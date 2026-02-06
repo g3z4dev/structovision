@@ -1,0 +1,21 @@
+{
+  "name": "structogramvisualizer",
+  "version": "1.0.0",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npm run build --workspace=browser"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3"
+  },
+  "workspaces": [
+    "app",
+    "test"
+  ]
+}

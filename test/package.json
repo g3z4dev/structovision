@@ -1,0 +1,18 @@
+{
+  "name": "@structogramvisualizer/test",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "devDependencies": {
+    "@structogramvisualizer/app": "^0.0.0",
+    "tsx": "^4.21.0",
+    "zora": "^6.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}
