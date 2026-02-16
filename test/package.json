@@ -1,15 +1,15 @@
 {
-  "name": "@structogramvisualizer/test",
+  "name": "@structovision/test",
   "version": "0.0.0",
   "description": "",
   "main": "index.js",
   "devDependencies": {
-    "@structogramvisualizer/app": "^0.0.0",
+    "@structovision/app": "^0.0.0",
     "tsx": "^4.21.0",
     "zora": "^6.0.0"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx tsx ./src/script.test.ts"
   },
   "keywords": [],
   "author": "",

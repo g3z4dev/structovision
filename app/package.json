@@ -1,8 +1,13 @@
 {
-  "name": "@structogramvisualizer/app",
+  "name": "@structovision/app",
   "version": "0.0.0",
   "description": "",
-  "exports": "./dist/script.js",
+  "exports": {
+    ".": "./src/script.ts",
+    "./model/statement": "./src/model/statement.ts",
+    "./model/memory": "./src/model/memory.ts",
+    "./model/util": "./src/model/util.ts"
+  },
   "scripts": {
     "build": "rollup -c",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,8 +17,9 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "rollup": "^4.57.1",
+    "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
+    "rollup": "^4.57.1",
     "rollup-plugin-string": "^3.0.0"
   }
 }
