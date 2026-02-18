@@ -6,7 +6,8 @@
     ".": "./src/script.ts",
     "./model/statement": "./src/model/statement.ts",
     "./model/memory": "./src/model/memory.ts",
-    "./model/util": "./src/model/util.ts"
+    "./model/util": "./src/model/util.ts",
+    "./model/structogram": "./src/model/structogram.ts"
   },
   "scripts": {
     "build": "rollup -c",

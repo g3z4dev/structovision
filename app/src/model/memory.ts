@@ -7,6 +7,14 @@ class UtilityObject {
 
 type MemoryValue = Primitive | UtilityObject;
 
+export class VariableCreationError extends Error {
+
+    constructor(m: string) {
+        super(m);
+        Object.setPrototypeOf(this, VariableCreationError.prototype);
+    }
+}
+
 export class Memory {
     private variables: Record<string, Primitive>;
     private emitter: EventEmitter2 | undefined;
@@ -57,10 +65,10 @@ export class Memory {
 
     public createVariable(key: string, value: Primitive) {
         if(Memory.forbiddenKeys.includes(key) || !this.validateKeyName(key)) {
-            throw new Error(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`);
+            throw new VariableCreationError(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`);
         }
         if(key in this.variables) {
-            throw new Error(`Variable with [${key}] is already defined!`);
+            throw new VariableCreationError(`Variable with key [${key}] is already defined!`);
         }
         this.variables[key] = value;
         this.emitter?.emit(Memory.variableAddedEvent, [key, value]);
@@ -72,7 +80,7 @@ export class Memory {
             this.emitter?.emit(Memory.variableChangedEvent, [key, value]);
             return;
         }
-        throw new Error(`Variable with [${key}] does not exist!`);
+        throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
     public getVariable(key: string): Primitive {
@@ -80,11 +88,20 @@ export class Memory {
             return this.variables[key]!;
         }
         
-        throw new Error(`Variable with [${key}] does not exist!`);
+        throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
     public hasVariable(key: string): boolean {
         return key in this.variables;
+    }
+
+    public changeVariable(key: string, fn: (v:Primitive) => Primitive) {
+        if(key in this.variables) {
+            this.variables[key] = fn(this.variables[key]!);
+            return;
+        }
+        
+        throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
     public clear(): void {

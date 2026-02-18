@@ -1,5 +1,5 @@
 import {test, type IAssert} from "zora";
-import {BooleanStatement, NumericStatement, StringStatement, StatementParseError} from "@structovision/app/model/statement";
+import {BooleanStatement, NumericStatement, StringStatement, StatementParseError, AnyStatement} from "@structovision/app/model/statement";
 import {type Primitive} from "@structovision/app/model/util";
 import { Memory } from "@structovision/app/model/memory";
 
@@ -17,10 +17,15 @@ function testBooleanStatement(assertion: IAssert, statement: string, result: boo
     assertion.equal(BooleanStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
 }
 
+function testAnyStatement(assertion: IAssert, statement: string, result: Primitive, memory: Memory = placeholderMemory) {
+    assertion.equal(AnyStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
+}
+
 test("statements with extra spaces should still be parsed correctly", (assertion) => {
     testNumericStatement(assertion, "  3    +  4           ", 7);
     testStringStatement(assertion, "  \"alma\"       &      \"fa\"         ", "almafa");
     testBooleanStatement(assertion, "  true    or                             false           ", true);
+    testAnyStatement(assertion, "                   5          *            3                ", 15);
 });
 
 test("numeric statements with just one operator should work correctly", (assertion) => {
@@ -123,6 +128,12 @@ test("boolean statements with just one operator should work correctly", (asserti
     }
 });
 
+test("string statements with just one operator should work correctly", assertion => {
+    testAnyStatement(assertion, "3+4", 7);
+    testAnyStatement(assertion, "\"alma\"&\"fa\"", "almafa");
+    testAnyStatement(assertion, "true and false", false);
+});
+
 test("complex statements with numeric, string and boolean components should work correctly", (assertion) => {
     testNumericStatement(assertion, "len(\"this is \"&(4=5-1))", 12);
     testNumericStatement(assertion, "sqrt(len(\"this is \"&(4=5-1)&\" no?\"))", 4);
@@ -133,6 +144,9 @@ test("complex statements with numeric, string and boolean components should work
     testBooleanStatement(assertion, "len(\"\"&true)=sqrt(len(\"this is \"&(4=5-1)&\" no?\"))", true);
     testBooleanStatement(assertion, "sqrt(len(\"almaalmaalmaalma\"))<(3.4+4.5)/2*16^(1/4)", true);
     testBooleanStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&sqrt(9)", false);
+    testAnyStatement(assertion, "len(\"alma\"&\"fa\")+-sqrt(sqrt(len(\"this is \"&(4=5-1)&\" no?\")))", 4);
+    testAnyStatement(assertion, "len(\"\"&true)&\"=\"&sqrt(len(\"this is \"&(4=5-1)&\" no?\"))&\" is \"&(len(\"\"&true)=sqrt(len(\"this is \"&(4=5-1)&\" no?\")))", "4=4 is true");
+    testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&sqrt(9)", false);
 });
 
 test("numeric statements with variables should work as intended", assertion => {
@@ -156,10 +170,21 @@ test("boolean statements with variables should work as intended", assertion => {
     testBooleanStatement(assertion, "a or b", true, mem);
 });
 
+test("any statements with variables should work as intended", assertion => {
+    const mem = new Memory();
+    mem.createVariable("a", 1);
+    mem.createVariable("b", "text");
+    mem.createVariable("c", false);
+    testAnyStatement(assertion, "a", 1, mem);
+    testAnyStatement(assertion, "b", "text", mem);
+    testAnyStatement(assertion, "c", false, mem);
+});
+
 test("statements with invalid tokens should throw an error", assertion => {
     assertion.throws(() => NumericStatement.parse("3+3,4", placeholderMemory).evaluate(), StatementParseError, "Statements should throw an error if given an invalid token");
     assertion.throws(() => BooleanStatement.parse("truee or false", placeholderMemory).evaluate(), StatementParseError, "Statements should throw an error if given a typo");
     assertion.throws(() => BooleanStatement.parse("true orfalse", placeholderMemory).evaluate(), StatementParseError, "Statements should throw an error if lacking spacing");
+    assertion.throws(() => AnyStatement.parse("ikjjaslkjdklasljrljldjljksdf", placeholderMemory).evaluate(), StatementParseError, "Statements should throw an error if it makes no sense");
 });
 
 test("statements with result types should throw an error", assertion => {

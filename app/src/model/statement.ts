@@ -226,7 +226,7 @@ class VariableOperand extends Operand {
     }
 }
 
-abstract class Statement<T> {
+export abstract class Statement<T> {
     protected tokens: (Operand | Operator)[] = [];
 
     abstract evaluate(): T;
@@ -505,6 +505,27 @@ export class BooleanStatement extends Statement<boolean> {
     public static parse(text: string, memory: Memory): BooleanStatement {
         const statement = new BooleanStatement();
         Statement.parseInto<boolean>(statement, text, memory);
+
+        return statement;
+    }
+}
+
+export class AnyStatement extends Statement<Primitive> {
+    public override evaluate(): Primitive {
+        return this.evaluateInternally();
+    }
+
+    protected constructor() {
+        super();
+    }
+
+    protected override assertReturnType(type: string): void {
+        return;
+    }
+
+    public static parse(text: string, memory: Memory): AnyStatement {
+        const statement = new AnyStatement();
+        Statement.parseInto<Primitive>(statement, text, memory);
 
         return statement;
     }
