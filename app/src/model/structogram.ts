@@ -33,7 +33,7 @@ export class Structogram {
     private currentBlock: StructogramBlock | undefined;
     private readonly idMap: Record<string, StructogramBlock> = {};
     private running = false;
-    private loopStack: LoopBlock[] = [];
+    private bracketBlockStack: BracketBlock[] = [];
     private ready = false;
     private variables: Record<string, Primitive> = {};
 
@@ -66,17 +66,18 @@ export class Structogram {
         if(!this.ready) {
             throw new Error("Cannot run before doing the preRun and addressing its issues!");
         }
+
         if(this.currentBlock) {
             this.running = true;
             const lastBlock = this.currentBlock;
             this.currentBlock = this.currentBlock.run();
-            if(lastBlock instanceof LoopBlock) {
-                if(!(lastBlock as LoopBlock).isFinished()) {
-                    this.loopStack.push(lastBlock);
+            if(lastBlock instanceof BracketBlock) {
+                if(!(lastBlock as BracketBlock).isFinished()) {
+                    this.bracketBlockStack.push(lastBlock);
                 }
             }
-        } else if(this.loopStack.length > 0) {
-            this.currentBlock = this.loopStack.pop();
+        } else if(this.bracketBlockStack.length > 0) {
+            this.currentBlock = this.bracketBlockStack.pop();
         } else {
             this.running = false;
             this.ready = false;
@@ -343,11 +344,17 @@ export class PrintBlock extends SequenceBlock {
     }
 }
 
-// TODO next block should be handled!
-export class TrueFalseBranchingBlock extends StructogramBlock {
+export abstract class BracketBlock extends StructogramBlock {
+    abstract isFinished(): boolean;
+}
+
+export class TrueFalseBranchingBlock extends BracketBlock {
     private condition: BooleanStatement | undefined ;
     public trueBranch: StructogramBlock | undefined;
     public falseBranch: StructogramBlock | undefined;
+    public next: StructogramBlock | undefined;
+    public hasRun: boolean = false;
+    public finished: boolean = false;
     public readonly conditionOption = new BooleanStatementOption(this.owner, "value", "the value to print");
 
     constructor(structogram: Structogram) {
@@ -355,6 +362,11 @@ export class TrueFalseBranchingBlock extends StructogramBlock {
     }
 
     public override run(): StructogramBlock | undefined {
+        if(this.hasRun) {
+            this.finished = true;
+            return this.next;
+        }
+        this.hasRun = true;
         if(this.condition?.evaluate()) {
             return this.trueBranch;
         }
@@ -382,13 +394,23 @@ export class TrueFalseBranchingBlock extends StructogramBlock {
             }
         }
 
+        this.hasRun = false;
+        this.finished = false;
+
         return [];
+    }
+
+    public isFinished(): boolean {
+        return this.finished;
     }
 }
 
-export class MultiBranchingBlock extends StructogramBlock {
+export class MultiBranchingBlock extends BracketBlock {
     private branches: BooleanStatement[] = [];
     private blocks: (StructogramBlock | undefined)[] = [];
+    public next: StructogramBlock | undefined;
+    public hasRun: boolean = false;
+    public finished: boolean = false;
     public readonly conditionListOption = new BooleanStatementListOption(this.owner, "conditions", "the list of conditions the branches have");
 
     constructor(structogram: Structogram) {
@@ -399,6 +421,11 @@ export class MultiBranchingBlock extends StructogramBlock {
     }
 
     public override run(): StructogramBlock | undefined {
+        if(this.hasRun) {
+            this.finished = true;
+            return this.next;
+        }
+        this.hasRun = true;
         for(let i = 0; i < this.branches.length; i++) {
             if(this.branches[i]?.evaluate()) {
                 return this.blocks[i];
@@ -433,11 +460,18 @@ export class MultiBranchingBlock extends StructogramBlock {
             }
         }
 
+        this.hasRun = false;
+        this.finished = false;
+
         return [];
+    }
+
+    public override isFinished(): boolean {
+        return this.finished;
     }
 }
 
-export abstract class LoopBlock extends StructogramBlock {
+export abstract class LoopBlock extends BracketBlock {
     public firstBlock: StructogramBlock | undefined;
     public next: StructogramBlock | undefined;
     protected finished = false;

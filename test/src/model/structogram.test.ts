@@ -280,7 +280,7 @@ test("a complex structogram should work as expected", assertion => {
         "c mod 11 = 0",
         "true"
     ]);
-    printBlock2.next = multiBlock;
+    truefalseBlock.next = multiBlock;
     const printBlock4 = new PrintBlock(structogram);
     printBlock4.statementOption.setStatement("\"the last value is divisble by 3\"");
     const printBlock5 = new PrintBlock(structogram);
@@ -293,10 +293,13 @@ test("a complex structogram should work as expected", assertion => {
     multiBlock.setBranch(1, printBlock5);
     multiBlock.setBranch(2, printBlock6);
     multiBlock.setBranch(3, printBlock7);
+    const printBlock8 = new PrintBlock(structogram);
+    printBlock8.statementOption.setStatement("\"it's done\"");
+    multiBlock.next = printBlock8;
 
     structogram.setStartingBlock(countingLoopBlock);
 
     runStructogram(structogram);
 
-    assertion.eq(printLog, ["2", "8", "34", "144", "610", "2584", "10946", "46368", "196418", "832040", "the last value is greater than 100000", "the last value is divisble by 11"], "complex structogram should have the expected output");
+    assertion.eq(printLog, ["2", "8", "34", "144", "610", "2584", "10946", "46368", "196418", "832040", "the last value is greater than 100000", "the last value is divisble by 11", "it's done"], "complex structogram should have the expected output");
 });
