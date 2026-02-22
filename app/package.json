@@ -10,8 +10,7 @@
     "./model/structogram": "./src/model/structogram.ts"
   },
   "scripts": {
-    "build": "rollup -c",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "build.cmd"
   },
   "keywords": [],
   "author": "",
@@ -20,7 +19,9 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
+    "@tailwindcss/cli": "^4.2.0",
     "rollup": "^4.57.1",
-    "rollup-plugin-string": "^3.0.0"
+    "rollup-plugin-string": "^3.0.0",
+    "tailwindcss": "^4.2.0"
   }
 }

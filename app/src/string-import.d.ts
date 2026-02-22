@@ -1,4 +1,4 @@
-declare module "*.txt" {
+declare module "*.html" {
     const file: string;
     export default file;
 }

@@ -3,8 +3,12 @@ import {Memory, VariableCreationError} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, StringStatement, StatementParseError} from "./statement";
 import {type Primitive} from "./util";
 
-interface TypeIdentifiable {
+export interface TypeIdentifiable {
     getTypeIdentifier(): string;
+}
+
+export interface Identifiable {
+    getID(): string;
 }
 
 export class StructogramIssues {
@@ -27,9 +31,10 @@ export class StructogramIssues {
 
 export class Structogram {
     public static readonly printEvent = "structogram.print";
+    public static readonly changedEvent = "structogram.changed";
     public readonly memory: Memory;
     public readonly emitter: EventEmitter2;
-    private startingBlock: StructogramBlock | undefined;
+    public startingBlock: StructogramBlock | undefined;
     private currentBlock: StructogramBlock | undefined;
     private readonly idMap: Record<string, StructogramBlock> = {};
     private running = false;
@@ -92,12 +97,14 @@ export class Structogram {
     public addBlock(block: StructogramBlock) {
         if(this.isRunning()) throw new Error();
         this.idMap[block.id] = block;
+        this.emitter.emit(Structogram.changedEvent, block);
     }
 
     public setStartingBlock(block: StructogramBlock) {
         if(this.isRunning()) throw new Error();
         this.startingBlock = block;
         this.currentBlock = block;
+        this.emitter.emit(Structogram.changedEvent, block);
     }
 
     public print(text: string) {
@@ -135,6 +142,7 @@ export abstract class BlockOption implements TypeIdentifiable {
     }
 
     public abstract getTypeIdentifier(): string;
+    public abstract getValue(): string[];
 }
 
 export class BooleanStatementListOption extends BlockOption {
@@ -164,6 +172,10 @@ export class BooleanStatementListOption extends BlockOption {
     public getConditionCount() {
         return this.statements.length;
     }
+
+    public override getValue() {
+        return [...this.statements];
+    }
 }
 
 export abstract class StatementOption<T extends Primitive> extends BlockOption {
@@ -180,6 +192,10 @@ export abstract class StatementOption<T extends Primitive> extends BlockOption {
 
     public tryResolveStatement(): Statement<T> {
         throw new Error("Not implemented. Use one of the subclasses!");
+    }
+
+    public override getValue(): string[] {
+        return [this.statement];
     }
 }
 
@@ -226,8 +242,12 @@ export class AnyStatementOption extends StatementOption<Primitive> {
 export class KeyOption extends BlockOption {
     private value: string = "";
 
-    public getValue() {
+    public getKey() {
         return this.value;
+    }
+
+    public override getValue(): string[] {
+        return [this.value];
     }
 
     public setValue(value: string) {
@@ -240,32 +260,53 @@ export class KeyOption extends BlockOption {
     }
 }
 
-export abstract class StructogramBlock implements TypeIdentifiable {
+export abstract class StructogramBlock implements TypeIdentifiable, Identifiable {
+    public static readonly childrenChanged = "structogramblock.childrenChanged";
     protected static idSeq = 0;
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
     protected owner: Structogram;
+    public parent: StructogramBlock | undefined;
+    private _next: StructogramBlock | undefined;
+    public readonly emitter = new EventEmitter2();
 
     constructor(owner: Structogram) {
         this.owner = owner;
         owner.addBlock(this);
     }
 
+    public get next() {
+        return this._next;
+    }
+
+    public set next(next: StructogramBlock | undefined) {
+        this._next = next;
+        this.emitter.emit(StructogramBlock.childrenChanged, this);
+    }
+
+    public getID() {
+        return this.id;
+    }
+
+    public getChildren(): Record<string,StructogramBlock | undefined> {
+        const extraChildren = this.getExtraChildren();
+        extraChildren["next"] = this.next;
+        return extraChildren;
+    }
+
+    public getExtraChildren(): Record<string,StructogramBlock | undefined> {
+        return {};
+    }
+
     public abstract run(): StructogramBlock | undefined;
-    public abstract getChildren(): (StructogramBlock | undefined)[];
     public abstract getOptions(): BlockOption[];
     public abstract getTypeIdentifier(): string;
     public abstract parseAndCheckForIssues(): StructogramIssues[];
 }
 
 export abstract class SequenceBlock extends StructogramBlock {
-    public next: StructogramBlock | undefined;
 
     protected constructor(structogram: Structogram) {
         super(structogram);
-    }
-
-    public override getChildren(): (StructogramBlock | undefined)[] {
-        return [this.next];
     }
 }
 
@@ -289,11 +330,11 @@ export class AssignmentBlock extends SequenceBlock {
     }
 
     public override getOptions(): BlockOption[] {
-        return [this.statementOption];
+        return [this.keyOption, this.statementOption];
     }
 
     public override parseAndCheckForIssues(): StructogramIssues[] {
-        this.key = this.keyOption.getValue();
+        this.key = this.keyOption.getKey();
         const issues = [];
         if(!this.owner.memory.hasVariable(this.key)) {
             issues.push(new StructogramIssues(this.id,`Variable with key [${this.key}] is not defined!`))
@@ -352,10 +393,9 @@ export class TrueFalseBranchingBlock extends BracketBlock {
     private condition: BooleanStatement | undefined ;
     public trueBranch: StructogramBlock | undefined;
     public falseBranch: StructogramBlock | undefined;
-    public next: StructogramBlock | undefined;
     public hasRun: boolean = false;
     public finished: boolean = false;
-    public readonly conditionOption = new BooleanStatementOption(this.owner, "value", "the value to print");
+    public readonly conditionOption = new BooleanStatementOption(this.owner, "condition", "the condition");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -373,8 +413,8 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         return this.falseBranch;
     }
 
-    public override getChildren(): (StructogramBlock | undefined)[] {
-        return [this.trueBranch, this.falseBranch];
+    public override getExtraChildren(): Record<string,StructogramBlock | undefined> {
+        return {"true": this.trueBranch, "false": this.falseBranch};
     }
 
     public override getTypeIdentifier() {
@@ -408,7 +448,6 @@ export class TrueFalseBranchingBlock extends BracketBlock {
 export class MultiBranchingBlock extends BracketBlock {
     private branches: BooleanStatement[] = [];
     private blocks: (StructogramBlock | undefined)[] = [];
-    public next: StructogramBlock | undefined;
     public hasRun: boolean = false;
     public finished: boolean = false;
     public readonly conditionListOption = new BooleanStatementListOption(this.owner, "conditions", "the list of conditions the branches have");
@@ -434,8 +473,12 @@ export class MultiBranchingBlock extends BracketBlock {
         return undefined;
     }
 
-    public override getChildren(): (StructogramBlock | undefined)[] {
-        return this.blocks;
+    public override getExtraChildren(): Record<string,StructogramBlock | undefined> {
+        const childrenRecord: Record<string, StructogramBlock |undefined> = {};
+        for(let i = 0; i < this.blocks.length; i++) {
+            childrenRecord[`block${i}`] = this.blocks[i];
+        }
+        return childrenRecord;
     }
 
     public override getTypeIdentifier() {
@@ -472,16 +515,15 @@ export class MultiBranchingBlock extends BracketBlock {
 }
 
 export abstract class LoopBlock extends BracketBlock {
-    public firstBlock: StructogramBlock | undefined;
-    public next: StructogramBlock | undefined;
+    public loopStart: StructogramBlock | undefined;
     protected finished = false;
 
     constructor(structogram: Structogram) {
         super(structogram);
     }
 
-    public override getChildren(): (StructogramBlock | undefined)[] {
-        return [this.next, this.firstBlock];
+    public override getExtraChildren(): Record<string, StructogramBlock | undefined> {
+        return {"loopStart": this.loopStart};
     }
 
     public isFinished() {
@@ -509,10 +551,10 @@ export class CountingLoopBlock extends LoopBlock {
             this.started = true;
             this.finished = false;
             this.owner.memory.setVariable(this.variableKey!, this.from?.evaluate() ?? 0);
-            return this.firstBlock;
+            return this.loopStart;
         } else if(this.owner.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0)) {
             this.owner.memory.changeVariable(this.variableKey!, v => v as number + (this.step?.evaluate() ?? 0));
-            return this.firstBlock;
+            return this.loopStart;
         }
         this.finished = true;
         this.started = false;
@@ -520,7 +562,7 @@ export class CountingLoopBlock extends LoopBlock {
     }
 
     public override getOptions(): BlockOption[] {
-        return [this.fromOption, this.toOption, this.stepOption];
+        return [this.variableKeyOption, this.fromOption, this.toOption, this.stepOption];
     }
 
     public override getTypeIdentifier(): string {
@@ -550,7 +592,7 @@ export class CountingLoopBlock extends LoopBlock {
                 issues.push(new StructogramIssues(this.id, error.message));
             }
         }
-        this.variableKey = this.variableKeyOption.getValue();
+        this.variableKey = this.variableKeyOption.getKey();
         if(!this.owner.memory.hasVariable(this.variableKey)) {
             try {
                 this.owner.memory.createVariable(this.variableKey, 0);
@@ -595,7 +637,7 @@ export class FrontTestingLoopBlock extends ConditionalLoopBlock {
     public override run(): StructogramBlock | undefined {
         if(this.condition?.evaluate()) {
             this.finished = false;
-            return this.firstBlock;
+            return this.loopStart;
         }
         this.finished = true;
         return this.next;
@@ -613,10 +655,10 @@ export class BackTestingLoopBlock extends ConditionalLoopBlock {
         if(!this.started) {
             this.finished = false;
             this.started = true;
-            return this.firstBlock;
+            return this.loopStart;
         }
         if(this.condition?.evaluate()) {
-            return this.firstBlock;
+            return this.loopStart;
         }
         this.started = false;
         this.finished = true;

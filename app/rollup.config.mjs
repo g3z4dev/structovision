@@ -7,13 +7,13 @@ import commonjs from "@rollup/plugin-commonjs";
 export default {
 	input: 'src/script.ts',
 	output: {
-		file: 'dist/script.js',
+		file: 'public/out/script.js',
 		format: 'es'
 	},
     plugins: [
 		typescript(),
 		string({
-			include: "src/*.txt"
+			include: "resources/*.html"
 		}),
 		nodeResolve(),
 		commonjs()
