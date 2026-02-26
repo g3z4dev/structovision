@@ -98,6 +98,9 @@ export class Structogram {
         if(this.isRunning()) throw new Error();
         this.idMap[block.id] = block;
         this.emitter.emit(Structogram.changedEvent, block);
+        block.emitter.addListener(StructogramBlock.childrenChanged, () => {
+            this.emitter.emit(Structogram.changedEvent, block);
+        });
     }
 
     public setStartingBlock(block: StructogramBlock) {

@@ -1,1 +1,5 @@
 @import "tailwindcss";
+
+.non-scaling-stroke {
+    vector-effect: non-scaling-stroke;
+}

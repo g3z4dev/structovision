@@ -1,1 +1,1 @@
-rollup -c & npx @tailwindcss/cli -i ./src/view/style.css -o ./dist/style.css
+rollup -c & npx @tailwindcss/cli -i ./src/view/style.css -o ./public/out/style.css
