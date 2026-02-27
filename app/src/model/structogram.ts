@@ -269,6 +269,7 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
     protected owner: Structogram;
     public parent: StructogramBlock | undefined;
+    protected abstract subBlocks: Record<string, StructogramBlock | undefined>;
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
 
@@ -290,14 +291,16 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
         return this.id;
     }
 
-    public getChildren(): Record<string,StructogramBlock | undefined> {
-        const extraChildren = this.getExtraChildren();
-        extraChildren["next"] = this.next;
-        return extraChildren;
+    public getSubBlocks(): Record<string,StructogramBlock | undefined> {
+        return this.subBlocks;
     }
 
-    public getExtraChildren(): Record<string,StructogramBlock | undefined> {
-        return {};
+    public setSubBlock(key: string, block: StructogramBlock | undefined) {
+        this.subBlocks[key] = block;
+    }
+
+    public getSubBlock(key: string) {
+        return this.subBlocks[key];
     }
 
     public abstract run(): StructogramBlock | undefined;
@@ -316,6 +319,7 @@ export abstract class SequenceBlock extends StructogramBlock {
 export class AssignmentBlock extends SequenceBlock {
     private key: string | undefined;
     private statement: AnyStatement | undefined;
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     public readonly keyOption = new KeyOption(this.owner, "key", "the key we assign the value to");
     public readonly statementOption = new AnyStatementOption(this.owner, "value", "the value to assign to the variable");
 
@@ -356,6 +360,7 @@ export class AssignmentBlock extends SequenceBlock {
 
 export class PrintBlock extends SequenceBlock {
     private statement: AnyStatement | undefined;
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     public readonly statementOption = new AnyStatementOption(this.owner, "value", "the value to print");
 
     constructor(structogram: Structogram) {
@@ -394,8 +399,10 @@ export abstract class BracketBlock extends StructogramBlock {
 
 export class TrueFalseBranchingBlock extends BracketBlock {
     private condition: BooleanStatement | undefined ;
-    public trueBranch: StructogramBlock | undefined;
-    public falseBranch: StructogramBlock | undefined;
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {
+        "true": undefined,
+        "false": undefined
+    };
     public hasRun: boolean = false;
     public finished: boolean = false;
     public readonly conditionOption = new BooleanStatementOption(this.owner, "condition", "the condition");
@@ -416,8 +423,20 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         return this.falseBranch;
     }
 
-    public override getExtraChildren(): Record<string,StructogramBlock | undefined> {
-        return {"true": this.trueBranch, "false": this.falseBranch};
+    public get trueBranch() {
+        return this.subBlocks["true"];
+    }
+
+    public set trueBranch(block: StructogramBlock | undefined) {
+        this.subBlocks["true"] = block;
+    }
+
+    public get falseBranch() {
+        return this.subBlocks["false"];
+    }
+
+    public set falseBranch(block: StructogramBlock | undefined) {
+        this.subBlocks["false"] = block;
     }
 
     public override getTypeIdentifier() {
@@ -450,16 +469,13 @@ export class TrueFalseBranchingBlock extends BracketBlock {
 
 export class MultiBranchingBlock extends BracketBlock {
     private branches: BooleanStatement[] = [];
-    private blocks: (StructogramBlock | undefined)[] = [];
     public hasRun: boolean = false;
     public finished: boolean = false;
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     public readonly conditionListOption = new BooleanStatementListOption(this.owner, "conditions", "the list of conditions the branches have");
 
     constructor(structogram: Structogram) {
         super(structogram);
-        this.conditionListOption.emitter.addListener(BlockOption.optionChangedEvent, () => {
-            this.blocks = Array.from(Array(this.conditionListOption.getConditionCount()).keys()).map(idx => idx in this.blocks ? this.blocks[idx] : undefined);
-        })
     }
 
     public override run(): StructogramBlock | undefined {
@@ -470,18 +486,10 @@ export class MultiBranchingBlock extends BracketBlock {
         this.hasRun = true;
         for(let i = 0; i < this.branches.length; i++) {
             if(this.branches[i]?.evaluate()) {
-                return this.blocks[i];
+                return Object.values(this.subBlocks)[i];
             }
         }
         return undefined;
-    }
-
-    public override getExtraChildren(): Record<string,StructogramBlock | undefined> {
-        const childrenRecord: Record<string, StructogramBlock |undefined> = {};
-        for(let i = 0; i < this.blocks.length; i++) {
-            childrenRecord[`block${i}`] = this.blocks[i];
-        }
-        return childrenRecord;
     }
 
     public override getTypeIdentifier() {
@@ -494,7 +502,7 @@ export class MultiBranchingBlock extends BracketBlock {
 
     public setBranch(index: number, block: StructogramBlock) {
         // todo checks
-        this.blocks[index] = block;
+        this.subBlocks["branch"+index] = block;
     }
 
     public override parseAndCheckForIssues(): StructogramIssues[] {
@@ -518,15 +526,21 @@ export class MultiBranchingBlock extends BracketBlock {
 }
 
 export abstract class LoopBlock extends BracketBlock {
-    public loopStart: StructogramBlock | undefined;
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {
+        "loopStart": undefined
+    };
     protected finished = false;
 
     constructor(structogram: Structogram) {
         super(structogram);
     }
 
-    public override getExtraChildren(): Record<string, StructogramBlock | undefined> {
-        return {"loopStart": this.loopStart};
+    public get loopStart() {
+        return this.subBlocks["loopStart"];
+    }
+
+    public set loopStart(block: StructogramBlock | undefined) {
+        this.subBlocks["loopStart"] = block;
     }
 
     public isFinished() {

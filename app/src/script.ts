@@ -77,14 +77,3 @@ printBlock8.statementOption.setStatement("\"it's done\"");
 multiBlock.next = printBlock8;
 
 viewmodel.currentStructogram.setStartingBlock(countingLoopBlock);
-
-const elem = document.createElement("svg");
-document.body.appendChild(elem);
-
-setTimeout(() => countingLoopBlock.toOption.setStatement("20"), 3000);
-
-
-const printBlock9 = new PrintBlock(structogram);
-printBlock9.statementOption.setStatement("\"it's done\"");
-
-setTimeout(() => printBlock8.next = printBlock9, 6000);

@@ -1,13 +1,22 @@
-import {BackTestingLoopBlock, BlockOption, Structogram, StructogramBlock, type Identifiable, type TypeIdentifiable} from "../model/structogram";
+import {AssignmentBlock, BackTestingLoopBlock, BlockOption, CountingLoopBlock, FrontTestingLoopBlock, MultiBranchingBlock, PrintBlock, Structogram, StructogramBlock, TrueFalseBranchingBlock, type Identifiable, type TypeIdentifiable} from "../model/structogram";
 import EventEmitter2 from "eventemitter2";
 
-import assignmentBlockTemplate from "../../resources/assignmentblock.html";
-import printBlockTemplate from "../../resources/printblock.html";
-import truefalseBranchingBlockTemplate from "../../resources/truefalsebranchingblock.html";
-import multiBranchingBlockTemplate from "../../resources/multibranchingblock.html";
-import countingLoopBlockTemplate from "../../resources/countingloopblock.html";
-import frontTestingLoopBlockTemplate from "../../resources/fronttestingloopblock.html";
-import backTestingLoopBlockTemplate from "../../resources/backtestingloopblock.html";
+import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
+import printBlockTemplate from "../../resources/blocks/printblock.html";
+import truefalseBranchingBlockTemplate from "../../resources/blocks/truefalsebranchingblock.html";
+import multiBranchingBlockTemplate from "../../resources/blocks/multibranchingblock.html";
+import countingLoopBlockTemplate from "../../resources/blocks/countingloopblock.html";
+import frontTestingLoopBlockTemplate from "../../resources/blocks/fronttestingloopblock.html";
+import backTestingLoopBlockTemplate from "../../resources/blocks/backtestingloopblock.html";
+import undefinedBlockTemplate from "../../resources/blocks/undefinedblock.html";
+
+import assignmentBlockIcon from "../../resources/toolbar-icons/assignmentblockicon.html";
+import printBlockIcon from "../../resources/toolbar-icons/printblockicon.html";
+import truefalseBranchingBlockIcon from "../../resources/toolbar-icons/truefalsebranchingblockicon.html";
+import multiBranchingBlockIcon from "../../resources/toolbar-icons/multibranchingblockicon.html";
+import countingLoopBlockIcon from "../../resources/toolbar-icons/countingloopblockicon.html";
+import frontTestingLoopBlockIcon from "../../resources/toolbar-icons/fronttestingloopblockicon.html";
+import backTestingLoopBlockIcon from "../../resources/toolbar-icons/backtestingloopblockicon.html";
 
 const baseBlockWidth = 100;
 const baseBlockHeight = 30;
@@ -51,10 +60,17 @@ function setRelativeScaleFor(elem: HTMLElement, width: number, height: number) {
     setScaleFor(elem, width/baseBlockWidth, height/baseBlockHeight);
 }
 
+function parseIntoHTML(text: string) {
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = text;
+    return tempDiv.firstChild as HTMLElement;
+}
+
 export class ViewModel {
     private emitter: EventEmitter2 = new EventEmitter2();
     public currentStructogram: Structogram = new Structogram(this.emitter);
-    private structogramEditorView = new StructogramEditorView(this.currentStructogram);
+    public readonly structogramEditorView = new StructogramEditorView(this.currentStructogram, this);
+    public readonly toolbar = new BlockToolbar(this.currentStructogram);
     private runSpeed: number = 100;
    
     constructor() {
@@ -62,10 +78,12 @@ export class ViewModel {
         this.currentStructogram.emitter.addListener(Structogram.changedEvent, () => {
             this.structogramEditorView.generateHTML();
         })
+        this.toolbar.generateHTML();
     }
 }
 
 class StructogramEditorView {
+    private readonly viewModel: ViewModel;
     private readonly blockResourceManager: ResourceManager = new ResourceManager();
     private readonly editor = document.querySelector("#editor") as HTMLElement;
     private readonly structogramSVG = document.querySelector("#structogram-svg") as HTMLElement;
@@ -76,7 +94,8 @@ class StructogramEditorView {
     private scale = 1;
     private rightClickDown = false;
 
-    constructor(structogram: Structogram) {
+    constructor(structogram: Structogram, viewModel: ViewModel) {
+        this.viewModel = viewModel;
         this.blockResourceManager.register("assignmentblock", assignmentBlockTemplate);
         this.blockResourceManager.register("printblock", printBlockTemplate);
         this.blockResourceManager.register("truefalsebranchingblock", truefalseBranchingBlockTemplate);
@@ -84,6 +103,7 @@ class StructogramEditorView {
         this.blockResourceManager.register("countingloopblock", countingLoopBlockTemplate);
         this.blockResourceManager.register("fronttestingloopblock", frontTestingLoopBlockTemplate);
         this.blockResourceManager.register("backtestingloopblock", backTestingLoopBlockTemplate);
+        this.blockResourceManager.register("undefined", undefinedBlockTemplate);
         this.structogram = structogram;
         this.setUpMovement();
     }
@@ -113,6 +133,9 @@ class StructogramEditorView {
         document.addEventListener("mouseup", event => {
             if(event.button == 2) {
                 this.rightClickDown = false;
+            } else if(event.button == 0) {
+                this.viewModel.toolbar.blockBrush = undefined;
+                console.log("brush removed")
             }
         });
         this.editor.addEventListener("contextmenu", event => {
@@ -130,9 +153,10 @@ class StructogramEditorView {
 
     public generateHTML() {
         if(!this.structogramSVG) return;
-        this.structogramSVG.innerHTML = "";
+        this.structogramSVG.textContent = "";
         let block = this.structogram.startingBlock;
-        this.resolveHTMLFor(this.structogramSVG, block);
+        const height = this.resolveHTMLFor(this.structogramSVG, block);
+        setHeight(this.structogramSVG, height);
     }
 
     private replaceOptionValues(template: string, options: BlockOption[]) {
@@ -180,18 +204,21 @@ class StructogramEditorView {
 
     private resolveHTMLFor(parent: Element, block: StructogramBlock | undefined, width: number = this.structogramWidth, xOffset: number = 0, _yOffset: number = 0): number {
         if(!this.structogramSVG) return 0;
+        let prevBlock: StructogramBlock | undefined = undefined;
         let currentBlock: StructogramBlock | undefined = block;
         let yOffset = _yOffset;
         while(currentBlock != undefined) {
-            const elem = this.blockResourceManager.getHTMLFor(currentBlock)!;
+            const elem = this.blockResourceManager.getHTMLForObject(currentBlock)!;
+            setID(elem, currentBlock.getID());
             parent.appendChild(elem);
-            const extraChildren = currentBlock.getExtraChildren();
-            const extraChildrenCount = Object.keys(extraChildren).length;
-            let maxChildrenHeight = 0;
-            for(let i = 0; i < extraChildrenCount; i++) {
+            const subBlocks = currentBlock.getSubBlocks();
+            const subBlockKeys = Object.keys(subBlocks);
+            const subBlockCount = Object.keys(subBlocks).length;
+            let maxSubBlockHeight = 0;
+            for(let i = 0; i < subBlockCount; i++) {
                 let childXOffset = Number.parseInt(elem.dataset.childXOffset ?? "0");
                 let childYOffset = Number.parseInt(elem.dataset.childYOffset ?? "0");
-                const newWidth = (width-childXOffset)/extraChildrenCount;
+                const newWidth = (width-childXOffset)/subBlockCount;
                 const childHeader = elem.querySelector(".js-childHeader") as HTMLElement | undefined;
                 if(childHeader) {
                     const header = childHeader.cloneNode(true) as HTMLElement;
@@ -203,10 +230,25 @@ class StructogramEditorView {
                     elem.appendChild(header);
                     this.addLabelFor(header, currentBlock.getOptions(), x, y, newWidth, baseBlockHeight);
                 }
-                const childrenHeight = this.resolveHTMLFor(elem, extraChildren[Object.keys(extraChildren)[i]!], newWidth, childXOffset+newWidth*i, childYOffset);
-                if(childrenHeight > maxChildrenHeight) maxChildrenHeight = childrenHeight;
+                const subBlock = subBlocks[subBlockKeys[i]!];
+                if(subBlock) {
+                    const subBlockHeight = this.resolveHTMLFor(elem, subBlock, newWidth, childXOffset+newWidth*i, childYOffset);
+                    if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
+                } else {
+                    const subElem = this.blockResourceManager.getHTMLForObject(undefined)!;
+                    setPosition(subElem, childXOffset+newWidth*i, childYOffset);
+                    setSize(subElem, newWidth, baseBlockHeight);
+                    const finalBlock = currentBlock;
+                    subElem.addEventListener("mouseup", event => {
+                        if(event.button == 0 && this.viewModel.toolbar.blockBrush) {
+                            finalBlock.setSubBlock(subBlockKeys[i]!, this.viewModel.toolbar.blockBrush());
+                        }
+                    });
+                    elem.appendChild(subElem);
+                    if(baseBlockHeight > maxSubBlockHeight) maxSubBlockHeight = baseBlockHeight;
+                }
             }
-            const blockHeight = maxChildrenHeight + baseBlockHeight;
+            const blockHeight = maxSubBlockHeight + baseBlockHeight;
             const heightMode = elem.dataset.height ?? "static";
             function calcVisualHeight() {
                 if(heightMode == "dynamic") {
@@ -219,10 +261,141 @@ class StructogramEditorView {
             setPosition(elem, xOffset, yOffset);
             setSize(elem, width, visualHeight);
             this.addLabelFor(elem, currentBlock.getOptions(), xOffset, yOffset, width, visualHeight);
+            prevBlock = currentBlock;
             currentBlock = currentBlock?.next;
             yOffset += blockHeight;
         }
-        return yOffset-_yOffset;
+        const elem = this.blockResourceManager.getHTMLForObject(undefined)!;
+        setPosition(elem, xOffset, yOffset);
+        setSize(elem, width, baseBlockHeight);
+        elem.addEventListener("mouseup", event => {
+            if(event.button == 0 && this.viewModel.toolbar.blockBrush) {
+                console.log("brushed")
+                if(prevBlock) {
+                    console.log("brushed1")
+                    prevBlock.next = this.viewModel.toolbar.blockBrush();
+                } else {
+                    console.log("brushed2")
+                    this.structogram.startingBlock = this.viewModel.toolbar.blockBrush();
+                }
+            }
+        });
+        parent.appendChild(elem);
+        return yOffset-_yOffset + baseBlockHeight;
+    }
+}
+
+class ToolbarEntry {
+    private readonly icon: HTMLElement;
+    private readonly _name: string;
+    private readonly _description: string;
+    private readonly factory: () => StructogramBlock;
+
+    constructor(toolbar: BlockToolbar, icon: string, name: string, description: string, factory: () => StructogramBlock) {
+        this.icon = parseIntoHTML(icon);
+        this.icon.classList.add("w-full");
+        this.icon.classList.add("h-full");
+        this._name = name;
+        this._description = description;
+        this.factory = factory;
+        this.icon.addEventListener("mousedown", event => {
+            if(event.button == 0) {
+                toolbar.blockBrush = factory;
+                console.log("brush applied")
+                event.stopPropagation();
+            }
+        })
+    }
+
+    public get name() {
+        return this._name;
+    }
+
+    public get description() {
+        return this._description;
+    }
+
+    public createBlock(): StructogramBlock {
+        return this.factory();
+    }
+
+    public getIcon() {
+        return this.icon;
+    }
+}
+
+class BlockToolbar {
+    private readonly blockIconResourceManager: ResourceManager = new ResourceManager();
+    private readonly toolbarEntries: ToolbarEntry[];
+    private readonly toolbarNode = document.querySelector("#toolbar")!;
+    private _blockBrush: (() => StructogramBlock) | undefined;
+
+    constructor(structogram: Structogram) {
+        this.toolbarEntries = [
+            new ToolbarEntry(
+                this,
+                assignmentBlockIcon, 
+                "Assignment block", 
+                "desc",
+                () => new AssignmentBlock(structogram)),
+            new ToolbarEntry(
+                this,
+                printBlockIcon, 
+                "Print block", 
+                "desc",
+                () => new PrintBlock(structogram)),
+                
+            new ToolbarEntry(
+                this,
+                truefalseBranchingBlockIcon, 
+                "True False branching block", 
+                "desc",
+                () => new TrueFalseBranchingBlock(structogram)),
+            new ToolbarEntry(
+                this,
+                multiBranchingBlockIcon, 
+                "Multi branching block", 
+                "desc",
+                () => new MultiBranchingBlock(structogram)),
+            new ToolbarEntry(
+                this,
+                countingLoopBlockIcon, 
+                "Counting loop block", 
+                "desc",
+                () => new CountingLoopBlock(structogram)),
+            new ToolbarEntry(
+                this,
+                frontTestingLoopBlockIcon, 
+                "Front testing loop block", 
+                "desc",
+                () => new FrontTestingLoopBlock(structogram)),
+            new ToolbarEntry(
+                this,
+                backTestingLoopBlockIcon, 
+                "Back testing loop block", 
+                "desc",
+                () => new BackTestingLoopBlock(structogram))
+            ];
+    }
+
+    public get blockBrush() {
+        return this._blockBrush;
+    }
+
+    public set blockBrush(blockBrush: (() => StructogramBlock) | undefined) {
+        this._blockBrush = blockBrush;
+    }
+
+    public generateHTML() {
+        this.toolbarNode.innerHTML = "";
+        for(const entry of this.toolbarEntries) {
+            const toolbarIcon = entry.getIcon();
+            const div = document.createElement("div");
+            div.classList.add("flex-auto");
+            div.classList.add("p-2");
+            div.appendChild(toolbarIcon);
+            this.toolbarNode.appendChild(div);
+        }
     }
 }
 
@@ -233,15 +406,19 @@ class ResourceManager {
         this.resourceCache[typeID] = html;
     }
 
-    public getHTMLFor(object: TypeIdentifiable & Identifiable) {
-        if(!(object.getTypeIdentifier() in this.resourceCache)) {
+    public getHTMLForObject(object: TypeIdentifiable | undefined) {
+        if(object) {
+            return this.getHTMLFor(object.getTypeIdentifier());
+        }
+        return this.getHTMLFor("undefined");
+    }
+
+    public getHTMLFor(id: string) {
+        if(!(id in this.resourceCache)) {
             return undefined;
         }
-        const htmlText = this.resourceCache[object.getTypeIdentifier()]!;
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = htmlText;
-        const element: HTMLElement = tempDiv.firstChild! as HTMLElement;
-        setID(element, object.getID());
+        const htmlText = this.resourceCache[id]!;
+        const element: HTMLElement = parseIntoHTML(htmlText);
         return element;
     }
 }

@@ -13,7 +13,7 @@ export default {
     plugins: [
 		typescript(),
 		string({
-			include: "resources/*.html"
+			include: "resources/**/*.html"
 		}),
 		nodeResolve(),
 		commonjs()
