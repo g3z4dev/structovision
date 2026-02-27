@@ -135,7 +135,7 @@ export abstract class BlockOption implements TypeIdentifiable {
     protected readonly structogram: Structogram;
     public readonly name: string;
     public readonly description: string;
-    public readonly emitter: EventEmitter2 = new EventEmitter2();
+    public readonly emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
     public static readonly optionChangedEvent = "blockoption.optionchanged";
 
     constructor(structogram: Structogram, name: string, description: string) {
@@ -193,9 +193,7 @@ export abstract class StatementOption<T extends Primitive> extends BlockOption {
         return this.statement;
     }
 
-    public tryResolveStatement(): Statement<T> {
-        throw new Error("Not implemented. Use one of the subclasses!");
-    }
+    public abstract tryResolveStatement(): Statement<T>;
 
     public override getValue(): string[] {
         return [this.statement];
@@ -474,8 +472,36 @@ export class MultiBranchingBlock extends BracketBlock {
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     public readonly conditionListOption = new BooleanStatementListOption(this.owner, "conditions", "the list of conditions the branches have");
 
+    private fillOutBranches() {
+        const statements = this.conditionListOption.getStatements();
+        const statementCount = statements.length;
+        for(let i = 0; i < statementCount; i++) {
+            if(!("branch"+i in this.subBlocks)) {
+                this.subBlocks["branch"+i] = undefined;
+                this.emitter.emit(StructogramBlock.childrenChanged);
+            }
+        }
+    }
+
+    private trimBranches() {
+        const statementCount = this.conditionListOption.getStatements().length;
+        const branchCount = Object.values(this.subBlocks).length;
+        if(branchCount > statementCount) {
+            for(let i = statementCount; i < branchCount; i++) {
+                if("branch"+i in this.subBlocks) {
+                    delete this.subBlocks["branch"+i];
+                    this.emitter.emit(StructogramBlock.childrenChanged);
+                }
+            }
+        }
+    }
+
     constructor(structogram: Structogram) {
         super(structogram);
+        this.conditionListOption.emitter.on(BlockOption.optionChangedEvent, () => {
+            this.fillOutBranches();
+            this.trimBranches();
+        });
     }
 
     public override run(): StructogramBlock | undefined {

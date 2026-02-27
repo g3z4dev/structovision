@@ -1,5 +1,7 @@
-import {AssignmentBlock, BackTestingLoopBlock, BlockOption, CountingLoopBlock, FrontTestingLoopBlock, MultiBranchingBlock, PrintBlock, Structogram, StructogramBlock, TrueFalseBranchingBlock, type Identifiable, type TypeIdentifiable} from "../model/structogram";
+import {AnyStatementOption, AssignmentBlock, BackTestingLoopBlock, BlockOption, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, StructogramBlock, TrueFalseBranchingBlock, type Identifiable, type TypeIdentifiable} from "../model/structogram";
 import EventEmitter2 from "eventemitter2";
+import {type Listener} from "eventemitter2";
+import type { Primitive } from "../model/util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
 import printBlockTemplate from "../../resources/blocks/printblock.html";
@@ -18,12 +20,20 @@ import countingLoopBlockIcon from "../../resources/toolbar-icons/countingloopblo
 import frontTestingLoopBlockIcon from "../../resources/toolbar-icons/fronttestingloopblockicon.html";
 import backTestingLoopBlockIcon from "../../resources/toolbar-icons/backtestingloopblockicon.html";
 
+import statementOptionTemplate from "../../resources/options/statementoption.html";
+import booleanStatementListOptionTemplate from "../../resources/options/booleanstatementlistoption.html";
+import keyOptionTemplate from "../../resources/options/keyoption.html";
+
 const baseBlockWidth = 100;
 const baseBlockHeight = 30;
 const textPadding = 8;
 
 function setID(elem: Element, id: string) {
     elem.setAttribute("id", id);
+}
+
+function getID(elem: Element) {
+    return elem.getAttribute("id") ?? "";
 }
 
 function setX(elem: Element, x: number) {
@@ -67,10 +77,11 @@ function parseIntoHTML(text: string) {
 }
 
 export class ViewModel {
-    private emitter: EventEmitter2 = new EventEmitter2();
+    private emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
     public currentStructogram: Structogram = new Structogram(this.emitter);
     public readonly structogramEditorView = new StructogramEditorView(this.currentStructogram, this);
     public readonly toolbar = new BlockToolbar(this.currentStructogram);
+    public readonly blockEditor = new BlockEditor();
     private runSpeed: number = 100;
    
     constructor() {
@@ -93,6 +104,8 @@ class StructogramEditorView {
     private structogramWidth = 1024;
     private scale = 1;
     private rightClickDown = false;
+
+    private optionListenerRemovers: (() => void)[] = [];
 
     constructor(structogram: Structogram, viewModel: ViewModel) {
         this.viewModel = viewModel;
@@ -135,7 +148,6 @@ class StructogramEditorView {
                 this.rightClickDown = false;
             } else if(event.button == 0) {
                 this.viewModel.toolbar.blockBrush = undefined;
-                console.log("brush removed")
             }
         });
         this.editor.addEventListener("contextmenu", event => {
@@ -153,6 +165,10 @@ class StructogramEditorView {
 
     public generateHTML() {
         if(!this.structogramSVG) return;
+        for(const remover of this.optionListenerRemovers) {
+            remover();
+        }
+        this.optionListenerRemovers = [];
         this.structogramSVG.textContent = "";
         let block = this.structogram.startingBlock;
         const height = this.resolveHTMLFor(this.structogramSVG, block);
@@ -194,11 +210,17 @@ class StructogramEditorView {
             textLabel.setAttribute("y", `${baseBlockHeight - textPadding}`);
         }
         for(const option of options) {
-            option.emitter.removeAllListeners();
-            option.emitter.addListener(BlockOption.optionChangedEvent, () => {
+            const listener = () => {
                 const text = this.replaceOptionValues(elem.dataset.text ?? "", options);
                 textLabel.textContent = text;
-            }) 
+                if(textHLocation == "center") {
+                    textLabel.setAttribute("x", `${width/2-textLabel.getBBox().width/2}`);
+                }
+            };
+            option.emitter.addListener(BlockOption.optionChangedEvent, listener);
+            this.optionListenerRemovers.push(() => {
+                option.emitter.removeListener(BlockOption.optionChangedEvent, listener);
+            });
         }
     }
 
@@ -210,6 +232,16 @@ class StructogramEditorView {
         while(currentBlock != undefined) {
             const elem = this.blockResourceManager.getHTMLForObject(currentBlock)!;
             setID(elem, currentBlock.getID());
+            const finalBlock = currentBlock;
+            elem.addEventListener("click", event => {
+                if(event.button == 0) {
+                    this.viewModel.blockEditor.currentBlock = finalBlock;
+                    event.stopPropagation();
+                }
+            })
+            if(this.viewModel.blockEditor.currentBlock == currentBlock) {
+                elem.classList.add("selected-block");
+            }
             parent.appendChild(elem);
             const subBlocks = currentBlock.getSubBlocks();
             const subBlockKeys = Object.keys(subBlocks);
@@ -270,12 +302,9 @@ class StructogramEditorView {
         setSize(elem, width, baseBlockHeight);
         elem.addEventListener("mouseup", event => {
             if(event.button == 0 && this.viewModel.toolbar.blockBrush) {
-                console.log("brushed")
                 if(prevBlock) {
-                    console.log("brushed1")
                     prevBlock.next = this.viewModel.toolbar.blockBrush();
                 } else {
-                    console.log("brushed2")
                     this.structogram.startingBlock = this.viewModel.toolbar.blockBrush();
                 }
             }
@@ -301,7 +330,6 @@ class ToolbarEntry {
         this.icon.addEventListener("mousedown", event => {
             if(event.button == 0) {
                 toolbar.blockBrush = factory;
-                console.log("brush applied")
                 event.stopPropagation();
             }
         })
@@ -325,7 +353,6 @@ class ToolbarEntry {
 }
 
 class BlockToolbar {
-    private readonly blockIconResourceManager: ResourceManager = new ResourceManager();
     private readonly toolbarEntries: ToolbarEntry[];
     private readonly toolbarNode = document.querySelector("#toolbar")!;
     private _blockBrush: (() => StructogramBlock) | undefined;
@@ -421,4 +448,167 @@ class ResourceManager {
         const element: HTMLElement = parseIntoHTML(htmlText);
         return element;
     }
+}
+
+abstract class OptionHandler {
+    private optionResourceManager: ResourceManager;
+
+    constructor(optionResourceManager: ResourceManager) {
+        this.optionResourceManager = optionResourceManager;
+    }
+
+    public getHTMLNodeFor(option: BlockOption, block: StructogramBlock) {
+        const node = this.optionResourceManager.getHTMLForObject(option);
+        if(!node) return undefined;
+        this.applyLogic(option, block, node);
+        return node;
+    }
+
+    protected abstract applyLogic(option: BlockOption, block: StructogramBlock, node: Element): void;
+}
+
+class StatementOptionHandler<J extends Primitive> extends OptionHandler {
+    protected override applyLogic(option: StatementOption<J>, block: StructogramBlock, node: Element): void {
+        node.innerHTML = 
+            node.innerHTML
+                .replaceAll("%id%", block.id + "-" + option.name)
+                .replaceAll("%name%", option.name);     
+        const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
+        textField.value = option.getStatement();
+        textField.addEventListener("change", () => {
+            option.setStatement(textField.value);
+        });
+    }   
+}
+
+class BooleanStatementListOptionHandler extends OptionHandler {
+
+    private updateStatements(form: HTMLElement, option: BooleanStatementListOption) {
+        const fields = [...form.querySelectorAll("input[type=\"text\"]")!.values()] as HTMLFormElement[];
+        option.setStatements(fields.map(f => f.value));
+    }
+
+    private addUpdateEventTo(form: HTMLElement, textField: HTMLFormElement, option: BooleanStatementListOption) {
+        textField.addEventListener("change", () => {
+            this.updateStatements(form, option);
+        })
+    }
+
+    private cloneAndAddTextField(form: HTMLElement, conditionEntry: HTMLElement, index: number, option: BooleanStatementListOption) {
+        const copy = conditionEntry.cloneNode(true) as HTMLElement;
+        form.appendChild(copy);
+        const textField = copy.querySelector("input[type=\"text\"]") as HTMLFormElement;
+        const removeButton = copy.querySelector("input[type=\"button\"]") as HTMLFormElement;
+        removeButton.addEventListener("click", event => {
+            if(event.button == 0) {
+                form.removeChild(copy);
+                this.updateStatements(form, option);
+            }
+        })
+        textField.value = option.getStatements()[index];
+        this.addUpdateEventTo(form, textField, option);
+        return copy;
+    }
+
+    protected override applyLogic(option: BooleanStatementListOption, block: StructogramBlock, node: Element): void {
+        node.innerHTML = 
+            node.innerHTML
+                .replaceAll("%id%", block.id + "-" + option.name)
+                .replaceAll("%name%", option.name);
+        const form = node.querySelector("form") as HTMLElement;
+        const conditionEntry = node.querySelector(".js-condition-entry") as HTMLElement;
+        const textField = conditionEntry.querySelector("input[type=\"text\"]") as HTMLFormElement;
+        const removeButton = conditionEntry.querySelector("input[type=\"button\"]") as HTMLFormElement;
+        removeButton.addEventListener("click", event => {
+            if(event.button == 0) {
+                form.removeChild(conditionEntry);
+                this.updateStatements(form, option);
+            }
+        })
+        const statementCount = option.getStatements().length;
+        textField.value = option.getStatements()[0];
+        this.addUpdateEventTo(form, textField, option);
+        let i = 1;
+        for(; i < statementCount; i++) {
+            this.cloneAndAddTextField(form, conditionEntry, i, option);
+        }
+        const addButton = node.querySelector(`#${block.id}-${option.name}-add-button`) as HTMLElement;
+        addButton.addEventListener("click", event => {
+            if(event.button == 0) {
+                i++;
+                this.cloneAndAddTextField(form, conditionEntry, i, option);
+                this.updateStatements(form, option);
+            }
+        })
+    }   
+}
+
+class KeyOptionHandler extends OptionHandler {
+    protected override applyLogic(option: KeyOption, block: StructogramBlock, node: Element): void {
+        node.innerHTML = 
+            node.innerHTML
+                .replaceAll("%id%", block.id + "-" + option.name)
+                .replaceAll("%name%", option.name);     
+        const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
+        textField.value = option.getKey();
+        textField.addEventListener("change", () => {
+            option.setValue(textField.value);
+        });
+    }   
+}
+
+class BlockEditor {
+    private _currentBlock: StructogramBlock | undefined;
+    private blockEditorNode = document.querySelector("#block-editor")!;
+    private optionResourceManager: ResourceManager = new ResourceManager();
+    private optionHandlers: Record<string, OptionHandler> = {};
+
+    constructor() {
+        this.optionResourceManager.register("anystatementoption", statementOptionTemplate);
+        this.optionHandlers["anystatementoption"] = new StatementOptionHandler<Primitive>(this.optionResourceManager);
+        this.optionResourceManager.register("numericstatementoption", statementOptionTemplate);
+        this.optionHandlers["numericstatementoption"] = new StatementOptionHandler<number>(this.optionResourceManager);
+        this.optionResourceManager.register("stringstatementoption", statementOptionTemplate);
+        this.optionHandlers["stringstatementoption"] = new StatementOptionHandler<string>(this.optionResourceManager);
+        this.optionResourceManager.register("booleanstatementoption", statementOptionTemplate);
+        this.optionHandlers["booleanstatementoption"] = new StatementOptionHandler<boolean>(this.optionResourceManager);
+        this.optionResourceManager.register("booleanstatementlistoption", booleanStatementListOptionTemplate);
+        this.optionHandlers["booleanstatementlistoption"] = new BooleanStatementListOptionHandler(this.optionResourceManager);
+        this.optionResourceManager.register("keyoption", keyOptionTemplate);
+        this.optionHandlers["keyoption"] = new KeyOptionHandler(this.optionResourceManager);
+    }
+
+    public generateHTML() {
+        this.blockEditorNode.textContent = "";
+        if(this._currentBlock) {
+            for(const option of this._currentBlock.getOptions()) {
+                if(option.getTypeIdentifier() in this.optionHandlers) {
+                    const node = this.optionHandlers[option.getTypeIdentifier()]!.getHTMLNodeFor(option, this._currentBlock);
+                    if(node) this.blockEditorNode.appendChild(node);
+                }
+            }
+        }
+    }
+
+    public set currentBlock(block: StructogramBlock | undefined) {
+        if(this._currentBlock) {
+            const node = document.querySelector(`#${this._currentBlock.id}`);
+            if(node) {
+                node.classList.remove("selected-block")
+            }
+        }
+        this._currentBlock = block;
+        if(this._currentBlock) {
+            const node = document.querySelector(`#${this._currentBlock.id}`);
+            if(node) {
+                node.classList.add("selected-block")
+            }
+        }
+        this.generateHTML();
+    }
+
+    public get currentBlock() {
+        return this._currentBlock;
+    }
+
 }
