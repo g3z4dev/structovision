@@ -27,6 +27,9 @@ import keyOptionTemplate from "../../resources/options/keyoption.html";
 const baseBlockWidth = 100;
 const baseBlockHeight = 30;
 const textPadding = 8;
+const runningClass = "fill-green-100";
+const selectedClass = "fill-cyan-100";
+const unselectedClass = "fill-white";
 
 function setID(elem: Element, id: string) {
     elem.setAttribute("id", id);
@@ -76,39 +79,84 @@ function parseIntoHTML(text: string) {
     return tempDiv.firstChild as HTMLElement;
 }
 
+type ViewMode = "builder" | "runner";
+
 export class ViewModel {
     private emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
     public currentStructogram: Structogram = new Structogram(this.emitter);
-    public readonly structogramEditorView = new StructogramEditorView(this.currentStructogram, this);
+    public readonly structogramBuilder = new StructogramBuilder(this.currentStructogram, this);
+    public readonly structogramRunner = new StructogramRunner(this.currentStructogram, this);
     public readonly toolbar = new BlockToolbar(this.currentStructogram);
     public readonly blockEditor = new BlockEditor();
-    private runSpeed: number = 100;
+    public readonly timeControl = new TimeControl(this);
+    private readonly structogramBuilderElem = document.querySelector("#structogram-builder")!;
+    private readonly structogramRunnerElem = document.querySelector("#structogram-runner")!;
+    private readonly programViewsElem = document.querySelector("#program-views")!;
+    private readonly switchToBuilderButton = document.querySelector("#switch-to-builder-button") as HTMLButtonElement;
+    private readonly switchToRunnerButton = document.querySelector("#switch-to-runner-button") as HTMLButtonElement;
+    private _mode: ViewMode = "builder";
    
+    private set mode(mode: ViewMode) {
+        if(mode == "builder") {
+            this.structogramBuilderElem.classList.remove("hidden");
+            this.structogramRunnerElem.classList.add("hidden");
+        } else if(mode == "runner") {
+            this.structogramRunnerElem.classList.remove("hidden");
+            this.structogramBuilderElem.classList.add("hidden");
+            this.structogramRunner.generateHTML();
+        }
+
+        this._mode = mode;
+    } 
+
+    public get mode() {
+        return this._mode;
+    }
+
     constructor() {
-        this.structogramEditorView.generateHTML();
+        this.structogramBuilder.generateHTML();
         this.currentStructogram.emitter.addListener(Structogram.changedEvent, () => {
-            this.structogramEditorView.generateHTML();
+            this.structogramBuilder.generateHTML();
         })
         this.toolbar.generateHTML();
+        this.switchToBuilderButton.addEventListener("click", event => {
+            if(event.button == 0) {
+                this.mode = "builder";
+            }
+        });
+        this.switchToRunnerButton.addEventListener("click", event => {
+            if(event.button == 0) {
+                this.mode = "runner";
+            }
+        });
+
+        this.currentStructogram.emitter.addListener(Structogram.printEvent, msg => {
+            const log = document.createElement("p");
+            log.classList.add("bg-white", "m-2");
+            log.textContent = msg;
+            this.programViewsElem.appendChild(log);
+        })
     }
 }
 
-class StructogramEditorView {
-    private readonly viewModel: ViewModel;
-    private readonly blockResourceManager: ResourceManager = new ResourceManager();
-    private readonly editor = document.querySelector("#editor") as HTMLElement;
-    private readonly structogramSVG = document.querySelector("#structogram-svg") as HTMLElement;
-    private readonly structogram: Structogram;
-    private structogramX = 0;
-    private structogramY = 0;
-    private structogramWidth = 1024;
-    private scale = 1;
-    private rightClickDown = false;
+class StructogramRenderer {
+    protected readonly viewModel: ViewModel;
+    protected readonly blockResourceManager: ResourceManager = new ResourceManager();
+    protected readonly renderTarget;
+    protected readonly structogramSVG: HTMLElement;
+    protected readonly structogram: Structogram;
+    protected structogramX = 0;
+    protected structogramY = 0;
+    protected structogramWidth = 1024;
+    protected scale = 1;
+    protected rightClickDown = false;
 
     private optionListenerRemovers: (() => void)[] = [];
 
-    constructor(structogram: Structogram, viewModel: ViewModel) {
+    constructor(structogram: Structogram, viewModel: ViewModel, renderTarget: HTMLElement) {
         this.viewModel = viewModel;
+        this.renderTarget = renderTarget;
+        this.structogramSVG = this.renderTarget.querySelector(".structogram-svg") as HTMLElement;
         this.blockResourceManager.register("assignmentblock", assignmentBlockTemplate);
         this.blockResourceManager.register("printblock", printBlockTemplate);
         this.blockResourceManager.register("truefalsebranchingblock", truefalseBranchingBlockTemplate);
@@ -124,7 +172,7 @@ class StructogramEditorView {
     private setUpMovement() {
         let lastX = 0;
         let lastY = 0;
-        this.editor.addEventListener("mousedown", event => {
+        this.renderTarget.addEventListener("mousedown", event => {
             if(event.button == 2) {
                 lastX = event.clientX;
                 lastY = event.clientY;
@@ -132,7 +180,7 @@ class StructogramEditorView {
                 event.preventDefault();
             }
         });
-        this.editor.addEventListener("mousemove", event => {
+        this.renderTarget.addEventListener("mousemove", event => {
             if(this.rightClickDown) {
                 const deltaX = event.clientX - lastX;
                 const deltaY = event.clientY - lastY;
@@ -150,10 +198,10 @@ class StructogramEditorView {
                 this.viewModel.toolbar.blockBrush = undefined;
             }
         });
-        this.editor.addEventListener("contextmenu", event => {
+        this.renderTarget.addEventListener("contextmenu", event => {
             event.preventDefault();
         });
-        this.editor.addEventListener("wheel", event => {
+        this.renderTarget.addEventListener("wheel", event => {
             this.scale *= (1+Math.sign(event.deltaY)/20);
             this.updateStructogramTransformation();
         })
@@ -172,7 +220,7 @@ class StructogramEditorView {
         this.structogramSVG.textContent = "";
         let block = this.structogram.startingBlock;
         const height = this.resolveHTMLFor(this.structogramSVG, block);
-        setHeight(this.structogramSVG, height);
+        setSize(this.structogramSVG, this.structogramWidth, height);
     }
 
     private replaceOptionValues(template: string, options: BlockOption[]) {
@@ -231,17 +279,7 @@ class StructogramEditorView {
         let yOffset = _yOffset;
         while(currentBlock != undefined) {
             const elem = this.blockResourceManager.getHTMLForObject(currentBlock)!;
-            setID(elem, currentBlock.getID());
-            const finalBlock = currentBlock;
-            elem.addEventListener("click", event => {
-                if(event.button == 0) {
-                    this.viewModel.blockEditor.currentBlock = finalBlock;
-                    event.stopPropagation();
-                }
-            })
-            if(this.viewModel.blockEditor.currentBlock == currentBlock) {
-                elem.classList.add("selected-block");
-            }
+            this.onBlockAdded(currentBlock, elem);
             parent.appendChild(elem);
             const subBlocks = currentBlock.getSubBlocks();
             const subBlockKeys = Object.keys(subBlocks);
@@ -267,17 +305,8 @@ class StructogramEditorView {
                     const subBlockHeight = this.resolveHTMLFor(elem, subBlock, newWidth, childXOffset+newWidth*i, childYOffset);
                     if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
                 } else {
-                    const subElem = this.blockResourceManager.getHTMLForObject(undefined)!;
-                    setPosition(subElem, childXOffset+newWidth*i, childYOffset);
-                    setSize(subElem, newWidth, baseBlockHeight);
-                    const finalBlock = currentBlock;
-                    subElem.addEventListener("mouseup", event => {
-                        if(event.button == 0 && this.viewModel.toolbar.blockBrush) {
-                            finalBlock.setSubBlock(subBlockKeys[i]!, this.viewModel.toolbar.blockBrush());
-                        }
-                    });
-                    elem.appendChild(subElem);
-                    if(baseBlockHeight > maxSubBlockHeight) maxSubBlockHeight = baseBlockHeight;
+                    const subBlockHeight = this.onUndefinedSubBlock(elem, currentBlock, subBlockKeys[i]!, newWidth, childXOffset+newWidth*i, childYOffset);
+                    if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
                 }
             }
             const blockHeight = maxSubBlockHeight + baseBlockHeight;
@@ -297,6 +326,45 @@ class StructogramEditorView {
             currentBlock = currentBlock?.next;
             yOffset += blockHeight;
         }
+        yOffset += this.onUndefinedBlock(parent, prevBlock, width, xOffset, yOffset);
+        return yOffset-_yOffset;
+    }
+
+    protected onBlockAdded(block: StructogramBlock, elem: HTMLElement) {
+
+    }
+
+    protected onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, width: number, xOffset: number, yOffset: number) {
+        return 0;
+    }
+
+    protected onUndefinedSubBlock(parent: Element, parentBlock: StructogramBlock, key: string, width: number, xOffset: number, yOffset: number) {
+        return 0;
+    }
+}
+
+class StructogramBuilder extends StructogramRenderer {
+    constructor(structogram: Structogram, viewModel: ViewModel) {
+        super(structogram, viewModel, document.querySelector("#build-view")!)
+    }
+
+    protected override onBlockAdded(block: StructogramBlock, elem: HTMLElement): void {
+        setID(elem, block.getID());
+        elem.addEventListener("click", event => {
+            if(event.button == 0) {
+                this.viewModel.blockEditor.currentBlock = block;
+                event.stopPropagation();
+            }
+        })
+        if(this.viewModel.blockEditor.currentBlock == block) {
+            for(const e of elem.querySelectorAll(`.${unselectedClass}`)) {
+                e.classList.remove(unselectedClass);
+                e.classList.add(selectedClass);
+            }
+        }
+    }
+
+    protected override onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, width:number, xOffset: number, yOffset: number): number {
         const elem = this.blockResourceManager.getHTMLForObject(undefined)!;
         setPosition(elem, xOffset, yOffset);
         setSize(elem, width, baseBlockHeight);
@@ -310,7 +378,110 @@ class StructogramEditorView {
             }
         });
         parent.appendChild(elem);
-        return yOffset-_yOffset + baseBlockHeight;
+        return baseBlockHeight;
+    }
+
+    protected override onUndefinedSubBlock(parent: Element, parentBlock: StructogramBlock, key: string, width: number, xOffset: number, yOffset: number): number {
+        const subElem = this.blockResourceManager.getHTMLForObject(undefined)!;
+        setPosition(subElem, xOffset, yOffset);
+        setSize(subElem, width, baseBlockHeight);
+        subElem.addEventListener("mouseup", event => {
+            if(event.button == 0 && this.viewModel.toolbar.blockBrush) {
+                parentBlock.setSubBlock(key, this.viewModel.toolbar.blockBrush());
+            }
+        });
+        parent.appendChild(subElem);
+        return baseBlockHeight;
+    }
+}
+
+class StructogramRunner extends StructogramRenderer {
+    private _runSpeed: number = 200;
+    private _currentBlock: StructogramBlock | undefined;
+    private paused: boolean = false;
+
+    public set currentBlock(currentBlock: StructogramBlock | undefined) {
+        if(this._currentBlock) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this._currentBlock.id} > .${runningClass}`) ?? []) {
+                e?.classList.remove(runningClass);
+                e?.classList.add(unselectedClass);
+            }
+        }
+        this._currentBlock = currentBlock;
+        if(currentBlock) {
+            for(const e of this.renderTarget.querySelectorAll(`#${currentBlock.id} > .${unselectedClass}`) ?? []) {
+                e?.classList.remove(unselectedClass);
+                e?.classList.add(runningClass);
+            }
+        }
+    }
+
+    public get currentBlock() {
+        return this._currentBlock;
+    }
+
+    public set runSpeed(runSpeed: number) {
+        if(0 > runSpeed) throw new Error();
+        this._runSpeed = runSpeed;
+    } 
+
+    constructor(structogram: Structogram, viewModel: ViewModel) {
+        super(structogram, viewModel, document.querySelector("#run-view")!)
+    }
+
+    private setBlockActive(lastBlock: StructogramBlock | undefined, currentBlock: StructogramBlock | undefined) {
+        if(lastBlock) {
+            for(const e of this.renderTarget.querySelectorAll(`#${lastBlock!.id} > .${runningClass}`) ?? []) {
+                e?.classList.remove(runningClass);
+                e?.classList.add(unselectedClass);
+            }
+        }
+        if(currentBlock) {
+            for(const e of this.renderTarget.querySelectorAll(`#${currentBlock!.id} > .${unselectedClass}`) ?? []) {
+                e?.classList.remove(unselectedClass);
+                e?.classList.add(runningClass);
+            }
+        }
+    }
+
+    private async wait(ms: number) {
+        await new Promise(r => setTimeout(r, ms));
+    }
+
+    public async start() {
+        if(!this.structogram.isRunning()) this.structogram.preRun();
+        this.paused = false;
+        this.currentBlock = this.structogram.currentBlock;
+        do {
+            await this.wait(this._runSpeed);
+            this.structogram.runStep();
+            this.currentBlock = this.structogram.currentBlock;
+        } while (this.structogram.isRunning() && !this.paused);
+        if(!this.structogram.isRunning()) this.currentBlock = undefined;
+    }
+
+    public pause() {
+        this.paused = true;
+    }
+
+    protected override onBlockAdded(block: StructogramBlock, elem: HTMLElement): void {
+        setID(elem, block.getID());
+    }
+
+    protected override onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, width:number, xOffset: number, yOffset: number): number {
+        const elem = this.blockResourceManager.getHTMLForObject(undefined)!;
+        setPosition(elem, xOffset, yOffset);
+        setSize(elem, width, baseBlockHeight);
+        parent.appendChild(elem);
+        return baseBlockHeight;
+    }
+
+    protected override onUndefinedSubBlock(parent: Element, parentBlock: StructogramBlock, key: string, width: number, xOffset: number, yOffset: number): number {
+        const subElem = this.blockResourceManager.getHTMLForObject(undefined)!;
+        setPosition(subElem, xOffset, yOffset);
+        setSize(subElem, width, baseBlockHeight);
+        parent.appendChild(subElem);
+        return baseBlockHeight;
     }
 }
 
@@ -594,14 +765,20 @@ class BlockEditor {
         if(this._currentBlock) {
             const node = document.querySelector(`#${this._currentBlock.id}`);
             if(node) {
-                node.classList.remove("selected-block")
+                for(const e of node.querySelectorAll(`.${selectedClass}`)) {
+                    e.classList.remove(selectedClass);
+                    e.classList.add(unselectedClass);
+                }
             }
         }
         this._currentBlock = block;
         if(this._currentBlock) {
             const node = document.querySelector(`#${this._currentBlock.id}`);
             if(node) {
-                node.classList.add("selected-block")
+                for(const e of node.querySelectorAll(`.${unselectedClass}`)) {
+                    e.classList.remove(unselectedClass);
+                    e.classList.add(selectedClass);
+                }
             }
         }
         this.generateHTML();
@@ -611,4 +788,66 @@ class BlockEditor {
         return this._currentBlock;
     }
 
+}
+
+class TimeControl {
+    private readonly viewModel: ViewModel;
+    private readonly startButton = document.querySelector("#start-button") as HTMLButtonElement;
+    private readonly pauseButton = document.querySelector("#pause-button") as HTMLButtonElement;
+    private readonly fasterButton = document.querySelector("#faster-button") as HTMLButtonElement;
+    private readonly slowerButton = document.querySelector("#slower-button") as HTMLButtonElement;
+    private readonly speedLabel = document.querySelector("#speed-label") as HTMLElement;
+    private readonly speeds: Record<number, number> = {
+        0: 0.1,
+        1: 0.25,
+        2: 0.5,
+        3: 0.75,
+        4: 1,
+        5: 1.5,
+        6: 2,
+        7: 3,
+        8: 4
+    }
+    private _currentSpeed = 4;
+
+    private set currentSpeed(currentSpeed: number) {
+        if(currentSpeed < 0) currentSpeed = 0;
+        if(currentSpeed > 8) currentSpeed = 8;
+        this._currentSpeed = currentSpeed;
+        const speed = this.speeds[this._currentSpeed]!;
+        this.viewModel.structogramRunner.runSpeed = 200 / speed;
+        this.speedLabel.innerText = `${speed}x`;
+    }
+
+    private get currentSpeed() {
+        return this._currentSpeed;
+    }
+
+    constructor(viewModel: ViewModel) {
+        this.viewModel = viewModel;
+        this.setupButtons();
+    }
+
+    private setupButtons() {
+        this.startButton.addEventListener("click", event => {
+            if(this.viewModel.mode == "runner") {
+                this.viewModel.structogramRunner.start();
+            }
+        });
+        this.pauseButton.addEventListener("click", event => {
+            if(this.viewModel.mode == "runner") {
+                this.viewModel.structogramRunner.pause();
+            }
+        });
+        this.slowerButton.addEventListener("click", event => {
+            if(this.viewModel.mode == "runner") {
+                this.currentSpeed -= 1;
+            }
+        });
+        this.fasterButton.addEventListener("click", event => {
+            if(this.viewModel.mode == "runner") {
+                this.currentSpeed += 1;
+            }
+        });
+    }
 }

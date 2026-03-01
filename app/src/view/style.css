@@ -3,7 +3,3 @@
 .non-scaling-stroke {
     vector-effect: non-scaling-stroke;
 }
-
-.selected-block {
-    stroke: green !important;
-}

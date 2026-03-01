@@ -35,7 +35,7 @@ export class Structogram {
     public readonly memory: Memory;
     public readonly emitter: EventEmitter2;
     public startingBlock: StructogramBlock | undefined;
-    private currentBlock: StructogramBlock | undefined;
+    private _currentBlock: StructogramBlock | undefined;
     private readonly idMap: Record<string, StructogramBlock> = {};
     private running = false;
     private bracketBlockStack: BracketBlock[] = [];
@@ -49,6 +49,14 @@ export class Structogram {
 
     public defineVariable(key: string, value: Primitive) {
         this.variables[key] = value;
+    }
+
+    public get currentBlock() {
+        return this._currentBlock;
+    }
+
+    private set currentBlock(currentBlock: StructogramBlock | undefined) {
+        this._currentBlock = currentBlock;
     }
 
     private createVariables() {
@@ -81,8 +89,10 @@ export class Structogram {
                     this.bracketBlockStack.push(lastBlock);
                 }
             }
+            if(!this.currentBlock) this.runStep();
         } else if(this.bracketBlockStack.length > 0) {
             this.currentBlock = this.bracketBlockStack.pop();
+            this.runStep();
         } else {
             this.running = false;
             this.ready = false;
