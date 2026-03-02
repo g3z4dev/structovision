@@ -2,6 +2,8 @@ import {AnyStatementOption, AssignmentBlock, BackTestingLoopBlock, BlockOption, 
 import EventEmitter2 from "eventemitter2";
 import {type Listener} from "eventemitter2";
 import type { Primitive } from "../model/util";
+import { Memory } from "../model/memory";
+import { Operand, Operator, Statement, type Bracket } from "../model/statement";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
 import printBlockTemplate from "../../resources/blocks/printblock.html";
@@ -24,8 +26,15 @@ import statementOptionTemplate from "../../resources/options/statementoption.htm
 import booleanStatementListOptionTemplate from "../../resources/options/booleanstatementlistoption.html";
 import keyOptionTemplate from "../../resources/options/keyoption.html";
 
+import outputViewTemplate from "../../resources/program-views/outputview.html";
+import memoryViewTemplate from "../../resources/program-views/memoryview.html";
+import logicViewTemplate from "../../resources/program-views/logicview.html";
+import operatorTemplate from "../../resources/program-views/logic-view-templates/operator.html";
+import operandTemplate from "../../resources/program-views/logic-view-templates/operand.html";
+
 const baseBlockWidth = 100;
 const baseBlockHeight = 30;
+const baseRunSpeed = 2000;
 const textPadding = 8;
 const runningClass = "fill-green-100";
 const selectedClass = "fill-cyan-100";
@@ -79,6 +88,17 @@ function parseIntoHTML(text: string) {
     return tempDiv.firstChild as HTMLElement;
 }
 
+async function wait(ms: number) {
+    await new Promise(r => setTimeout(r, ms));
+}
+
+function setTemplateText(elem: HTMLElement, clazz: string, text: string): void {
+    const n = elem.querySelector(`.t-${clazz}`) as HTMLElement | undefined;
+    if(n) {
+        n.textContent = text;
+    }
+}
+
 type ViewMode = "builder" | "runner";
 
 export class ViewModel {
@@ -89,9 +109,9 @@ export class ViewModel {
     public readonly toolbar = new BlockToolbar(this.currentStructogram);
     public readonly blockEditor = new BlockEditor();
     public readonly timeControl = new TimeControl(this);
+    public readonly programViewManager = new ProgramViewManager(this);
     private readonly structogramBuilderElem = document.querySelector("#structogram-builder")!;
     private readonly structogramRunnerElem = document.querySelector("#structogram-runner")!;
-    private readonly programViewsElem = document.querySelector("#program-views")!;
     private readonly switchToBuilderButton = document.querySelector("#switch-to-builder-button") as HTMLButtonElement;
     private readonly switchToRunnerButton = document.querySelector("#switch-to-runner-button") as HTMLButtonElement;
     private _mode: ViewMode = "builder";
@@ -129,13 +149,6 @@ export class ViewModel {
                 this.mode = "runner";
             }
         });
-
-        this.currentStructogram.emitter.addListener(Structogram.printEvent, msg => {
-            const log = document.createElement("p");
-            log.classList.add("bg-white", "m-2");
-            log.textContent = msg;
-            this.programViewsElem.appendChild(log);
-        })
     }
 }
 
@@ -204,6 +217,7 @@ class StructogramRenderer {
         this.renderTarget.addEventListener("wheel", event => {
             this.scale *= (1+Math.sign(event.deltaY)/20);
             this.updateStructogramTransformation();
+            event.preventDefault();
         })
     }
 
@@ -223,28 +237,21 @@ class StructogramRenderer {
         setSize(this.structogramSVG, this.structogramWidth, height);
     }
 
-    private replaceOptionValues(template: string, options: BlockOption[]) {
-        let text = template ?? "";
-        if(text.length == 0) return "";
+    private replaceOptionValues(elem: HTMLElement, options: BlockOption[], index: number) {
         for(const option of options) {
             const values = option.getValue();
-            if(values.length == 1) {
-                text = text.replace(`%${option.name}%`, values[0]!);
-            } else if(values.length > 1) {
-                for(let i = 0; i < values.length; i++) {
-                    text = text.replace(`%${option.name}${i}%`, values[i]!);
-                }
+            if(values.length > 1) {
+                setTemplateText(elem, option.name, values[index]!);
+            } else {
+                setTemplateText(elem, option.name, values[0]!);
             }
         }
-        return text;
     }
 
-    private addLabelFor(elem: HTMLElement, options: BlockOption[], x: number, y: number, width: number, height:number) {
+    private setupTextFor(elem: HTMLElement, options: BlockOption[], width: number, height:number, index: number = 0) {
         if(!this.structogramSVG) return;
-        const text = this.replaceOptionValues(elem.dataset.text ?? "", options);
-        const textLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        textLabel.textContent = text;
-        elem.append(textLabel);
+        this.replaceOptionValues(elem, options, index);
+        const textLabel = elem.querySelector(".t-text") as SVGAElement;
         const textHLocation = elem.dataset.textHLocation ?? "left";
         if(textHLocation == "center") {
             textLabel.setAttribute("x", `${width/2-textLabel.getBBox().width/2}`);
@@ -259,8 +266,7 @@ class StructogramRenderer {
         }
         for(const option of options) {
             const listener = () => {
-                const text = this.replaceOptionValues(elem.dataset.text ?? "", options);
-                textLabel.textContent = text;
+                this.replaceOptionValues(elem, options, index);
                 if(textHLocation == "center") {
                     textLabel.setAttribute("x", `${width/2-textLabel.getBBox().width/2}`);
                 }
@@ -289,16 +295,15 @@ class StructogramRenderer {
                 let childXOffset = Number.parseInt(elem.dataset.childXOffset ?? "0");
                 let childYOffset = Number.parseInt(elem.dataset.childYOffset ?? "0");
                 const newWidth = (width-childXOffset)/subBlockCount;
-                const childHeader = elem.querySelector(".js-childHeader") as HTMLElement | undefined;
+                const childHeader = elem.querySelector(".t-childHeader") as HTMLElement | undefined;
                 if(childHeader) {
                     const header = childHeader.cloneNode(true) as HTMLElement;
-                    header.dataset.text = header.dataset.text!.replace("[i]", i.toString());
                     const x = childXOffset + newWidth*i;
                     const y = 0;
                     setPosition(header, x, y);
-                    setSize(header, newWidth, baseBlockHeight)
+                    setSize(header, newWidth, baseBlockHeight);
                     elem.appendChild(header);
-                    this.addLabelFor(header, currentBlock.getOptions(), x, y, newWidth, baseBlockHeight);
+                    this.setupTextFor(header, currentBlock.getOptions(), newWidth, baseBlockHeight, i);
                 }
                 const subBlock = subBlocks[subBlockKeys[i]!];
                 if(subBlock) {
@@ -321,7 +326,7 @@ class StructogramRenderer {
             const visualHeight = calcVisualHeight();
             setPosition(elem, xOffset, yOffset);
             setSize(elem, width, visualHeight);
-            this.addLabelFor(elem, currentBlock.getOptions(), xOffset, yOffset, width, visualHeight);
+            this.setupTextFor(elem, currentBlock.getOptions(), width, visualHeight);
             prevBlock = currentBlock;
             currentBlock = currentBlock?.next;
             yOffset += blockHeight;
@@ -396,8 +401,8 @@ class StructogramBuilder extends StructogramRenderer {
 }
 
 class StructogramRunner extends StructogramRenderer {
-    private _runSpeed: number = 200;
     private _currentBlock: StructogramBlock | undefined;
+    private _activeBlockStep: string | undefined;
     private paused: boolean = false;
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
@@ -406,46 +411,48 @@ class StructogramRunner extends StructogramRenderer {
                 e?.classList.remove(runningClass);
                 e?.classList.add(unselectedClass);
             }
+            currentBlock?.emitter.removeAllListeners(StructogramBlock.activeStepChanged);
         }
+        this.activeBlockStep = undefined;
         this._currentBlock = currentBlock;
         if(currentBlock) {
             for(const e of this.renderTarget.querySelectorAll(`#${currentBlock.id} > .${unselectedClass}`) ?? []) {
                 e?.classList.remove(unselectedClass);
                 e?.classList.add(runningClass);
+                this.activeBlockStep = currentBlock.activeStep;
+            }
+            currentBlock.emitter.addListener(StructogramBlock.activeStepChanged, step => {
+                this.activeBlockStep = step;
+            });
+        } else {
+            this.activeBlockStep = undefined;
+        }
+    }
+
+    protected set activeBlockStep(step: string | undefined) {
+        if(this._activeBlockStep && this.currentBlock) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}`) ?? []) {
+                e?.classList.remove("font-bold", "stroke-green-500");
             }
         }
+        this._activeBlockStep = step;
+        if(this._activeBlockStep && this.currentBlock) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}`) ?? []) {
+                e?.classList.add("font-bold", "stroke-green-500");
+            }
+        }
+    }
+
+    protected get activeBlockStep(): string | undefined {
+        return this._activeBlockStep;
     }
 
     public get currentBlock() {
         return this._currentBlock;
     }
 
-    public set runSpeed(runSpeed: number) {
-        if(0 > runSpeed) throw new Error();
-        this._runSpeed = runSpeed;
-    } 
-
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(structogram, viewModel, document.querySelector("#run-view")!)
-    }
-
-    private setBlockActive(lastBlock: StructogramBlock | undefined, currentBlock: StructogramBlock | undefined) {
-        if(lastBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${lastBlock!.id} > .${runningClass}`) ?? []) {
-                e?.classList.remove(runningClass);
-                e?.classList.add(unselectedClass);
-            }
-        }
-        if(currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${currentBlock!.id} > .${unselectedClass}`) ?? []) {
-                e?.classList.remove(unselectedClass);
-                e?.classList.add(runningClass);
-            }
-        }
-    }
-
-    private async wait(ms: number) {
-        await new Promise(r => setTimeout(r, ms));
     }
 
     public async start() {
@@ -453,9 +460,10 @@ class StructogramRunner extends StructogramRenderer {
         this.paused = false;
         this.currentBlock = this.structogram.currentBlock;
         do {
-            await this.wait(this._runSpeed);
+            this.viewModel.programViewManager.clearEffects();
             this.structogram.runStep();
-            this.currentBlock = this.structogram.currentBlock;
+            await wait(baseRunSpeed / this.viewModel.timeControl.currentSpeed);
+            if(!this.paused) this.currentBlock = this.structogram.currentBlock;
         } while (this.structogram.isRunning() && !this.paused);
         if(!this.structogram.isRunning()) this.currentBlock = undefined;
     }
@@ -808,19 +816,22 @@ class TimeControl {
         7: 3,
         8: 4
     }
-    private _currentSpeed = 4;
+    private _currentSpeedIndex = 4;
 
-    private set currentSpeed(currentSpeed: number) {
+    private set currentSpeedIndex(currentSpeed: number) {
         if(currentSpeed < 0) currentSpeed = 0;
         if(currentSpeed > 8) currentSpeed = 8;
-        this._currentSpeed = currentSpeed;
-        const speed = this.speeds[this._currentSpeed]!;
-        this.viewModel.structogramRunner.runSpeed = 200 / speed;
+        this._currentSpeedIndex = currentSpeed;
+        const speed = this.speeds[this._currentSpeedIndex]!;
         this.speedLabel.innerText = `${speed}x`;
     }
 
-    private get currentSpeed() {
-        return this._currentSpeed;
+    private get currentSpeedIndex() {
+        return this._currentSpeedIndex;
+    }
+
+    public get currentSpeed(): number {
+        return this.speeds[this._currentSpeedIndex] ?? 1;
     }
 
     constructor(viewModel: ViewModel) {
@@ -841,13 +852,235 @@ class TimeControl {
         });
         this.slowerButton.addEventListener("click", event => {
             if(this.viewModel.mode == "runner") {
-                this.currentSpeed -= 1;
+                this.currentSpeedIndex -= 1;
             }
         });
         this.fasterButton.addEventListener("click", event => {
             if(this.viewModel.mode == "runner") {
-                this.currentSpeed += 1;
+                this.currentSpeedIndex += 1;
             }
         });
     }
+}
+
+class ProgramViewManager {
+    public static readonly ready = "programviewmanager.ready";
+    private emitter: EventEmitter2 = new EventEmitter2();
+    private viewModel: ViewModel;
+    private printView: OutputView;
+    private memoryView: MemoryView;
+    private logicView: LogicView;
+    private readonly programViewsElem = document.querySelector("#program-views")!;
+
+    constructor(viewModel: ViewModel) {
+        this.viewModel = viewModel;
+        this.printView = new OutputView(viewModel);
+        this.memoryView = new MemoryView(viewModel);
+        this.logicView = new LogicView(viewModel);
+        this.programViewsElem.appendChild(this.printView.getElement());
+        this.programViewsElem.appendChild(this.memoryView.getElement());
+        this.programViewsElem.appendChild(this.logicView.getElement());
+    }
+
+    public clearEffects() {
+        this.printView.clearEffects();
+        this.memoryView.clearEffects();
+        this.logicView.clearEffects();
+    }
+
+    public render(delta: number) {
+        
+    }
+}
+
+abstract class ProgramView {
+    protected viewModel: ViewModel;
+    
+    constructor(viewModel: ViewModel) {
+        this.viewModel = viewModel;
+    }
+
+    public abstract getElement(): HTMLElement;
+    public abstract reset(): void;
+
+    public clearEffects() {
+
+    }
+
+}
+
+class OutputView extends ProgramView {
+    private outputViewElem = parseIntoHTML(outputViewTemplate) as HTMLElement;
+    private logTemplateElem = this.outputViewElem.querySelector("p.js-log-template")!.cloneNode() as HTMLElement;
+
+    constructor(viewModel: ViewModel) {
+        super(viewModel);
+        this.reset();
+        this.viewModel.currentStructogram.emitter.addListener(Structogram.printEvent, msg => {
+            const log = this.logTemplateElem.cloneNode() as HTMLElement;
+            log.textContent = msg;
+            this.outputViewElem.appendChild(log);
+        });
+    }
+
+    public override getElement(): HTMLElement {
+        return this.outputViewElem;
+    }
+
+
+    public override reset() {
+        this.outputViewElem.innerText = "";
+    }
+}
+
+class MemoryView extends ProgramView {
+    private memoryViewElem = parseIntoHTML(memoryViewTemplate) as HTMLElement;
+    private memoryViewEntriesElem = this.memoryViewElem.querySelector(".js-memory-entries") as HTMLElement;
+    private memoryTemplateElem = this.memoryViewElem.querySelector(".js-memory-template")!.cloneNode(true) as HTMLElement;
+    private readonly changedStyle = ["bg-orange-300"];
+    private readonly accessedStyle = ["bg-green-300"];
+    private readonly changedAndAccessedStyle = ["bg-blue-300"];
+
+    private addEntry(key: string, value: Primitive) {
+        const memoryEntry = this.memoryTemplateElem.cloneNode(true) as HTMLElement;
+        const keyElem = memoryEntry.querySelector(".js-memory-key") as HTMLElement;
+        const valueElem = memoryEntry.querySelector(".js-memory-value") as HTMLElement;
+        keyElem.textContent = key;
+        valueElem.textContent = value.toString();
+        setID(memoryEntry, `v-${key}`);
+        this.memoryViewEntriesElem.appendChild(memoryEntry);
+    }
+
+    constructor(viewModel: ViewModel) {
+        super(viewModel);
+        this.reset();
+        const memory = this.viewModel.currentStructogram.memory;
+        memory.emitter.addListener(Memory.variableAddedEvent, (key, value) => {   
+            this.addEntry(key, value);
+        });
+        memory.emitter.addListener(Memory.variableChangedEvent, (key, value) => {
+            const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
+            const valueElem = memoryEntry.querySelector(".js-memory-value") as HTMLElement;
+            valueElem.textContent = value;
+            if(this.isStyleSubset(memoryEntry, this.changedStyle)) {
+                this.clearStyle(memoryEntry, this.changedStyle);
+                memoryEntry.classList.add(...this.changedAndAccessedStyle);
+            }
+            memoryEntry.classList.add(...this.changedStyle);
+        });
+        memory.emitter.addListener(Memory.variableAccessedEvent, key => {
+            const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
+            if(this.isStyleSubset(memoryEntry, this.accessedStyle)) {
+                this.clearStyle(memoryEntry, this.accessedStyle);
+                memoryEntry.classList.add(...this.changedAndAccessedStyle);
+            }
+            memoryEntry.classList.add(...this.accessedStyle);
+        });
+    }
+
+    private clearStyle(elem: HTMLElement, styles: string[]) {
+        for(const style of styles) {
+            if(elem.classList.contains(style)) {
+                elem.classList.remove(style);
+            }
+        }
+    }
+
+    private isStyleSubset(elem: HTMLElement, styles: string[]) {
+        for(const style of styles) {
+            if(!elem.classList.contains(style)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public override clearEffects(): void {
+        const memory = this.viewModel.currentStructogram.memory;
+        for(const [key, _] of memory.getEntries()) {
+            const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
+            this.clearStyle(memoryEntry, this.changedStyle);
+            this.clearStyle(memoryEntry, this.accessedStyle);
+            this.clearStyle(memoryEntry, this.changedAndAccessedStyle);
+        }
+    }
+
+    public override getElement(): HTMLElement {
+        return this.memoryViewElem;
+    }
+
+    public reset(): void {
+        this.memoryViewEntriesElem.textContent = "";
+        const memory = this.viewModel.currentStructogram.memory;
+        for(const [key, value] of memory.getEntries()) {
+            this.addEntry(key, value);
+        }
+    }
+}
+
+class LogicView extends ProgramView implements AnimatedView {
+    private logicViewElem = parseIntoHTML(logicViewTemplate) as HTMLElement;
+    private operandTemplateElem = parseIntoHTML(operandTemplate) as HTMLElement;
+    private operatorTemplateElem = parseIntoHTML(operatorTemplate) as HTMLElement;
+
+    private addOperator(operator: Operator | string) {
+        const elem = this.operatorTemplateElem.cloneNode(true) as HTMLElement;
+        if(operator instanceof Operator) {
+            setTemplateText(elem, "representation", operator.getRepresentingChar());
+        } else {
+            setTemplateText(elem, "representation", operator);
+        }
+        this.logicViewElem.appendChild(elem);
+    }
+
+    private addOperand(operand: Operand | string) {
+        const elem = this.operandTemplateElem.cloneNode(true) as HTMLElement;
+        if(operand instanceof Operand) {
+            setTemplateText(elem, "representation", operand.getRepresentation());
+            setTemplateText(elem, "value", operand.resolve().toString());
+        } else {
+            setTemplateText(elem, "representation", "");
+            setTemplateText(elem, "value", operand);
+        }
+        this.logicViewElem.appendChild(elem);
+    }
+
+    constructor(viewModel: ViewModel) {
+        super(viewModel);
+        this.reset();
+        Statement.emitter.on(Statement.evaluationStart, (statementTokens: (Operand | Operator | Bracket)[]) =>{
+            for(const token of statementTokens) {
+                if(token instanceof Operand) {
+                    this.addOperand(token);
+                } else {
+                    this.addOperator(token);
+                }
+            }
+        });
+        
+        Statement.emitter.on(Statement.evaluationEnd, (result: Primitive) =>{
+            this.addOperator("->");
+            this.addOperand(result.toString());
+        });
+    }
+
+    public clearEffects(): void {
+        this.reset();
+    }
+
+    public render(delta: number): void {
+        
+    }
+
+    public override reset(): void {
+        this.logicViewElem.textContent = "";
+    }
+
+    public override getElement(): HTMLElement {
+        return this.logicViewElem;
+    }
+}
+
+interface AnimatedView {
+    render(delta: number): void;
 }

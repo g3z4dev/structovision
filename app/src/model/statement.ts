@@ -1,9 +1,10 @@
+import EventEmitter2 from "eventemitter2";
 import {Memory} from "./memory.ts";
 import {type Primitive} from "./util.ts";
 
 type OpeningBracket = "(";
 type ClosingBracket = ")";
-type Bracket = OpeningBracket | ClosingBracket;
+export type Bracket = OpeningBracket | ClosingBracket;
 
 export class StatementParseError extends Error {
 
@@ -34,7 +35,7 @@ function getAllSortedPairs(array: string[]): string[][] {
     return pairs;
 }
 
-abstract class Operator {
+export abstract class Operator {
     protected precedence: number;
     protected representingChar: string;
     protected returnType: string;
@@ -168,9 +169,10 @@ register(new BinaryOperator(3, ">=", [["number", "number"], ["string", "string"]
 // String Operators
 register(new BinaryOperator(4, "&", getAllSortedPairs(["number", "string", "boolean"]), "string", (a, b) => String(a) + String(b)));
 
-abstract class Operand {
+export abstract class Operand {
     public abstract resolve(): Primitive;
     public abstract getType(): string;
+    public abstract getRepresentation(): string;
 }
 
 class LiteralOperand extends Operand {
@@ -202,15 +204,19 @@ class LiteralOperand extends Operand {
     public override getType(): string {
         return typeof this.value;
     }
+
+    public override getRepresentation() {
+        return "";
+    }
 }
 
 class VariableOperand extends Operand {
-    private key: string;
+    private _key: string;
     private memory: Memory;
 
     constructor(key: string, memory: Memory) {
         super();
-        this.key = key;
+        this._key = key;
         this.memory = memory;
         if(!this.memory.hasVariable(key)) {
             throw new StatementParseError(`Invalid variable key [${key}]!`);
@@ -224,17 +230,51 @@ class VariableOperand extends Operand {
     public override getType(): string {
         return typeof this.memory.getVariable(this.key);
     }
+
+    private set key(key: string) {
+        this._key = key;
+    }
+
+    public get key() {
+        return this._key;
+    }
+    
+    public override getRepresentation() {
+        return this.key;
+    }
 }
 
 export abstract class Statement<T> {
-    protected tokens: (Operand | Operator)[] = [];
+    /**
+     * Emitted when an operator is applied on operands.
+     * The event handler is given the operator and its operands in a list. (Operator, Primitive[])
+     * */ 
+    public static readonly computeEvent = "statement.compute";
+    /**
+     * Emitted when an operand is resolved.
+     * The event handler is given the operand and how its resolved in a list. (Operand, Primitive)
+     * */
+    public static readonly operandResolutionEvent = "statement.operandresolution";/**
+    /** 
+     * Emitted when the evaluation is started.
+     * */
+    public static readonly evaluationStart = "statement.evaluation.start";
+    /** 
+     * Emitted when the evaluation is ended.
+     * */
+    public static readonly evaluationEnd = "statement.evaluation.end";
+    public static readonly emitter: EventEmitter2 = new EventEmitter2();
+    protected evaluatableTokens: (Operand | Operator)[] = [];
+    protected readableTokens: (Operand | Operator | Bracket)[] = [];
 
     abstract evaluate(): T;
     protected evaluateInternally(): Primitive {
+        Statement.emitter.emit(Statement.evaluationStart, this.readableTokens);
         const operands: Primitive[] = [];
-        for(const token of this.tokens) {
-            if("resolve" in token) {
-                operands.push(token.resolve());
+        for(const token of this.evaluatableTokens) {
+            if(token instanceof Operand) {
+                const resolvedOperand = token.resolve();
+                operands.push(resolvedOperand);
             } else {
                 const opCount = token.getOperandCount();
                 const usedOperands = [];
@@ -244,7 +284,9 @@ export abstract class Statement<T> {
                 operands.push(token.apply(usedOperands));
             }
         }
-        return operands.pop()!;
+        const value = operands.pop()!;
+        Statement.emitter.emit(Statement.evaluationEnd, value);
+        return value;
     }
 
     protected abstract assertReturnType(type: string): void;
@@ -437,7 +479,8 @@ export abstract class Statement<T> {
             return operands[0]!.tokens!;
         }
 
-        statement.tokens.push(...arrangeIntoPostfix());
+        statement.evaluatableTokens.push(...arrangeIntoPostfix());
+        statement.readableTokens.push(...parsedTokens);
     }
 }
 

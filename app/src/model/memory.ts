@@ -17,7 +17,7 @@ export class VariableCreationError extends Error {
 
 export class Memory {
     private variables: Record<string, Primitive>;
-    private emitter: EventEmitter2 | undefined;
+    public readonly emitter: EventEmitter2 = new EventEmitter2();
 
     private static readonly forbiddenKeys = [
         "true",
@@ -26,11 +26,11 @@ export class Memory {
 
     public static readonly variableAddedEvent: string = "memory.variable.added";
     public static readonly variableChangedEvent: string = "memory.variable.changed";
+    public static readonly variableAccessedEvent: string = "memory.variable.accessed";
     public static readonly objectAddedEvent: string = "memory.object.added";
 
-    constructor(emitter?: EventEmitter2) {
+    constructor() {
         this.variables = {};
-        this.emitter = emitter;
     }
 
     private validateKeyName(key: string): boolean {
@@ -71,13 +71,13 @@ export class Memory {
             throw new VariableCreationError(`Variable with key [${key}] is already defined!`);
         }
         this.variables[key] = value;
-        this.emitter?.emit(Memory.variableAddedEvent, [key, value]);
+        this.emitter.emit(Memory.variableAddedEvent, key, value);
     }
 
     public setVariable(key: string, value: Primitive) {
         if(key in this.variables) {
             this.variables[key] = value;
-            this.emitter?.emit(Memory.variableChangedEvent, [key, value]);
+            this.emitter.emit(Memory.variableChangedEvent, key, value);
             return;
         }
         throw new Error(`Variable with key [${key}] does not exist!`);
@@ -85,10 +85,16 @@ export class Memory {
 
     public getVariable(key: string): Primitive {
         if(key in this.variables) {
+            this.emitter.emit(Memory.variableAccessedEvent, key);
             return this.variables[key]!;
         }
         
         throw new Error(`Variable with key [${key}] does not exist!`);
+    }
+
+    // todo test if this exposes the inner state or not
+    public getEntries(): [string, Primitive][] {
+        return [...Object.entries(this.variables)];
     }
 
     public hasVariable(key: string): boolean {
@@ -97,7 +103,9 @@ export class Memory {
 
     public changeVariable(key: string, fn: (v:Primitive) => Primitive) {
         if(key in this.variables) {
-            this.variables[key] = fn(this.variables[key]!);
+            const value = fn(this.variables[key]!)
+            this.variables[key] = value;
+            this.emitter.emit(Memory.variableChangedEvent, key, value);
             return;
         }
         

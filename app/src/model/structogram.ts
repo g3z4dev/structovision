@@ -43,7 +43,7 @@ export class Structogram {
     private variables: Record<string, Primitive> = {};
 
     constructor(emitter: EventEmitter2) {
-        this.memory = new Memory(emitter);
+        this.memory = new Memory();
         this.emitter = emitter;
     }
 
@@ -84,7 +84,7 @@ export class Structogram {
             this.running = true;
             const lastBlock = this.currentBlock;
             this.currentBlock = this.currentBlock.run();
-            if(lastBlock instanceof BracketBlock) {
+            if(lastBlock instanceof BracketBlock && this.currentBlock != lastBlock) {
                 if(!(lastBlock as BracketBlock).isFinished()) {
                     this.bracketBlockStack.push(lastBlock);
                 }
@@ -92,7 +92,9 @@ export class Structogram {
             if(!this.currentBlock) this.runStep();
         } else if(this.bracketBlockStack.length > 0) {
             this.currentBlock = this.bracketBlockStack.pop();
-            this.runStep();
+            if((this.currentBlock as BracketBlock).skipToNext()) {
+                this.runStep();
+            }
         } else {
             this.running = false;
             this.ready = false;
@@ -273,6 +275,7 @@ export class KeyOption extends BlockOption {
 
 export abstract class StructogramBlock implements TypeIdentifiable, Identifiable {
     public static readonly childrenChanged = "structogramblock.childrenChanged";
+    public static readonly activeStepChanged = "structogramblock.activeStepChanged";
     protected static idSeq = 0;
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
     protected owner: Structogram;
@@ -280,6 +283,16 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     protected abstract subBlocks: Record<string, StructogramBlock | undefined>;
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
+    protected _activeStep: string = "ready";
+
+    public get activeStep() {
+        return this._activeStep;
+    }
+
+    protected set activeStep(step: string) {
+        this._activeStep = step;
+        this.emitter.emit(StructogramBlock.activeStepChanged, step);
+    }
 
     constructor(owner: Structogram) {
         this.owner = owner;
@@ -336,6 +349,7 @@ export class AssignmentBlock extends SequenceBlock {
     }
 
     public override run(): StructogramBlock | undefined {
+        this.activeStep = "main";
         this.owner.memory.setVariable(this.key!, this.statement?.evaluate() ?? 0);
         return this.next;
     }
@@ -376,6 +390,7 @@ export class PrintBlock extends SequenceBlock {
     }
 
     public override run(): StructogramBlock | undefined {
+        this.activeStep = "main";
         this.owner.print(this.statement?.evaluate()?.toString() ?? "null");
         return this.next;
     }
@@ -403,7 +418,10 @@ export class PrintBlock extends SequenceBlock {
 
 export abstract class BracketBlock extends StructogramBlock {
     abstract isFinished(): boolean;
+    abstract skipToNext(): boolean;
 }
+
+type TrueFalseBranchingBlockStates = "ready" | "hasRun" | "finished" 
 
 export class TrueFalseBranchingBlock extends BracketBlock {
     private condition: BooleanStatement | undefined ;
@@ -411,8 +429,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         "true": undefined,
         "false": undefined
     };
-    public hasRun: boolean = false;
-    public finished: boolean = false;
+    public state: TrueFalseBranchingBlockStates = "ready";
     public readonly conditionOption = new BooleanStatementOption(this.owner, "condition", "the condition");
 
     constructor(structogram: Structogram) {
@@ -420,15 +437,20 @@ export class TrueFalseBranchingBlock extends BracketBlock {
     }
 
     public override run(): StructogramBlock | undefined {
-        if(this.hasRun) {
-            this.finished = true;
+        this.activeStep = "main";
+        if(this.state == "hasRun") {
+            this.state = "finished"
             return this.next;
         }
-        this.hasRun = true;
+        this.state = "hasRun";
         if(this.condition?.evaluate()) {
             return this.trueBranch;
         }
         return this.falseBranch;
+    }
+
+    public override skipToNext(): boolean {
+        return true;
     }
 
     public get trueBranch() {
@@ -464,14 +486,13 @@ export class TrueFalseBranchingBlock extends BracketBlock {
             }
         }
 
-        this.hasRun = false;
-        this.finished = false;
+        this.state = "ready";
 
         return [];
     }
 
     public isFinished(): boolean {
-        return this.finished;
+        return this.state == "finished";
     }
 }
 
@@ -480,6 +501,7 @@ export class MultiBranchingBlock extends BracketBlock {
     public hasRun: boolean = false;
     public finished: boolean = false;
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
+    protected branchIndex = 0;
     public readonly conditionListOption = new BooleanStatementListOption(this.owner, "conditions", "the list of conditions the branches have");
 
     private fillOutBranches() {
@@ -514,15 +536,20 @@ export class MultiBranchingBlock extends BracketBlock {
         });
     }
 
+    // TODO else branch
     public override run(): StructogramBlock | undefined {
+        this.activeStep = "branch[i]";
         if(this.hasRun) {
             this.finished = true;
             return this.next;
         }
         this.hasRun = true;
-        for(let i = 0; i < this.branches.length; i++) {
-            if(this.branches[i]?.evaluate()) {
-                return Object.values(this.subBlocks)[i];
+        if(this.branchIndex in this.branches) {
+            if(this.branches[this.branchIndex]!.evaluate()) {
+                return Object.values(this.subBlocks)[this.branchIndex];
+            } else {
+                this.branchIndex++;
+                return this;
             }
         }
         return undefined;
@@ -559,6 +586,10 @@ export class MultiBranchingBlock extends BracketBlock {
     public override isFinished(): boolean {
         return this.finished;
     }
+
+    public override skipToNext(): boolean {
+        return false;
+    }
 }
 
 export abstract class LoopBlock extends BracketBlock {
@@ -582,6 +613,10 @@ export abstract class LoopBlock extends BracketBlock {
     public isFinished() {
         return this.finished;
     }
+
+    public override skipToNext(): boolean {
+        return false;
+    }
 }
 
 export class CountingLoopBlock extends LoopBlock {
@@ -590,7 +625,8 @@ export class CountingLoopBlock extends LoopBlock {
     private step: NumericStatement | undefined;
     private variableKey: string | undefined;
     private started: boolean = false;
-    public readonly variableKeyOption: KeyOption = new KeyOption(this.owner, "variable key", "the key of the variable the loop will use to iterate with");
+    private checkedCondition = false;
+    public readonly variableKeyOption: KeyOption = new KeyOption(this.owner, "key", "the key of the variable the loop will use to iterate with");
     public readonly fromOption: NumericStatementOption = new NumericStatementOption(this.owner, "from", "the number the calculation is starting from");
     public readonly toOption: NumericStatementOption = new NumericStatementOption(this.owner, "to", "the number the calculation is ending at");
     public readonly stepOption: NumericStatementOption = new NumericStatementOption(this.owner, "step", "the number the calculation is stepping with");
@@ -603,9 +639,18 @@ export class CountingLoopBlock extends LoopBlock {
         if(!this.started) {
             this.started = true;
             this.finished = false;
+            this.activeStep = "init";
             this.owner.memory.setVariable(this.variableKey!, this.from?.evaluate() ?? 0);
             return this.loopStart;
-        } else if(this.owner.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0)) {
+        } else if(!this.checkedCondition) {
+            this.activeStep = "condition";
+            this.checkedCondition = this.owner.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0);
+            if(this.checkedCondition) {
+                return this;
+            }
+        } else {
+            this.activeStep = "increment";
+            this.checkedCondition = false;
             this.owner.memory.changeVariable(this.variableKey!, v => v as number + (this.step?.evaluate() ?? 0));
             return this.loopStart;
         }
@@ -688,6 +733,7 @@ export abstract class ConditionalLoopBlock extends LoopBlock {
 export class FrontTestingLoopBlock extends ConditionalLoopBlock {
 
     public override run(): StructogramBlock | undefined {
+        this.activeStep = "main";
         if(this.condition?.evaluate()) {
             this.finished = false;
             return this.loopStart;
@@ -705,6 +751,7 @@ export class BackTestingLoopBlock extends ConditionalLoopBlock {
     private started: boolean = false;
 
     public override run(): StructogramBlock | undefined {
+        this.activeStep = "main";
         if(!this.started) {
             this.finished = false;
             this.started = true;

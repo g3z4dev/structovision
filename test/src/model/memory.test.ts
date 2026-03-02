@@ -75,7 +75,7 @@ test("Memory should emit the expected events", assertion => {
         variableChangedEventEmitted = true;
     });
 
-    const mem = new Memory(emitter);
+    const mem = new Memory();
 
     assertion.falsy(variableAddedEventEmitted, "memory.variable.added event should not be fired during object creation");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during object creation");
