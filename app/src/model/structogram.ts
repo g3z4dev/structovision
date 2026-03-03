@@ -498,7 +498,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
 
 export class MultiBranchingBlock extends BracketBlock {
     private branches: BooleanStatement[] = [];
-    public hasRun: boolean = false;
+    public foundBranch: boolean = false;
     public finished: boolean = false;
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     protected branchIndex = 0;
@@ -538,14 +538,14 @@ export class MultiBranchingBlock extends BracketBlock {
 
     // TODO else branch
     public override run(): StructogramBlock | undefined {
-        this.activeStep = "branch[i]";
-        if(this.hasRun) {
+        if(this.foundBranch) {
             this.finished = true;
             return this.next;
         }
-        this.hasRun = true;
         if(this.branchIndex in this.branches) {
+            this.activeStep = `branch${this.branchIndex}`;
             if(this.branches[this.branchIndex]!.evaluate()) {
+                this.foundBranch = true;
                 return Object.values(this.subBlocks)[this.branchIndex];
             } else {
                 this.branchIndex++;
@@ -577,7 +577,8 @@ export class MultiBranchingBlock extends BracketBlock {
             }
         }
 
-        this.hasRun = false;
+        this.branchIndex = 0;
+        this.foundBranch = false;
         this.finished = false;
 
         return [];
@@ -588,7 +589,7 @@ export class MultiBranchingBlock extends BracketBlock {
     }
 
     public override skipToNext(): boolean {
-        return false;
+        return this.foundBranch;
     }
 }
 

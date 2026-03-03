@@ -295,14 +295,22 @@ class StructogramRenderer {
                 let childXOffset = Number.parseInt(elem.dataset.childXOffset ?? "0");
                 let childYOffset = Number.parseInt(elem.dataset.childYOffset ?? "0");
                 const newWidth = (width-childXOffset)/subBlockCount;
-                const childHeader = elem.querySelector(".t-childHeader") as HTMLElement | undefined;
+                const childHeader = elem.querySelector(".t-child-header") as HTMLElement | undefined;
                 if(childHeader) {
                     const header = childHeader.cloneNode(true) as HTMLElement;
+                    elem.appendChild(header);
+                    for(const child of header.querySelectorAll(":not(svg) *") ?? []) {
+                        for(const clazz of child.classList.values()) {
+                            if(clazz.includes("%i%")) {
+                                child.classList.remove(clazz);
+                                child.classList.add(clazz.replace("%i%", `${i}`));
+                            }
+                        }
+                    }
                     const x = childXOffset + newWidth*i;
                     const y = 0;
                     setPosition(header, x, y);
                     setSize(header, newWidth, baseBlockHeight);
-                    elem.appendChild(header);
                     this.setupTextFor(header, currentBlock.getOptions(), newWidth, baseBlockHeight, i);
                 }
                 const subBlock = subBlocks[subBlockKeys[i]!];
@@ -407,7 +415,7 @@ class StructogramRunner extends StructogramRenderer {
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this._currentBlock.id} > .${runningClass}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this._currentBlock.id} > .${runningClass}, #${this._currentBlock.id} > svg.t-child-header > .${runningClass}`) ?? []) {
                 e?.classList.remove(runningClass);
                 e?.classList.add(unselectedClass);
             }
@@ -416,7 +424,7 @@ class StructogramRunner extends StructogramRenderer {
         this.activeBlockStep = undefined;
         this._currentBlock = currentBlock;
         if(currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${currentBlock.id} > .${unselectedClass}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${currentBlock.id} > .${unselectedClass}, #${currentBlock.id} > svg.t-child-header > .${unselectedClass}`) ?? []) {
                 e?.classList.remove(unselectedClass);
                 e?.classList.add(runningClass);
                 this.activeBlockStep = currentBlock.activeStep;
@@ -431,13 +439,13 @@ class StructogramRunner extends StructogramRenderer {
 
     protected set activeBlockStep(step: string | undefined) {
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-child-header .t-step-${this._activeBlockStep}`) ?? []) {
                 e?.classList.remove("font-bold", "stroke-green-500");
             }
         }
         this._activeBlockStep = step;
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-child-header .t-step-${this._activeBlockStep}`) ?? []) {
                 e?.classList.add("font-bold", "stroke-green-500");
             }
         }
@@ -476,7 +484,7 @@ class StructogramRunner extends StructogramRenderer {
         setID(elem, block.getID());
     }
 
-    protected override onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, width:number, xOffset: number, yOffset: number): number {
+    /*protected override onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, width:number, xOffset: number, yOffset: number): number {
         const elem = this.blockResourceManager.getHTMLForObject(undefined)!;
         setPosition(elem, xOffset, yOffset);
         setSize(elem, width, baseBlockHeight);
@@ -490,7 +498,7 @@ class StructogramRunner extends StructogramRenderer {
         setSize(subElem, width, baseBlockHeight);
         parent.appendChild(subElem);
         return baseBlockHeight;
-    }
+    }*/
 }
 
 class ToolbarEntry {

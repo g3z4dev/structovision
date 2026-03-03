@@ -8,9 +8,9 @@ const structogram = viewmodel.currentStructogram;
 structogram.defineVariable("a", 1);
 structogram.defineVariable("b", 1);
 structogram.defineVariable("c", 1);
-const countingLoopBlock = new CountingLoopBlock(structogram);
+/*const countingLoopBlock = new CountingLoopBlock(structogram);
 countingLoopBlock.fromOption.setStatement("1");
-countingLoopBlock.toOption.setStatement("10");
+countingLoopBlock.toOption.setStatement("3");
 countingLoopBlock.stepOption.setStatement("1");
 countingLoopBlock.variableKeyOption.setValue("i");
 const assignmentBlock1 = new AssignmentBlock(structogram);
@@ -51,7 +51,7 @@ printBlock2.statementOption.setStatement("\"the last value is greater than 10000
 const printBlock3 = new PrintBlock(structogram);
 printBlock3.statementOption.setStatement("\"the last value is less than 100000\"");
 truefalseBlock.trueBranch = printBlock2;
-truefalseBlock.falseBranch = printBlock3;
+truefalseBlock.falseBranch = printBlock3;*/
 const multiBlock = new MultiBranchingBlock(structogram);
 multiBlock.conditionListOption.setStatements([
     "c mod 3 = 0",
@@ -59,7 +59,7 @@ multiBlock.conditionListOption.setStatements([
     "c mod 11 = 0",
     "true"
 ]);
-truefalseBlock.next = multiBlock;
+//truefalseBlock.next = multiBlock;
 const printBlock4 = new PrintBlock(structogram);
 printBlock4.statementOption.setStatement("\"the last value is divisble by 3\"");
 const printBlock5 = new PrintBlock(structogram);
@@ -76,4 +76,4 @@ const printBlock8 = new PrintBlock(structogram);
 printBlock8.statementOption.setStatement("\"it's done\"");
 multiBlock.next = printBlock8;
 
-viewmodel.currentStructogram.setStartingBlock(countingLoopBlock);
+viewmodel.currentStructogram.setStartingBlock(multiBlock);
