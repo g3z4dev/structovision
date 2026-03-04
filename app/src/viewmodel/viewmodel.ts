@@ -2,7 +2,7 @@ import {AnyStatementOption, AssignmentBlock, BackTestingLoopBlock, BlockOption, 
 import EventEmitter2 from "eventemitter2";
 import {type Listener} from "eventemitter2";
 import type { Primitive } from "../model/util";
-import { Memory } from "../model/memory";
+import { Memory, MemoryEntry, type VariableType} from "../model/memory";
 import { Operand, Operator, Statement, type Bracket } from "../model/statement";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
@@ -22,15 +22,18 @@ import countingLoopBlockIcon from "../../resources/toolbar-icons/countingloopblo
 import frontTestingLoopBlockIcon from "../../resources/toolbar-icons/fronttestingloopblockicon.html";
 import backTestingLoopBlockIcon from "../../resources/toolbar-icons/backtestingloopblockicon.html";
 
-import statementOptionTemplate from "../../resources/options/statementoption.html";
-import booleanStatementListOptionTemplate from "../../resources/options/booleanstatementlistoption.html";
-import keyOptionTemplate from "../../resources/options/keyoption.html";
+import statementOptionTemplate from "../../resources/settings/structogram-options/statementoption.html";
+import booleanStatementListOptionTemplate from "../../resources/settings/structogram-options/booleanstatementlistoption.html";
+import keyOptionTemplate from "../../resources/settings/structogram-options/keyoption.html";
+import dataSettingsTemplate from "../../resources/settings/datasettings.html";
 
 import outputViewTemplate from "../../resources/program-views/outputview.html";
 import memoryViewTemplate from "../../resources/program-views/memoryview.html";
 import logicViewTemplate from "../../resources/program-views/logicview.html";
 import operatorTemplate from "../../resources/program-views/logic-view-templates/operator.html";
 import operandTemplate from "../../resources/program-views/logic-view-templates/operand.html";
+
+import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
 
 const baseBlockWidth = 100;
 const baseBlockHeight = 30;
@@ -99,6 +102,11 @@ function setTemplateText(elem: HTMLElement, clazz: string, text: string): void {
     }
 }
 
+function getTemplateText(elem: HTMLElement, clazz: string): string {
+    const n = elem.querySelector(`.t-${clazz}`) as HTMLElement | undefined;
+    return n!.textContent;
+}
+
 type ViewMode = "builder" | "runner";
 
 export class ViewModel {
@@ -107,9 +115,10 @@ export class ViewModel {
     public readonly structogramBuilder = new StructogramBuilder(this.currentStructogram, this);
     public readonly structogramRunner = new StructogramRunner(this.currentStructogram, this);
     public readonly toolbar = new BlockToolbar(this.currentStructogram);
-    public readonly blockEditor = new BlockEditor();
+    public readonly structogramSettings = new StructogramSettings(this);
     public readonly timeControl = new TimeControl(this);
     public readonly programViewManager = new ProgramViewManager(this);
+    public readonly structogramSpecificator = new StructogramSpecificator(this);
     private readonly structogramBuilderElem = document.querySelector("#structogram-builder")!;
     private readonly structogramRunnerElem = document.querySelector("#structogram-runner")!;
     private readonly switchToBuilderButton = document.querySelector("#switch-to-builder-button") as HTMLButtonElement;
@@ -365,11 +374,11 @@ class StructogramBuilder extends StructogramRenderer {
         setID(elem, block.getID());
         elem.addEventListener("click", event => {
             if(event.button == 0) {
-                this.viewModel.blockEditor.currentBlock = block;
+                this.viewModel.structogramSettings.currentBlock = block;
                 event.stopPropagation();
             }
         })
-        if(this.viewModel.blockEditor.currentBlock == block) {
+        if(this.viewModel.structogramSettings.currentBlock == block) {
             for(const e of elem.querySelectorAll(`.${unselectedClass}`)) {
                 e.classList.remove(unselectedClass);
                 e.classList.add(selectedClass);
@@ -383,10 +392,11 @@ class StructogramBuilder extends StructogramRenderer {
         setSize(elem, width, baseBlockHeight);
         elem.addEventListener("mouseup", event => {
             if(event.button == 0 && this.viewModel.toolbar.blockBrush) {
+                console.log(prevBlock);
                 if(prevBlock) {
                     prevBlock.next = this.viewModel.toolbar.blockBrush();
                 } else {
-                    this.structogram.startingBlock = this.viewModel.toolbar.blockBrush();
+                    this.structogram.setStartingBlock(this.viewModel.toolbar.blockBrush());
                 }
             }
         });
@@ -412,6 +422,7 @@ class StructogramRunner extends StructogramRenderer {
     private _currentBlock: StructogramBlock | undefined;
     private _activeBlockStep: string | undefined;
     private paused: boolean = false;
+    private readonly inputDataElem = document.querySelector("#input-data") as HTMLElement;
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
@@ -459,12 +470,28 @@ class StructogramRunner extends StructogramRenderer {
         return this._currentBlock;
     }
 
+    public addInputEntry(key: string) {
+        const entry = parseIntoHTML(inputDataEntryTemplate);
+        setTemplateText(entry, "key", key);
+        this.inputDataElem.appendChild(entry);
+    }
+
+    public getInputs() {
+        return [...this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>].map(n => n.value);
+    }
+
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(structogram, viewModel, document.querySelector("#run-view")!)
+        viewModel.currentStructogram.emitter.addListener(Structogram.inputDataEvent, (key, _) => {
+            this.addInputEntry(key);
+        });
+        viewModel.currentStructogram.emitter.addListener(Structogram.dataClearEvent, () => {
+            this.inputDataElem.textContent = "";
+        });
     }
 
     public async start() {
-        if(!this.structogram.isRunning()) this.structogram.preRun();
+        if(!this.structogram.isRunning()) console.log(this.structogram.preRun(this.getInputs()));
         this.paused = false;
         this.currentBlock = this.structogram.currentBlock;
         do {
@@ -744,13 +771,119 @@ class KeyOptionHandler extends OptionHandler {
     }   
 }
 
-class BlockEditor {
+class DataSettingsHandler {
+    private readonly dataSettingsTemplateElem = parseIntoHTML(dataSettingsTemplate);
+    private readonly viewModel: ViewModel;
+    private entryTemplateElem = this.dataSettingsTemplateElem.querySelector(".t-data-entry") as HTMLElement;
+    private inDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
+    private auxDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
+    private outDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
+
+    private parseEntryElem(elem: HTMLElement): [string, VariableType] {
+        const textfield = elem.querySelector(`.t-key-textfield`) as HTMLFormElement;
+        const select = elem.querySelector(`.t-type-selector`) as HTMLSelectElement;
+        return [textfield.value, select.value as VariableType];
+    }
+
+    private parseEntryElems(elems: NodeListOf<HTMLElement>) {
+        return [...elems].map(this.parseEntryElem);
+    }
+
+    private flushToStructogram() {
+        const inputDataEntries = this.inDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
+        const auxDataEntries = this.auxDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
+        const outputDataEntries = this.outDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
+        
+        this.viewModel.currentStructogram.clearData();
+
+        const inputEntries = this.parseEntryElems(inputDataEntries);
+        for(const [key, type] of inputEntries) {
+            this.viewModel.currentStructogram.defineInputData(key, type);
+        }
+
+        const auxEntries = this.parseEntryElems(auxDataEntries);
+        for(const [key, type] of auxEntries) {
+            this.viewModel.currentStructogram.defineAuxData(key, type);
+        }
+
+        const outputEntries = this.parseEntryElems(outputDataEntries);
+        for(const [key, type] of outputEntries) {
+            this.viewModel.currentStructogram.defineOutputData(key, type);
+        }
+    }
+
+    private setupElements() {
+        this.setupDataSettings(this.viewModel.currentStructogram.inputData, this.inDataElem, "Input");
+        this.setupDataSettings(this.viewModel.currentStructogram.auxData, this.auxDataElem, "Auxilary");
+        this.setupDataSettings(this.viewModel.currentStructogram.outputData, this.outDataElem, "Output");
+    }
+
+    private loadEntriesFor(entries: [string, VariableType][], target: HTMLElement) {
+        const entriesElem = target.querySelector(".t-entries") as HTMLElement;
+        entriesElem.textContent = "";
+        for(const [key, entry] of entries) {
+            this.addEntry(key, entry, entriesElem);
+        }
+    }
+
+
+    private loadEntries() {
+        this.loadEntriesFor(this.viewModel.currentStructogram.inputData, this.inDataElem);
+        this.loadEntriesFor(this.viewModel.currentStructogram.auxData, this.auxDataElem);
+        this.loadEntriesFor(this.viewModel.currentStructogram.outputData, this.outDataElem);
+    }
+
+    private setupDataSettings(entries: [string, VariableType][], target: HTMLElement, name: string) {
+        this.loadEntriesFor(entries, target);
+        setTemplateText(target, "name", name);
+        const entriesElem = target.querySelector(".t-entries") as HTMLElement;
+        const addButton = target.querySelector(".t-add-button") as HTMLButtonElement;
+        addButton.addEventListener("click", () =>  {
+            this.addEntry("", "number", entriesElem);
+        });
+    }
+
+    private addEntry(key: string, type: VariableType, entriesElem: HTMLElement) {
+        const entryElem = this.entryTemplateElem?.cloneNode(true) as HTMLElement;
+        const textfield = entryElem.querySelector(`.t-key-textfield`) as HTMLFormElement;
+        textfield.value = key;
+        const select = entryElem.querySelector(`.t-type-selector`) as HTMLSelectElement;
+        select.value = type;
+        const removeButton = entryElem.querySelector(`.t-del-button`) as HTMLButtonElement;
+        entriesElem.appendChild(entryElem);
+        removeButton.addEventListener("click", () => {
+            entriesElem.removeChild(entryElem);
+            this.flushToStructogram();
+        });
+        textfield.addEventListener("change", () => {
+            this.flushToStructogram();
+        });
+        select.addEventListener("change", () => {
+            this.flushToStructogram();
+        });
+    }
+
+    constructor(viewModel: ViewModel) {
+        this.viewModel = viewModel;
+        this.setupElements();
+    }
+
+    public getHTML(): HTMLElement[] {
+        this.loadEntries();
+        return [this.inDataElem, this.auxDataElem, this.outDataElem];
+    }
+    
+}
+
+class StructogramSettings {
     private _currentBlock: StructogramBlock | undefined;
-    private blockEditorNode = document.querySelector("#block-editor")!;
+    private structogramSettingsElem = document.querySelector("#structogram-settings")!;
     private optionResourceManager: ResourceManager = new ResourceManager();
     private optionHandlers: Record<string, OptionHandler> = {};
+    private dataSettingsHandler: DataSettingsHandler;
 
-    constructor() {
+    constructor(viewModel: ViewModel) {
+        this.dataSettingsHandler = new DataSettingsHandler(viewModel);
         this.optionResourceManager.register("anystatementoption", statementOptionTemplate);
         this.optionHandlers["anystatementoption"] = new StatementOptionHandler<Primitive>(this.optionResourceManager);
         this.optionResourceManager.register("numericstatementoption", statementOptionTemplate);
@@ -766,13 +899,18 @@ class BlockEditor {
     }
 
     public generateHTML() {
-        this.blockEditorNode.textContent = "";
+        this.structogramSettingsElem.textContent = "";
         if(this._currentBlock) {
             for(const option of this._currentBlock.getOptions()) {
                 if(option.getTypeIdentifier() in this.optionHandlers) {
                     const node = this.optionHandlers[option.getTypeIdentifier()]!.getHTMLNodeFor(option, this._currentBlock);
-                    if(node) this.blockEditorNode.appendChild(node);
+                    if(node) this.structogramSettingsElem.appendChild(node);
                 }
+            }
+        } else {
+            const nodes = this.dataSettingsHandler.getHTML();
+            for(const n of nodes) {
+                this.structogramSettingsElem.appendChild(n);
             }
         }
     }
@@ -943,18 +1081,17 @@ class OutputView extends ProgramView {
 
 class MemoryView extends ProgramView {
     private memoryViewElem = parseIntoHTML(memoryViewTemplate) as HTMLElement;
-    private memoryViewEntriesElem = this.memoryViewElem.querySelector(".js-memory-entries") as HTMLElement;
-    private memoryTemplateElem = this.memoryViewElem.querySelector(".js-memory-template")!.cloneNode(true) as HTMLElement;
+    private memoryViewEntriesElem = this.memoryViewElem.querySelector(".t-memory-entries") as HTMLElement;
+    private memoryTemplateElem = this.memoryViewElem.querySelector(".t-memory-template")!.cloneNode(true) as HTMLElement;
     private readonly changedStyle = ["bg-orange-300"];
     private readonly accessedStyle = ["bg-green-300"];
     private readonly changedAndAccessedStyle = ["bg-blue-300"];
 
-    private addEntry(key: string, value: Primitive) {
+    private addEntry(key: string, value: MemoryEntry) {
         const memoryEntry = this.memoryTemplateElem.cloneNode(true) as HTMLElement;
-        const keyElem = memoryEntry.querySelector(".js-memory-key") as HTMLElement;
-        const valueElem = memoryEntry.querySelector(".js-memory-value") as HTMLElement;
-        keyElem.textContent = key;
-        valueElem.textContent = value.toString();
+        setTemplateText(memoryEntry, "memory-key", key);
+        setTemplateText(memoryEntry, "memory-value", value.value.toString());
+        setTemplateText(memoryEntry, "memory-constant", value.constant.toString());
         setID(memoryEntry, `v-${key}`);
         this.memoryViewEntriesElem.appendChild(memoryEntry);
     }
@@ -968,8 +1105,7 @@ class MemoryView extends ProgramView {
         });
         memory.emitter.addListener(Memory.variableChangedEvent, (key, value) => {
             const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
-            const valueElem = memoryEntry.querySelector(".js-memory-value") as HTMLElement;
-            valueElem.textContent = value;
+            setTemplateText(memoryEntry, "memory-value", value);
             if(this.isStyleSubset(memoryEntry, this.changedStyle)) {
                 this.clearStyle(memoryEntry, this.changedStyle);
                 memoryEntry.classList.add(...this.changedAndAccessedStyle);
@@ -1091,4 +1227,58 @@ class LogicView extends ProgramView implements AnimatedView {
 
 interface AnimatedView {
     render(delta: number): void;
+}
+
+class StructogramSpecificator {
+    private viewModel: ViewModel;
+    private specificationElem = document.querySelector("#specification") as HTMLElement;
+
+    private addEntryTo(clazz: string, entry: string) {
+        const currentText = getTemplateText(this.specificationElem, clazz);
+        if(currentText.length > 0) {
+            setTemplateText(this.specificationElem, clazz, currentText + `, ${entry}`);  
+        } else {
+            setTemplateText(this.specificationElem, clazz, `${entry}`);  
+        }
+    }
+
+    constructor(viewModel: ViewModel) {
+        this.viewModel = viewModel;
+        this.reset();
+        viewModel.currentStructogram.emitter.addListener(Structogram.inputDataEvent, (key, type) => {
+            this.addEntryTo("spec-in", `${key}: ${type}`);
+        });
+        viewModel.currentStructogram.emitter.addListener(Structogram.auxDataEvent, (key, type) => {
+            this.addEntryTo("spec-aux", `${key}: ${type}`);
+        });
+        viewModel.currentStructogram.emitter.addListener(Structogram.outputDataEvent, (key, type) => {
+            this.addEntryTo("spec-out", `${key}: ${type}`);
+        });
+        viewModel.currentStructogram.emitter.addListener(Structogram.dataClearEvent, () => {
+            setTemplateText(this.specificationElem, "spec-in", "");
+            setTemplateText(this.specificationElem, "spec-aux", "");
+            setTemplateText(this.specificationElem, "spec-out", "");
+        });
+        this.specificationElem.addEventListener("click", () => {
+            viewModel.structogramSettings.currentBlock = undefined;
+        });
+    }
+
+    private reset() {
+        let inEntries = [];
+        for(const [key, value]of this.viewModel.currentStructogram.inputData) {
+            inEntries.push(`${key}: ${typeof value}`);
+        }
+        let auxEntries = [];
+        for(const [key, value]of this.viewModel.currentStructogram.auxData) {
+            auxEntries.push(`${key}: ${typeof value}`);
+        }
+        let outEntries = [];
+        for(const [key, value]of this.viewModel.currentStructogram.outputData) {
+            outEntries.push(`${key}: ${typeof value}`);
+        }
+        setTemplateText(this.specificationElem, "spec-in", inEntries.join(", "));
+        setTemplateText(this.specificationElem, "spec-aux", auxEntries.join(", "));
+        setTemplateText(this.specificationElem, "spec-out", outEntries.join(", "));
+    }
 }

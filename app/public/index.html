@@ -21,6 +21,11 @@
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2">load</button>
                     </div>
                 </div>
+                <div class="align-middle m-0 bg-white" id="specification">
+                    <p>In: <span class="t-spec-in"></span></p>
+                    <p>Aux: <span class="t-spec-aux"></span></p>
+                    <p>Out: <span class="t-spec-out"></span></p>
+                </div>
                 <div class="basis-full overflow-hidden bg-blue-50" id="build-view">
                     <svg class="align-middle m-0 structogram-svg bg-white">
                     </svg>
@@ -31,15 +36,18 @@
                     </div>
                 </div>
             </div>
-            <div class="col-span-5 bg-blue-900" id="block-editor">
+            <div class="col-span-5 bg-blue-900" id="structogram-settings">
             </div>
         </div>
     </div>
     <div class="hidden h-full" id="structogram-runner">
         <div class="grid grid-cols-12 h-full">
             <div class="col-span-6 flex flex-col ">
+                <div class="bg-white border border-gray-800" id="input-data">
+                    
+                </div>
                 <div class="basis-full w-full h-full overflow-hidden bg-blue-50" id="run-view">
-                    <svg class="align-middle m-0 structogram-svg bg-white">
+                    <svg class="align-middle m-0 structogram-svg">
                     </svg>
                 </div>
                 <div class="flex bg-gray-200 border-t border-t-gray-400">

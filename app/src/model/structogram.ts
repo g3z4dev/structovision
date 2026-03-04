@@ -1,5 +1,5 @@
 import EventEmitter2 from "eventemitter2";
-import {Memory, VariableCreationError} from "./memory";
+import {Memory, VariableCreationError, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, StringStatement, StatementParseError} from "./statement";
 import {type Primitive} from "./util";
 
@@ -32,6 +32,11 @@ export class StructogramIssues {
 export class Structogram {
     public static readonly printEvent = "structogram.print";
     public static readonly changedEvent = "structogram.changed";
+    public static readonly dataEvent = "structogram.data";
+    public static readonly inputDataEvent = "structogram.data.input";
+    public static readonly auxDataEvent = "structogram.data.aux";
+    public static readonly outputDataEvent = "structogram.data.output";
+    public static readonly dataClearEvent = "structogram.data.clear";
     public readonly memory: Memory;
     public readonly emitter: EventEmitter2;
     public startingBlock: StructogramBlock | undefined;
@@ -40,15 +45,47 @@ export class Structogram {
     private running = false;
     private bracketBlockStack: BracketBlock[] = [];
     private ready = false;
-    private variables: Record<string, Primitive> = {};
+    private _inData: Record<string, VariableType> = {};
+    private _auxData: Record<string, VariableType> = {};
+    private _outData: Record<string, VariableType> = {};
+
+    public get inputData() {
+        return Object.entries(this._inData);
+    }
+
+    public get auxData() {
+        return Object.entries(this._auxData);
+    }
+
+    public get outputData() {
+        return Object.entries(this._outData);
+    }
 
     constructor(emitter: EventEmitter2) {
         this.memory = new Memory();
         this.emitter = emitter;
     }
 
-    public defineVariable(key: string, value: Primitive) {
-        this.variables[key] = value;
+    public clearData() {
+        this._inData = {};
+        this._auxData = {};
+        this._outData = {};
+        this.emitter.emit(Structogram.dataClearEvent);
+    }
+
+    public defineInputData(key: string, type: VariableType) {
+        this._inData[key] = type;
+        this.emitter.emit(Structogram.inputDataEvent, key, type);
+    }
+
+    public defineAuxData(key: string, type: VariableType) {
+        this._auxData[key] = type;
+        this.emitter.emit(Structogram.auxDataEvent, key, type);
+    }
+
+    public defineOutputData(key: string, type: VariableType) {
+        this._outData[key] = type;
+        this.emitter.emit(Structogram.outputDataEvent, key, type);
     }
 
     public get currentBlock() {
@@ -59,15 +96,22 @@ export class Structogram {
         this._currentBlock = currentBlock;
     }
 
-    private createVariables() {
-        for(const [key, value] of Object.entries(this.variables)) {
-            this.memory.createVariable(key, value);
+    private createVariables(input: string[]) {
+        if(input.length != this.inputData.length) {
+            throw new Error("Missing inputs!");
+        }
+        for(let i = 0; i < input.length; i++) {
+            const [key, type] = this.inputData[i]!;
+            this.memory.createVariable(key, type, AnyStatement.parse(input[i]!, this.memory).evaluate());
+        }
+        for(const [key, type] of Object.entries(this._auxData)) {
+            this.memory.createVariable(key, type);
         }
     }
 
-    public preRun(): StructogramIssues[] {
+    public preRun(input: string[]): StructogramIssues[] {
         this.memory.clear();
-        this.createVariables();
+        this.createVariables(input);
         const issues = Object.values(this.idMap).map(block => block.parseAndCheckForIssues()).flat();
         if(issues.length == 0) {
             this.ready = true;
@@ -318,6 +362,7 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
 
     public setSubBlock(key: string, block: StructogramBlock | undefined) {
         this.subBlocks[key] = block;
+        this.emitter.emit(StructogramBlock.childrenChanged, this);
     }
 
     public getSubBlock(key: string) {
@@ -693,13 +738,7 @@ export class CountingLoopBlock extends LoopBlock {
         }
         this.variableKey = this.variableKeyOption.getKey();
         if(!this.owner.memory.hasVariable(this.variableKey)) {
-            try {
-                this.owner.memory.createVariable(this.variableKey, 0);
-            } catch(error) {
-                if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssues(this.id, error.message));
-                }
-            }
+            issues.push(new StructogramIssues(this.id,`Variable with key [${this.variableKey}] is not defined!`))
         }
 
         return [];

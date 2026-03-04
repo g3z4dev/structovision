@@ -20,7 +20,7 @@ function runStructogram(structogram: Structogram) {
 test("assignment blocks should work as expected", assertion => {
     const [emitter, structogram] = createBasicStructogram();
 
-    structogram.defineVariable("a", 0);
+    structogram.defineAuxData("a", 0);
 
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setValue("a");
@@ -39,7 +39,7 @@ test("print blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printedText = text);
 
-    structogram.defineVariable("text", "hello world");
+    structogram.defineAuxData("text", "hello world");
 
     const printBlock = new PrintBlock(structogram);
     printBlock.statementOption.setStatement("text");
@@ -57,7 +57,7 @@ test("true-false branching blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printedText = text);
 
-    structogram.defineVariable("a", true);
+    structogram.defineAuxData("a", true);
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setValue("a");
     assignmentBlock.statementOption.setStatement("true");
@@ -91,7 +91,7 @@ test("multi branching blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printedText = text);
 
-    structogram.defineVariable("v", 1);
+    structogram.defineAuxData("v", 1);
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setValue("v");
     assignmentBlock.statementOption.setStatement("1");
@@ -170,7 +170,7 @@ test("front testing loop blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineVariable("i", "a");
+    structogram.defineAuxData("i", "a");
     const frontTestingLoopBlock = new FrontTestingLoopBlock(structogram);
     frontTestingLoopBlock.conditionOption.setStatement("len(i) < 4");
     const loopedBlock = new PrintBlock(structogram);
@@ -198,7 +198,7 @@ test("back testing loop blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineVariable("i", "a");
+    structogram.defineAuxData("i", "a");
     const backTestingLoopBlock = new BackTestingLoopBlock(structogram);
     backTestingLoopBlock.conditionOption.setStatement("len(i) < 1 or len(i) > 2 and len(i) <= 3");
     const loopedBlock = new PrintBlock(structogram);
@@ -226,9 +226,9 @@ test("a complex structogram should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineVariable("a", 1);
-    structogram.defineVariable("b", 1);
-    structogram.defineVariable("c", 1);
+    structogram.defineAuxData("a", 1);
+    structogram.defineAuxData("b", 1);
+    structogram.defineAuxData("c", 1);
     const countingLoopBlock = new CountingLoopBlock(structogram);
     countingLoopBlock.fromOption.setStatement("1");
     countingLoopBlock.toOption.setStatement("10");
