@@ -26,8 +26,12 @@
                     <p>Aux: <span class="t-spec-aux"></span></p>
                     <p>Out: <span class="t-spec-out"></span></p>
                 </div>
-                <div class="basis-full overflow-hidden bg-blue-50" id="build-view">
-                    <svg class="align-middle m-0 structogram-svg bg-white">
+                <div id="build-view" class="basis-full w-full h-full overflow-clip bg-blue-50">
+                    <svg width="100%" height="100%">
+                        <svg width="8000" height="8000" class="render-target border border-red-600">
+                            <svg x="4000" y="4000" class="align-middle m-0 structogram-svg bg-white">
+                            </svg>
+                        </svg>
                     </svg>
                 </div>
                 <div class="flex bg-gray-200 border-t border-t-gray-400">
@@ -47,7 +51,11 @@
                     
                 </div>
                 <div class="basis-full w-full h-full overflow-hidden bg-blue-50" id="run-view">
-                    <svg class="align-middle m-0 structogram-svg">
+                    <svg width="100%" height="100%">
+                        <svg width="8000" height="8000" class="render-target border border-red-600">
+                            <svg x="4000" y="4000" class="align-middle m-0 structogram-svg">
+                            </svg>
+                        </svg>
                     </svg>
                 </div>
                 <div class="flex bg-gray-200 border-t border-t-gray-400">

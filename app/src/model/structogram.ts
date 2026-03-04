@@ -159,10 +159,11 @@ export class Structogram {
         });
     }
 
-    public setStartingBlock(block: StructogramBlock) {
+    public setStartingBlock(block: StructogramBlock | undefined) {
         if(this.isRunning()) throw new Error();
         this.startingBlock = block;
         this.currentBlock = block;
+        if(block) block.isActive = true;
         this.emitter.emit(Structogram.changedEvent, block);
     }
 
@@ -328,6 +329,18 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
     protected _activeStep: string = "ready";
+    public _isActive: boolean = false;
+
+    public get isActive() {
+        return this._isActive;
+    }
+
+    public set isActive(isActive: boolean) {
+        this._isActive = isActive;
+        if(this._next) {
+            this._next.isActive = isActive;
+        }
+    }
 
     public get activeStep() {
         return this._activeStep;
@@ -348,7 +361,13 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     }
 
     public set next(next: StructogramBlock | undefined) {
+        if(this._next && this.isActive) {
+            this._next.isActive = false;
+        }
         this._next = next;
+        if(this._next) {
+            this._next.isActive = this.isActive;
+        }
         this.emitter.emit(StructogramBlock.childrenChanged, this);
     }
 
