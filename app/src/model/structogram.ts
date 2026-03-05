@@ -238,13 +238,9 @@ export class Structogram {
     }
 
     public loadData(data: any) {
-        console.log(data)
         const input = data["input"];
         const aux = data["auxiliary"];
         const output = data["output"];
-        console.log(input);
-        console.log(aux);
-        console.log(output);
         
         function loadWith(entries: any, loader:(a: string, type: VariableType) => void) {
             for(const entry of entries) loader(entry["key"], entry["type"]);
