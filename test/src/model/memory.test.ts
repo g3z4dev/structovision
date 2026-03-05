@@ -1,12 +1,12 @@
 import {test} from "zora"
-import { Memory } from "@structovision/app/model/memory";
-import ee2 from "eventemitter2"
+import { Memory, type VariableType } from "@structovision/app/model/memory";
+import { cartesian } from "../testutil.ts";
 
 test("Memory should allow declaring, changing and getting values", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", 1);
-    mem.createVariable("b", "hi");
-    mem.createVariable("c", true);
+    mem.createVariable("a", "number", 1);
+    mem.createVariable("b", "string", "hi");
+    mem.createVariable("c", "boolean", true);
     assertion.truthy(mem.hasVariable("a"), "Memory should have a variable with key \"a\"");
     assertion.truthy(mem.hasVariable("b"), "Memory should have a variable with key \"b\"");
     assertion.truthy(mem.hasVariable("c"), "Memory should have a variable with key \"c\"");
@@ -26,11 +26,11 @@ test("Memory should allow declaring, changing and getting values", assertion => 
 
 test("Memory should allow declaring variables with special names", assertion => {
     const mem = new Memory();
-    mem.createVariable("_a", 1);
-    mem.createVariable("___a", 2);
-    mem.createVariable("a1", 3);
-    mem.createVariable("a_1", 3);
-    mem.createVariable("Xxx_3p1c_v4r14bl3_xxX", 4);
+    mem.createVariable("_a", "number", 1);
+    mem.createVariable("___a", "number", 2);
+    mem.createVariable("a1", "number", 3);
+    mem.createVariable("a_1", "number", 3);
+    mem.createVariable("Xxx_3p1c_v4r14bl3_xxX", "number", 4);
     assertion.truthy(mem.hasVariable("_a"), "Memory should have a variable with a key starting with a underscores");
     assertion.truthy(mem.hasVariable("___a"), "Memory should have a variable with a key starting with multiple underscores");
     assertion.truthy(mem.getVariable("a1"), "Memory should have a variable with a key containing a number in it (not starting with it)");
@@ -40,8 +40,8 @@ test("Memory should allow declaring variables with special names", assertion => 
 
 test("Memory should not allow creating variables with keys that have already been created", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", 1);
-    assertion.throws(() => mem.createVariable("a", 1), Error, "Creating another variable with key \"a\" throws an Error");
+    mem.createVariable("a", "number", 1);
+    assertion.throws(() => mem.createVariable("a", "number", 1), Error, "Creating another variable with key \"a\" throws an Error");
 });
 
 test("Memory should not allow getting variables that do not exist", assertion => {
@@ -56,31 +56,30 @@ test("Memory should not allow changing variables that do not exist", assertion =
 
 test("Memory should not allow creating variables with illegal keys", assertion => {
     const mem = new Memory();
-    assertion.throws(() => mem.createVariable("true", 2), Error, "Creating a variable with key \"true\" throws an Error");
-    assertion.throws(() => mem.createVariable("false", "test"), Error, "Creating a variable with key \"false\" throws an Error");
-    assertion.throws(() => mem.createVariable("123", false), Error, "Creating a variable with a key that is a number throws an Error");
-    assertion.throws(() => mem.createVariable("123test", -3.2), Error, "Creating a variable starting with a number throws an Error");
-    assertion.throws(() => mem.createVariable("", "this is empty keyed"), Error, "Creating a variable with an empty key throws an Error");
+    assertion.throws(() => mem.createVariable("true", "number", 2), Error, "Creating a variable with key \"true\" throws an Error");
+    assertion.throws(() => mem.createVariable("false", "string", "test"), Error, "Creating a variable with key \"false\" throws an Error");
+    assertion.throws(() => mem.createVariable("123", "boolean", false), Error, "Creating a variable with a key that is a number throws an Error");
+    assertion.throws(() => mem.createVariable("123test", "number", -3.2), Error, "Creating a variable starting with a number throws an Error");
+    assertion.throws(() => mem.createVariable("", "string", "this is empty keyed"), Error, "Creating a variable with an empty key throws an Error");
 });
 
 test("Memory should emit the expected events", assertion => {
-    const emitter = new ee2.EventEmitter2();
     let variableAddedEventEmitted = false;
     let variableChangedEventEmitted = false;
 
-    emitter.addListener(Memory.variableAddedEvent, () => {
+    const mem = new Memory();
+
+    mem.emitter.addListener(Memory.variableAddedEvent, () => {
         variableAddedEventEmitted = true;
     });
-    emitter.addListener(Memory.variableChangedEvent, () => {
+    mem.emitter.addListener(Memory.variableChangedEvent, () => {
         variableChangedEventEmitted = true;
     });
-
-    const mem = new Memory();
 
     assertion.falsy(variableAddedEventEmitted, "memory.variable.added event should not be fired during object creation");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during object creation");
 
-    mem.createVariable("a", 1);
+    mem.createVariable("a", "number", 1);
 
     assertion.truthy(variableAddedEventEmitted, "memory.variable.added event should be fired during variable creation");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during variable creation");
@@ -98,4 +97,25 @@ test("Memory should emit the expected events", assertion => {
 
     assertion.falsy(variableAddedEventEmitted, "memory.variable.added event should not be fired during getting a variable");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during getting a variable");
+});
+
+test("Memory should be 'strongly-typed' and should not allow a variable to change types", assertion => {
+    const mem = new Memory();
+    const types: VariableType[] = ["number", "string", "boolean"]
+    const typeToValue = {
+        "number": 1,
+        "string": "alma",
+        "boolean": true
+    }
+    for(const [type1, type2] of cartesian(types, types).filter(([t1, t2]) => t1 != t2)) {
+        mem.clear();
+        mem.createVariable("a", type1);
+        assertion.throws(() => mem.setVariable("a", typeToValue[type2]), Error, `setting a variable of type ${type1} to a value of type ${type2} should throw an error`);
+    }
+});
+
+test("Memory should not allow changing constant variables", assertion => {
+    const mem = new Memory();
+    mem.createVariable("a", "number", 1, true);
+    assertion.throws(() => mem.setVariable("a", 4), Error, "setting a constant variable should throw an error");
 });

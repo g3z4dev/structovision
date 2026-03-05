@@ -442,7 +442,6 @@ class StructogramBuilder extends StructogramRenderer {
                     elem.addEventListener("mousedown", event => {
                         if(event.button == 0) {
                             if(this.movingBlock) {
-                                console.log(this.movingBlock);
                                 this.movingBlock.associatedSegment = segment;
                                 segment.relMouseX = event.offsetX/this.scale - this.originX - segment.x;
                                 segment.relMouseY = event.offsetY/this.scale - this.originY - segment.y;
@@ -453,8 +452,6 @@ class StructogramBuilder extends StructogramRenderer {
                     this.segments.push(segment);
                     this.generateHTML();
                 } else if(this.movingBlock) {
-                    console.log(event.clientX, event.clientY, "release")
-                    console.log(Math.abs(this.movingBlock.startX - event.clientX), Math.abs(this.movingBlock.startY - event.clientY), "release")
                     if(!this.movingBlock.associatedSegment && (Math.abs(this.movingBlock.startX - event.clientX) > 5 || Math.abs(this.movingBlock.startY - event.clientY) > 5)) {
                         const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
                         const segment = new StructogramSegment(elem, this.movingBlock.block, event.offsetX/this.scale - this.originX, event.offsetY/this.scale - this.originY);
@@ -495,7 +492,6 @@ class StructogramBuilder extends StructogramRenderer {
 
     public override generateHTML(): void {
         super.generateHTML();
-        console.log(this.segments);
         for(const segment of this.segments) {
             this.resolveHTMLFor(segment.svgElem, segment.rootBlock, b => {}, this.structogramWidth, 0, 0);
             applyTransformation(segment.svgElem, segment.x, segment.y, 1);
@@ -513,7 +509,6 @@ class StructogramBuilder extends StructogramRenderer {
         setID(elem, block.getID());
         elem.addEventListener("mousedown", event => {
             if(event.button == 0) {
-                console.log(block);
                 this.viewModel.structogramSettings.currentBlock = block;
                 this.movingBlock = new MovingBlock(block, elem, event.clientX, event.clientY);
                 this.movingBlock.blockParent = parent;
@@ -631,7 +626,7 @@ class StructogramRunner extends StructogramRenderer {
     }
 
     public async start() {
-        if(!this.structogram.isRunning()) console.log(this.structogram.preRun(this.getInputs()));
+        if(!this.structogram.isRunning()) this.structogram.preRun(this.getInputs());
         this.paused = false;
         this.currentBlock = this.structogram.currentBlock;
         do {
@@ -1067,7 +1062,6 @@ class StructogramSettings {
     }
 
     public set currentBlock(block: StructogramBlock | undefined) {
-        console.log(this._currentBlock, block)
         if(this._currentBlock) {
             const node = document.querySelector(`#${this._currentBlock.id}`);
             if(node) {

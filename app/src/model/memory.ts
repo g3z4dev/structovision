@@ -109,8 +109,26 @@ export class Memory {
         return [...Object.entries(this.variables)];
     }
 
+    public getType(key: string): string {
+        if(key in this.variables) {
+            this.emitter.emit(Memory.variableAccessedEvent, key);
+            return this.variables[key]!.type;
+        }
+        
+        throw new Error(`Variable with key [${key}] does not exist!`);
+    }
+
     public hasVariable(key: string): boolean {
         return key in this.variables;
+    }
+
+    public isConstant(key: string): boolean {
+        if(key in this.variables) {
+            this.emitter.emit(Memory.variableAccessedEvent, key);
+            return this.variables[key]!.constant;
+        }
+        
+        throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
     public changeVariable(key: string, fn: (v:Primitive) => Primitive) {
@@ -149,6 +167,9 @@ export class MemoryEntry {
     public set value(value: Primitive) {
         if(this.constant) {
             throw new Error("Constant variable cannot be modified!");
+        }
+        if((typeof value) != this.type) {
+            throw new Error(`Value must be of type [${this.type}] but is ${typeof value}!`);
         }
         this._value = value;
     }

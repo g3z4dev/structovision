@@ -151,30 +151,30 @@ test("complex statements with numeric, string and boolean components should work
 
 test("numeric statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", 7);
-    mem.createVariable("b", 5);
+    mem.createVariable("a", "number", 7);
+    mem.createVariable("b", "number", 5);
     testNumericStatement(assertion, "a+b", 12, mem);
 });
 
 test("string statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", "hello");
-    mem.createVariable("b", "world");
+    mem.createVariable("a", "string", "hello");
+    mem.createVariable("b", "string", "world");
     testStringStatement(assertion, "a&b", "helloworld", mem);
 });
 
 test("boolean statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", true);
-    mem.createVariable("b", false);
+    mem.createVariable("a", "boolean", true);
+    mem.createVariable("b", "boolean", false);
     testBooleanStatement(assertion, "a or b", true, mem);
 });
 
 test("any statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", 1);
-    mem.createVariable("b", "text");
-    mem.createVariable("c", false);
+    mem.createVariable("a", "number", 1);
+    mem.createVariable("b", "string", "text");
+    mem.createVariable("c", "boolean", false);
     testAnyStatement(assertion, "a", 1, mem);
     testAnyStatement(assertion, "b", "text", mem);
     testAnyStatement(assertion, "c", false, mem);

@@ -266,6 +266,7 @@ export abstract class Statement<T> {
     public static readonly emitter: EventEmitter2 = new EventEmitter2();
     protected evaluatableTokens: (Operand | Operator)[] = [];
     protected readableTokens: (Operand | Operator | Bracket)[] = [];
+    protected returnType: string = "any";
 
     abstract evaluate(): T;
     protected evaluateInternally(): Primitive {
@@ -290,6 +291,9 @@ export abstract class Statement<T> {
     }
 
     protected abstract assertReturnType(type: string): void;
+    public getReturnType(): string {
+        return this.returnType;
+    }
 
     protected static parseOperand(text: string, memory: Memory): Operand {
         if(memory.hasVariable(text)) {
@@ -475,6 +479,7 @@ export abstract class Statement<T> {
             flushOperatorsWhile(() => operators.length > 0);
 
             statement.assertReturnType(operands[0]!.type);
+            statement.returnType = operands[0]!.type;
 
             return operands[0]!.tokens!;
         }

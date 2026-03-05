@@ -96,23 +96,52 @@ export class Structogram {
         this._currentBlock = currentBlock;
     }
 
-    private createVariables(input: string[]) {
+    private createVariables(input: string[]): StructogramIssues[] {
+        const issues = [];
         if(input.length != this.inputData.length) {
-            throw new Error("Missing inputs!");
+            return [new StructogramIssues("specification", "Missing inputs!")]
         }
+        const usedKeys = new Set<string>();
         for(let i = 0; i < input.length; i++) {
             const [key, type] = this.inputData[i]!;
-            this.memory.createVariable(key, type, AnyStatement.parse(input[i]!, this.memory).evaluate());
+            if(usedKeys.has(key)) {
+                return [new StructogramIssues("specification", "Duplicate key in data specification is not allowed!")]
+            }
+            usedKeys.add(key);
+            try {
+                const statement = AnyStatement.parse(input[i]!, this.memory);
+                if(statement.getReturnType() != type) {
+                    issues.push(new StructogramIssues("specification", "Wrong type returned by statement given to input data!"));
+                } else {
+                    this.memory.createVariable(key, type, statement.evaluate(), true);
+                }
+            } catch (error) {
+                if(error instanceof StatementParseError) {
+                    issues.push(new StructogramIssues("specification", error.message));
+                }
+            }
         }
         for(const [key, type] of Object.entries(this._auxData)) {
+            if(usedKeys.has(key)) {
+                return [new StructogramIssues("specification", "Duplicate key in data specification is not allowed!")]
+            }
+            usedKeys.add(key);
             this.memory.createVariable(key, type);
         }
+        for(const [key, type] of Object.entries(this._outData)) {
+            if(usedKeys.has(key)) {
+                return [new StructogramIssues("specification", "Duplicate key in data specification is not allowed!")]
+            }
+            usedKeys.add(key);
+            this.memory.createVariable(key, type);
+        }
+        return issues;
     }
 
-    public preRun(input: string[]): StructogramIssues[] {
+    public preRun(input: string[] = []): StructogramIssues[] {
         this.memory.clear();
-        this.createVariables(input);
-        const issues = Object.values(this.idMap).map(block => block.parseAndCheckForIssues()).flat();
+        const issues = this.createVariables(input);
+        issues.push(...Object.values(this.idMap).map(block => block.parseAndCheckForIssues()).flat());
         if(issues.length == 0) {
             this.ready = true;
         }
@@ -429,9 +458,6 @@ export class AssignmentBlock extends SequenceBlock {
     public override parseAndCheckForIssues(): StructogramIssues[] {
         this.key = this.keyOption.getKey();
         const issues = [];
-        if(!this.owner.memory.hasVariable(this.key)) {
-            issues.push(new StructogramIssues(this.id,`Variable with key [${this.key}] is not defined!`))
-        }
         try {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
@@ -439,7 +465,13 @@ export class AssignmentBlock extends SequenceBlock {
                 issues.push(new StructogramIssues(this.id, error.message));
             }
         }
-
+        if(!this.owner.memory.hasVariable(this.key)) {
+            issues.push(new StructogramIssues(this.id, `Variable with key [${this.key}] is not defined!`));
+        } else if(this.owner.memory.getType(this.key) != this.statement?.getReturnType()) {
+            issues.push(new StructogramIssues(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`));
+        } else if(this.owner.memory.isConstant(this.key)) {
+            issues.push(new StructogramIssues(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
+        }
         return issues;
     }
 }
@@ -755,12 +787,17 @@ export class CountingLoopBlock extends LoopBlock {
                 issues.push(new StructogramIssues(this.id, error.message));
             }
         }
+        
         this.variableKey = this.variableKeyOption.getKey();
         if(!this.owner.memory.hasVariable(this.variableKey)) {
             issues.push(new StructogramIssues(this.id,`Variable with key [${this.variableKey}] is not defined!`))
+        } else if(this.owner.memory.getType(this.variableKey) != "number") {
+            issues.push(new StructogramIssues(this.id, `Block violates the type restrictions of the variable with key [${this.variableKey}]!`));
+        } else if (this.owner.memory.isConstant(this.variableKey)) {
+            issues.push(new StructogramIssues(this.id, `Block tries to assign [${this.variableKey}] which is a constant variable!`));
         }
 
-        return [];
+        return issues;
     }
 }
 
