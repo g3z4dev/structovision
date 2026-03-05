@@ -58,7 +58,7 @@ test("assignment blocks should work as expected", assertion => {
     structogram.defineAuxData("a", "number");
 
     const assignmentBlock = new AssignmentBlock(structogram);
-    assignmentBlock.keyOption.setValue("a");
+    assignmentBlock.keyOption.setKey("a");
     assignmentBlock.statementOption.setStatement("3+4+5");
     structogram.startingBlock = assignmentBlock;
     
@@ -94,7 +94,7 @@ test("true-false branching blocks should work as expected", assertion => {
 
     structogram.defineAuxData("a", "boolean");
     const assignmentBlock = new AssignmentBlock(structogram);
-    assignmentBlock.keyOption.setValue("a");
+    assignmentBlock.keyOption.setKey("a");
     assignmentBlock.statementOption.setStatement("true");
     const truefalseBlock = new TrueFalseBranchingBlock(structogram);
     truefalseBlock.conditionOption.setStatement("a");
@@ -128,7 +128,7 @@ test("multi branching blocks should work as expected", assertion => {
 
     structogram.defineAuxData("v", "number");
     const assignmentBlock = new AssignmentBlock(structogram);
-    assignmentBlock.keyOption.setValue("v");
+    assignmentBlock.keyOption.setKey("v");
     assignmentBlock.statementOption.setStatement("1");
     const multiBranchingBlock = new MultiBranchingBlock(structogram);
     multiBranchingBlock.conditionListOption.setStatements([
@@ -176,7 +176,7 @@ test("counting loop blocks should work as expected", assertion => {
     structogram.defineAuxData("i", "number");
 
     const countingLoopBlock = new CountingLoopBlock(structogram);
-    countingLoopBlock.variableKeyOption.setValue("i");
+    countingLoopBlock.variableKeyOption.setKey("i");
     countingLoopBlock.fromOption.setStatement("1");
     countingLoopBlock.toOption.setStatement("10");
     countingLoopBlock.stepOption.setStatement("1");
@@ -209,7 +209,7 @@ test("front testing loop blocks should work as expected", assertion => {
 
     structogram.defineAuxData("i", "string");
     const assignmentBlock = new AssignmentBlock(structogram);
-    assignmentBlock.keyOption.setValue("i");
+    assignmentBlock.keyOption.setKey("i");
     assignmentBlock.statementOption.setStatement("\"a\"")
     const frontTestingLoopBlock = new FrontTestingLoopBlock(structogram);
     frontTestingLoopBlock.conditionOption.setStatement("len(i) < 4");
@@ -218,7 +218,7 @@ test("front testing loop blocks should work as expected", assertion => {
     loopedBlock.statementOption.setStatement("i");
     frontTestingLoopBlock.loopStart = loopedBlock;
     const loopedBlock2 = new AssignmentBlock(structogram);
-    loopedBlock2.keyOption.setValue("i");
+    loopedBlock2.keyOption.setKey("i");
     loopedBlock2.statementOption.setStatement("i&\"a\"");
     loopedBlock.next = loopedBlock2;
     const finishedBlock = new PrintBlock(structogram);
@@ -241,7 +241,7 @@ test("back testing loop blocks should work as expected", assertion => {
 
     structogram.defineAuxData("i", "string");
     const assignmentBlock = new AssignmentBlock(structogram);
-    assignmentBlock.keyOption.setValue("i");
+    assignmentBlock.keyOption.setKey("i");
     assignmentBlock.statementOption.setStatement("\"a\"")
     const backTestingLoopBlock = new BackTestingLoopBlock(structogram);
     backTestingLoopBlock.conditionOption.setStatement("len(i) < 1 or len(i) > 2 and len(i) <= 3");
@@ -250,7 +250,7 @@ test("back testing loop blocks should work as expected", assertion => {
     loopedBlock.statementOption.setStatement("i");
     backTestingLoopBlock.loopStart = loopedBlock;
     const loopedBlock2 = new AssignmentBlock(structogram);
-    loopedBlock2.keyOption.setValue("i");
+    loopedBlock2.keyOption.setKey("i");
     loopedBlock2.statementOption.setStatement("i&\"aa\"");
     loopedBlock.next = loopedBlock2;
     const finishedBlock = new PrintBlock(structogram);
@@ -276,47 +276,47 @@ test("a complex structogram should work as expected", assertion => {
     structogram.defineAuxData("c", "number");
     structogram.defineAuxData("i", "number");
     const assignmentBlocka = new AssignmentBlock(structogram);
-    assignmentBlocka.keyOption.setValue("a");
+    assignmentBlocka.keyOption.setKey("a");
     assignmentBlocka.statementOption.setStatement("1")
     const assignmentBlockb = new AssignmentBlock(structogram);
-    assignmentBlockb.keyOption.setValue("b");
+    assignmentBlockb.keyOption.setKey("b");
     assignmentBlockb.statementOption.setStatement("1")
     assignmentBlocka.next = assignmentBlockb;
     const assignmentBlockc = new AssignmentBlock(structogram);
-    assignmentBlockc.keyOption.setValue("c");
+    assignmentBlockc.keyOption.setKey("c");
     assignmentBlockc.statementOption.setStatement("2")
     assignmentBlockb.next = assignmentBlockc
     const countingLoopBlock = new CountingLoopBlock(structogram);
     countingLoopBlock.fromOption.setStatement("1");
     countingLoopBlock.toOption.setStatement("10");
     countingLoopBlock.stepOption.setStatement("1");
-    countingLoopBlock.variableKeyOption.setValue("i");
+    countingLoopBlock.variableKeyOption.setKey("i");
     assignmentBlockc.next = countingLoopBlock;
     const assignmentBlock1 = new AssignmentBlock(structogram);
-    assignmentBlock1.keyOption.setValue("c");
+    assignmentBlock1.keyOption.setKey("c");
     assignmentBlock1.statementOption.setStatement("a+b");
     countingLoopBlock.loopStart = assignmentBlock1;
     const assignmentBlock2 = new AssignmentBlock(structogram);
-    assignmentBlock2.keyOption.setValue("a");
+    assignmentBlock2.keyOption.setKey("a");
     assignmentBlock2.statementOption.setStatement("b");
     assignmentBlock1.next = assignmentBlock2;
     const assignmentBlock3 = new AssignmentBlock(structogram);
-    assignmentBlock3.keyOption.setValue("b");
+    assignmentBlock3.keyOption.setKey("b");
     assignmentBlock3.statementOption.setStatement("c");
     assignmentBlock2.next = assignmentBlock3;
     const frontTestingLoop = new FrontTestingLoopBlock(structogram);
     frontTestingLoop.conditionOption.setStatement("b mod 2 != 0");
     assignmentBlock3.next = frontTestingLoop;
     const assignmentBlock4 = new AssignmentBlock(structogram);
-    assignmentBlock4.keyOption.setValue("c");
+    assignmentBlock4.keyOption.setKey("c");
     assignmentBlock4.statementOption.setStatement("a+b");
     frontTestingLoop.loopStart = assignmentBlock4;
     const assignmentBlock5 = new AssignmentBlock(structogram);
-    assignmentBlock5.keyOption.setValue("a");
+    assignmentBlock5.keyOption.setKey("a");
     assignmentBlock5.statementOption.setStatement("b");
     assignmentBlock4.next = assignmentBlock5;
     const assignmentBlock6 = new AssignmentBlock(structogram);
-    assignmentBlock6.keyOption.setValue("b");
+    assignmentBlock6.keyOption.setKey("b");
     assignmentBlock6.statementOption.setStatement("c");
     assignmentBlock5.next = assignmentBlock6;
     const printBlock = new PrintBlock(structogram);
@@ -367,7 +367,7 @@ test("assignment block should raise issues when expected", assertion => {
     const [_, structogram] = createBasicStructogram();
 
     const block = new AssignmentBlock(structogram);
-    block.keyOption.setValue("a");
+    block.keyOption.setKey("a");
     block.statementOption.setStatement("\"hello\"");
     structogram.startingBlock = block;
 
@@ -440,7 +440,7 @@ test("countingloop block should raise issues when expected", assertion => {
     const [_, structogram] = createBasicStructogram();
 
     const block = new CountingLoopBlock(structogram);
-    block.variableKeyOption.setValue("i")
+    block.variableKeyOption.setKey("i")
     block.fromOption.setStatement("1");
     block.toOption.setStatement("10");
     block.stepOption.setStatement("1");

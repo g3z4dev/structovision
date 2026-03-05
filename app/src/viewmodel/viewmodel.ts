@@ -128,8 +128,6 @@ export class ViewModel {
     public readonly structogramRunner = new StructogramRunner(this.currentStructogram, this);
     public readonly toolbar = new BlockToolbar(this.currentStructogram);
     public readonly structogramSettings = new StructogramSettings(this);
-    public readonly timeControl = new TimeControl(this);
-    public readonly programViewManager = new ProgramViewManager(this);
     public readonly structogramSpecificator = new StructogramSpecificator(this);
     private readonly structogramBuilderElem = document.querySelector("#structogram-builder")!;
     private readonly structogramRunnerElem = document.querySelector("#structogram-runner")!;
@@ -281,7 +279,7 @@ class StructogramRenderer {
 
     private replaceOptionValues(elem: HTMLElement, options: BlockOption[], index: number) {
         for(const option of options) {
-            const values = option.getValue();
+            const values = option.getRawValues();
             if(values.length > 1) {
                 setTemplateText(elem, option.name, values[index]!);
             } else {
@@ -407,6 +405,8 @@ class MovingBlock {
 }
 
 class StructogramBuilder extends StructogramRenderer {
+    private saveButton = document.querySelector("#save-button") as HTMLElement;
+    private loadButton = document.querySelector("#load-button") as HTMLElement;
     private movingBlock: MovingBlock | undefined;
 
     private addSegmentFor(block: StructogramBlock, x: number, y: number) {
@@ -448,6 +448,42 @@ class StructogramBuilder extends StructogramRenderer {
         return this.originOffsetY - this.originY + y / this.scale;
     }
 
+    private setupButtons(structogram: Structogram) {
+        // https://www.javaspring.net/blog/create-and-save-a-file-with-javascript/
+        const a = document.createElement("a");
+        a.download = "structogram.json"
+
+        this.saveButton.addEventListener("click", () => {
+            const data = JSON.stringify(structogram.getData());
+            const blob = new Blob([data], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // https://stackoverflow.com/questions/16215771/how-to-open-select-file-dialog-via-js
+        const input = document.createElement("input");
+        input.type = "file";
+
+        input.onchange = _ => {
+            if(input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                reader.readAsText(file);
+
+                reader.onload = readerEvent => {
+                    if(readerEvent.target && readerEvent.target.result) {
+                        structogram.loadData(JSON.parse(readerEvent.target.result as string));
+                    }
+                }
+            }
+        };
+        this.loadButton.addEventListener("click", () => {
+            input.click();
+        });
+    }
+
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(structogram, viewModel, document.querySelector("#build-view")!)
         this.mainDiv.addEventListener("mouseup", event => {
@@ -471,7 +507,7 @@ class StructogramBuilder extends StructogramRenderer {
             if(this.movingBlock && this.movingBlock.associatedElement) {
                 setPosition(this.movingBlock.associatedElement, this.xDivToSvg(event.offsetX+10), this.yDivToSvg(event.offsetY));
             }
-        })
+        });
         document.addEventListener("mouseup", event => {
             if(event.button == 0 && this.movingBlock) {
                 this.disconnectBlock(this.movingBlock.block);
@@ -484,7 +520,20 @@ class StructogramBuilder extends StructogramRenderer {
                 }
                 this.movingBlock = undefined;
             }
-        })
+        });
+        this.setupButtons(structogram);
+        this.loadCache();
+    }
+
+    public loadCache() {
+        const data = localStorage.getItem("lastStructogram");
+        if(data) {
+            this.structogram.loadData(JSON.parse(data));
+        }
+    }
+
+    public saveCache() {
+        localStorage.setItem("lastStructogram", JSON.stringify(this.structogram.getData()));
     }
 
     public override generateHTML(): void {
@@ -497,6 +546,7 @@ class StructogramBuilder extends StructogramRenderer {
                 setHeight(associatedElem, height);
             }
         }
+        this.saveCache();
     }
 
     protected override onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement): void {
@@ -529,7 +579,7 @@ class StructogramBuilder extends StructogramRenderer {
                 let block = undefined;
                 if(this.viewModel.toolbar.blockBrush) {
                     block = this.viewModel.toolbar.applyBrush();
-                } else if(this.movingBlock) {
+                } else if(this.movingBlock && this.movingBlock.block != context.parent && this.movingBlock.block != context.superBlock) {
                     block = this.movingBlock.block;
                     if(this.movingBlock.associatedElement) {
                         this.renderTarget.removeChild(this.movingBlock.associatedElement);
@@ -554,11 +604,48 @@ class StructogramBuilder extends StructogramRenderer {
     }
 }
 
+class ListWindow {
+    private window: HTMLElement;
+    private list: HTMLElement;
+
+    constructor(windowID:string , okButtonID: string){
+        this.window = document.querySelector(`#${windowID}`) as HTMLElement;
+        this.list = this.window.querySelector("ul") as HTMLElement;
+        const okButton = this.window.querySelector(`#${okButtonID}`) as HTMLElement;
+        okButton.addEventListener("click", () => {
+            this.hide();
+            this.clearEntries();
+        });
+    }
+
+    public addEntry(text: string) {
+        const li = document.createElement("li");
+        li.textContent = text;
+        this.list.appendChild(li);
+    }
+
+    public clearEntries() {
+        this.list.textContent = "";
+    }
+
+    public show() {
+        this.window.classList.remove("hidden");
+    }
+
+    public hide() {
+        this.window.classList.add("hidden");
+    }
+}
+
 class StructogramRunner extends StructogramRenderer {
     private _currentBlock: StructogramBlock | undefined;
     private _activeBlockStep: string | undefined;
     private paused: boolean = false;
     private readonly inputDataElem = document.querySelector("#input-data") as HTMLElement;
+    private readonly runIssueWindow = new ListWindow("issues", "issues-ok");
+    private readonly runResultsWindow = new ListWindow("results", "results-ok");
+    public readonly timeControl = new TimeControl(this.viewModel);
+    public readonly programViewManager = new ProgramViewManager(this.viewModel);
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
@@ -618,6 +705,9 @@ class StructogramRunner extends StructogramRenderer {
 
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(structogram, viewModel, document.querySelector("#run-view")!)
+        for(const [key, _] of structogram.inputData) {
+            this.addInputEntry(key);
+        }
         viewModel.currentStructogram.emitter.addListener(Structogram.inputDataEvent, (key, _) => {
             this.addInputEntry(key);
         });
@@ -627,16 +717,33 @@ class StructogramRunner extends StructogramRenderer {
     }
 
     public async start() {
-        if(!this.structogram.isRunning()) this.structogram.preRun(this.getInputs());
+        if(!this.structogram.isRunning()) {
+            const issues = this.structogram.preRun(this.getInputs());
+            if(issues.length > 0) {
+                for(const issue of issues) {
+                    this.runIssueWindow.addEntry(issue.id + ": " + issue.message);
+                }
+                this.runIssueWindow.show();
+                return;
+            }
+            this.programViewManager.reset();
+        }
         this.paused = false;
         this.currentBlock = this.structogram.currentBlock;
+        let partialResults: [string, Primitive][] = [];
         do {
-            this.viewModel.programViewManager.clearEffects();
-            this.structogram.runStep();
-            await wait(baseRunSpeed / this.viewModel.timeControl.currentSpeed);
+            this.programViewManager.clearEffects();
+            partialResults = this.structogram.runStep();
+            await wait(baseRunSpeed / this.timeControl.currentSpeed);
             if(!this.paused) this.currentBlock = this.structogram.currentBlock;
         } while (this.structogram.isRunning() && !this.paused);
-        if(!this.structogram.isRunning()) this.currentBlock = undefined;
+        if(!this.structogram.isRunning()) {
+            this.currentBlock = undefined;
+            for(const [key, value] of partialResults) {
+                this.runResultsWindow.addEntry(key + " = " + value);
+            }
+            this.runResultsWindow.show();
+        }
     }
 
     public pause() {
@@ -913,7 +1020,7 @@ class KeyOptionHandler extends OptionHandler {
         const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
         textField.value = option.getKey();
         textField.addEventListener("change", () => {
-            option.setValue(textField.value);
+            option.setKey(textField.value);
         });
     }   
 }
@@ -957,6 +1064,8 @@ class DataSettingsHandler {
         for(const [key, type] of outputEntries) {
             this.viewModel.currentStructogram.defineOutputData(key, type);
         }
+
+        this.viewModel.structogramBuilder.saveCache();
     }
 
     private setupElements() {
@@ -1181,6 +1290,13 @@ class ProgramViewManager {
         this.logicView.clearEffects();
     }
 
+    public reset() {
+        this.clearEffects();
+        this.printView.reset();
+        this.memoryView.reset();
+        this.logicView.reset();
+    }
+
     public render(delta: number) {
         
     }
@@ -1199,7 +1315,6 @@ abstract class ProgramView {
     public clearEffects() {
 
     }
-
 }
 
 class OutputView extends ProgramView {
@@ -1413,16 +1528,16 @@ class StructogramSpecificator {
 
     private reset() {
         let inEntries = [];
-        for(const [key, value]of this.viewModel.currentStructogram.inputData) {
-            inEntries.push(`${key}: ${typeof value}`);
+        for(const [key, type]of this.viewModel.currentStructogram.inputData) {
+            inEntries.push(`${key}: ${type}`);
         }
         let auxEntries = [];
-        for(const [key, value]of this.viewModel.currentStructogram.auxData) {
-            auxEntries.push(`${key}: ${typeof value}`);
+        for(const [key, type]of this.viewModel.currentStructogram.auxData) {
+            auxEntries.push(`${key}: ${type}`);
         }
         let outEntries = [];
-        for(const [key, value]of this.viewModel.currentStructogram.outputData) {
-            outEntries.push(`${key}: ${typeof value}`);
+        for(const [key, type]of this.viewModel.currentStructogram.outputData) {
+            outEntries.push(`${key}: ${type}`);
         }
         setTemplateText(this.specificationElem, "spec-in", inEntries.join(", "));
         setTemplateText(this.specificationElem, "spec-aux", auxEntries.join(", "));

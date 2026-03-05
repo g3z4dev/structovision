@@ -148,7 +148,7 @@ export class Structogram {
         return issues;
     }
 
-    public runStep() {
+    public runStep(): [string, Primitive][] {
         if(!this.ready) {
             throw new Error("Cannot run before doing the preRun and addressing its issues!");
         }
@@ -162,17 +162,23 @@ export class Structogram {
                     this.bracketBlockStack.push(lastBlock);
                 }
             }
-            if(!this.currentBlock) this.runStep();
+            if(!this.currentBlock) return this.runStep();
         } else if(this.bracketBlockStack.length > 0) {
             this.currentBlock = this.bracketBlockStack.pop();
             if((this.currentBlock as BracketBlock).skipToNext()) {
-                this.runStep();
+                return this.runStep();
             }
         } else {
             this.running = false;
             this.ready = false;
             this.currentBlock = this.startingBlock;
+            const results = [] as [string, Primitive][];
+            for(const [key, _] of this.outputData) {
+                results.push([key, this.memory.getVariable(key)]);
+            }
+            return results;
         }
+        return [];
     }
 
     public isRunning() {
@@ -216,6 +222,41 @@ export class Structogram {
         return this._startingBlock;
     }
 
+    public getData() {
+        return {
+            "input": this.inputData.map(data => {
+                return {"key": data[0], "type": data[1]}
+            }),
+            "auxiliary": this.auxData.map(data => {
+                return {"key": data[0], "type": data[1]}
+            }),
+            "output": this.outputData.map(data => {
+                return {"key": data[0], "type": data[1]}
+            }),
+            "startingBlock": this.startingBlock?.getData()
+        }   
+    }
+
+    public loadData(data: any) {
+        console.log(data)
+        const input = data["input"];
+        const aux = data["auxiliary"];
+        const output = data["output"];
+        console.log(input);
+        console.log(aux);
+        console.log(output);
+        
+        function loadWith(entries: any, loader:(a: string, type: VariableType) => void) {
+            for(const entry of entries) loader(entry["key"], entry["type"]);
+        }
+
+        loadWith(input, (key, type) => this.defineInputData(key, type));
+        loadWith(aux, (key, type) => this.defineAuxData(key, type));
+        loadWith(output, (key, type) => this.defineOutputData(key, type));
+
+        this.startingBlock = StructogramBlock.BlockDataFactory.constructFromData(data["startingBlock"], this);
+    }
+
     public print(text: string) {
         this.emitter.emit(Structogram.printEvent, text);
     }
@@ -251,7 +292,8 @@ export abstract class BlockOption implements TypeIdentifiable {
     }
 
     public abstract getTypeIdentifier(): string;
-    public abstract getValue(): string[];
+    public abstract getRawValues(): string[];
+    public abstract setRawValues(data: string[]): void;
 }
 
 export class BooleanStatementListOption extends BlockOption {
@@ -282,8 +324,12 @@ export class BooleanStatementListOption extends BlockOption {
         return this.statements.length;
     }
 
-    public override getValue() {
+    public override getRawValues() {
         return [...this.statements];
+    }
+
+    public override setRawValues(data: string[]): void {
+        this.statements = data;
     }
 }
 
@@ -301,8 +347,12 @@ export abstract class StatementOption<T extends Primitive> extends BlockOption {
 
     public abstract tryResolveStatement(): Statement<T>;
 
-    public override getValue(): string[] {
+    public override getRawValues(): string[] {
         return [this.statement];
+    }
+
+    public setRawValues(data: string[]): void {
+        this.statement = data[0]!;
     }
 }
 
@@ -353,18 +403,23 @@ export class KeyOption extends BlockOption {
         return this.value;
     }
 
-    public override getValue(): string[] {
+    public override getRawValues(): string[] {
         return [this.value];
     }
 
-    public setValue(value: string) {
+    public setKey(value: string) {
         this.value = value;
         this.emitter.emit(BlockOption.optionChangedEvent);
+    }
+
+    public override setRawValues(data: string[]): void {
+        this.value = data[0]!;
     }
 
     public override getTypeIdentifier(): string {
         return "keyoption";
     }
+    
 }
 
 export abstract class StructogramBlock implements TypeIdentifiable, Identifiable {
@@ -471,6 +526,57 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     public abstract getOptions(): BlockOption[];
     public abstract getTypeIdentifier(): string;
     public abstract parseAndCheckForIssues(): StructogramIssues[];
+
+    public getData(): any {
+        return {
+            "type": this.getTypeIdentifier(),
+            "next": this.next?.getData(),
+            "subBlocks": Object.entries(this.subBlocks).map(entry => {
+                return {"key": entry[0], "block": entry[1]?.getData()};
+            }),
+            "options": this.getOptions().map(option => {
+                return {"name": option.name, "value": option.getRawValues()};
+            })
+        };
+    }
+
+    public static BlockDataFactory = class {
+        public static readonly typeToFactory: Record<string, (s: Structogram) => StructogramBlock> = {
+            "assignmentblock": (s) => new AssignmentBlock(s),
+            "printblock": (s) => new PrintBlock(s),
+            "truefalsebranchingblock": (s) => new TrueFalseBranchingBlock(s),
+            "multibranchingblock": (s) => new MultiBranchingBlock(s),
+            "countingloopblock": (s) => new CountingLoopBlock(s),
+            "fronttestingloopblock": (s) => new FrontTestingLoopBlock(s),
+            "backtestingloopblock": (s) => new BackTestingLoopBlock(s),
+        }
+
+        public static constructFromData(data: any, structogram: Structogram): StructogramBlock {
+            const block = this.typeToFactory[data["type"]]!(structogram);
+            const optionsData = data["options"];
+            for(const option of block.getOptions()) {
+                for(const optionData of optionsData) {
+                    if(option.name == optionData["name"]) {
+                        option.setRawValues(optionData["value"]);
+                        break;
+                    }
+                }
+            }
+            const nextData = data["next"];
+            if(nextData) {
+                block.next = this.constructFromData(nextData, structogram);
+            }
+            const subBlocksData = data["subBlocks"];
+            for(const subBlockData of subBlocksData) {
+                let subBlock = undefined;
+                if(subBlockData["block"]) {
+                    subBlock = this.constructFromData(subBlockData["block"], structogram);
+                }
+                block.setSubBlock(subBlockData["key"], subBlock);
+            }
+            return block;
+        }
+    }
 }
 
 export abstract class SequenceBlock extends StructogramBlock {
@@ -788,12 +894,13 @@ export class CountingLoopBlock extends LoopBlock {
             this.finished = false;
             this.activeStep = "init";
             this.owner.memory.setVariable(this.variableKey!, this.from?.evaluate() ?? 0);
-            return this.loopStart;
+            return this;
         } else if(!this.checkedCondition) {
+            const lastStep = this.activeStep;
             this.activeStep = "condition";
             this.checkedCondition = this.owner.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0);
             if(this.checkedCondition) {
-                return this;
+                return lastStep == "init" ? this.loopStart : this;
             }
         } else {
             this.activeStep = "increment";

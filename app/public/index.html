@@ -17,8 +17,8 @@
 
                     </div>
                     <div class="flex flex-row border-l border-gray-800" id="options">
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2">save</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2">load</button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="save-button">save</button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="load-button">load</button>
                     </div>
                 </div>
                 <div class="align-middle m-0 bg-white" id="specification">
@@ -40,7 +40,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-span-5 bg-blue-900" id="structogram-settings">
+            <div class="col-span-5 bg-gray-800" id="structogram-settings">
             </div>
         </div>
     </div>
@@ -69,7 +69,33 @@
                     </div>
                 </div>
             </div>
-            <div class="col-span-6 bg-blue-900 flex flex-col" id="program-views">
+            <div class="col-span-6 bg-gray-800 flex flex-col" id="program-views">
+            </div>
+        </div>
+        <div id="issues" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
+            <div class="m-auto mt-5 w-1/2 h-2/3 flex flex-col bg-gray-800">
+                <p class="text-white text-lg m-2">Issues</p>
+                <div class="basis-4/5 overflow-y-scroll bg-gray-700 p-2">
+                    <ul class="text-red-400">
+
+                    </ul>
+                </div>
+                <div class="w-full flex items-center justify-center">
+                    <button id="issues-ok" class="m-auto bg-blue-500 hover:bg-blue-400 w-1/5">Ok</button>
+                </div>
+            </div>
+        </div>
+        <div id="results" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
+            <div class="m-auto mt-5 w-1/2 h-2/3 flex flex-col bg-gray-800">
+                <p class="text-white text-lg m-2">Results</p>
+                <div class="basis-4/5 overflow-y-scroll bg-gray-700 p-2">
+                    <ul class="text-white">
+
+                    </ul>
+                </div>
+                <div class="w-full flex items-center justify-center">
+                    <button id="results-ok" class="m-auto bg-blue-500 hover:bg-blue-400 w-1/5">Ok</button>
+                </div>
             </div>
         </div>
     </div>
