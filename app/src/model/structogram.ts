@@ -39,7 +39,7 @@ export class Structogram {
     public static readonly dataClearEvent = "structogram.data.clear";
     public readonly memory: Memory;
     public readonly emitter: EventEmitter2;
-    public startingBlock: StructogramBlock | undefined;
+    public _startingBlock: StructogramBlock | undefined;
     private _currentBlock: StructogramBlock | undefined;
     private readonly idMap: Record<string, StructogramBlock> = {};
     private running = false;
@@ -180,7 +180,7 @@ export class Structogram {
     }
 
     public addBlock(block: StructogramBlock) {
-        if(this.isRunning()) throw new Error();
+        if(this.isRunning()) throw new Error("Cannot add block while structogram is running!");
         this.idMap[block.id] = block;
         this.emitter.emit(Structogram.changedEvent, block);
         block.emitter.addListener(StructogramBlock.childrenChanged, () => {
@@ -188,12 +188,32 @@ export class Structogram {
         });
     }
 
-    public setStartingBlock(block: StructogramBlock | undefined) {
-        if(this.isRunning()) throw new Error();
-        this.startingBlock = block;
-        this.currentBlock = block;
-        if(block) block.isActive = true;
+    public removeBlock(block: StructogramBlock) {
+        if(this.isRunning()) throw new Error("Cannot remove block while structogram is running!");
+        delete this.idMap[block.id];
         this.emitter.emit(Structogram.changedEvent, block);
+        block.emitter.removeAllListeners(StructogramBlock.childrenChanged);
+    }
+
+    public getIndependentRootBlocks(): StructogramBlock[] {
+        return Object.values(this.idMap).filter(b => !b.parent && this.startingBlock != b && !b.superBlock);
+    }
+
+    public set startingBlock(block: StructogramBlock | undefined) {
+        if(this.isRunning()) throw new Error("Cannot change starting block while structogram is running!");
+        if(block?.superBlock) {
+            throw new Error("Cannot set subblock as starting block!");
+        }
+        if(block?.parent) {
+            throw new Error("Cannot set child block as starting block!");
+        }
+        this._startingBlock = block;
+        this.currentBlock = block;
+        this.emitter.emit(Structogram.changedEvent, block);
+    }
+
+    public get startingBlock() {
+        return this._startingBlock;
     }
 
     public print(text: string) {
@@ -353,23 +373,13 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     protected static idSeq = 0;
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
     protected owner: Structogram;
-    public parent: StructogramBlock | undefined;
+    private _parent: StructogramBlock | undefined;
+    protected _superBlock: StructogramBlock | undefined;
+    protected _subBlockKey: string | undefined;
     protected abstract subBlocks: Record<string, StructogramBlock | undefined>;
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
     protected _activeStep: string = "ready";
-    public _isActive: boolean = false;
-
-    public get isActive() {
-        return this._isActive;
-    }
-
-    public set isActive(isActive: boolean) {
-        this._isActive = isActive;
-        if(this._next) {
-            this._next.isActive = isActive;
-        }
-    }
 
     public get activeStep() {
         return this._activeStep;
@@ -390,18 +400,42 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     }
 
     public set next(next: StructogramBlock | undefined) {
-        if(this._next && this.isActive) {
-            this._next.isActive = false;
+        if(this._next) {
+            this._next.parent = undefined;
         }
         this._next = next;
         if(this._next) {
-            this._next.isActive = this.isActive;
+            this._next.parent = this;
         }
         this.emitter.emit(StructogramBlock.childrenChanged, this);
     }
 
+    public get parent() {
+        return this._parent;
+    }
+
+    protected set parent(parent: StructogramBlock | undefined) {
+        this._parent = parent;
+    }
+
     public getID() {
         return this.id;
+    }
+
+    public get superBlock() {
+        return this._superBlock;
+    }
+
+    protected set superBlock(block: StructogramBlock | undefined) {
+        this._superBlock = block;
+    }
+
+    public get subBlockKey() {
+        return this._subBlockKey;
+    }
+
+    protected set subBlockKey(key: string | undefined) {
+        this._subBlockKey = key;
     }
 
     public getSubBlocks(): Record<string,StructogramBlock | undefined> {
@@ -409,7 +443,23 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     }
 
     public setSubBlock(key: string, block: StructogramBlock | undefined) {
+        if(block) {
+            if(block.parent) {
+                throw new Error("Child block cannot become a subblock!");
+            }
+            if(this.owner.startingBlock == block || block.owner.startingBlock == block) {
+                throw new Error("Starting block cannot become a subblock!");
+            }
+        }
+        if(this.subBlocks[key]) {
+            this.subBlocks[key].superBlock = undefined;
+            this.subBlocks[key].subBlockKey = undefined;
+        }
         this.subBlocks[key] = block;
+        if(block) {
+            block.superBlock = this;
+            block.subBlockKey = key;
+        }
         this.emitter.emit(StructogramBlock.childrenChanged, this);
     }
 

@@ -60,7 +60,7 @@ test("assignment blocks should work as expected", assertion => {
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setValue("a");
     assignmentBlock.statementOption.setStatement("3+4+5");
-    structogram.setStartingBlock(assignmentBlock);
+    structogram.startingBlock = assignmentBlock;
     
     runStructogram(structogram);
 
@@ -78,7 +78,7 @@ test("print blocks should work as expected", assertion => {
 
     const printBlock = new PrintBlock(structogram);
     printBlock.statementOption.setStatement("text");
-    structogram.setStartingBlock(printBlock);
+    structogram.startingBlock = printBlock;
 
     runStructogram(structogram, ["\"hello world\""]);
 
@@ -106,7 +106,7 @@ test("true-false branching blocks should work as expected", assertion => {
     truefalseBlock.falseBranch = falseBlock;
     assignmentBlock.next = truefalseBlock;
 
-    structogram.setStartingBlock(assignmentBlock);
+    structogram.startingBlock = assignmentBlock;
 
     runStructogram(structogram);
 
@@ -147,7 +147,7 @@ test("multi branching blocks should work as expected", assertion => {
     multiBranchingBlock.setBranch(2, thirdBlock);
     assignmentBlock.next = multiBranchingBlock;
 
-    structogram.setStartingBlock(assignmentBlock);
+    structogram.startingBlock = assignmentBlock;
 
     runStructogram(structogram);
 
@@ -187,7 +187,7 @@ test("counting loop blocks should work as expected", assertion => {
     finishedBlock.statementOption.setStatement("\"finished\"");
     countingLoopBlock.next = finishedBlock;
 
-    structogram.setStartingBlock(countingLoopBlock);
+    structogram.startingBlock = countingLoopBlock;
 
     runStructogram(structogram);
 
@@ -225,7 +225,7 @@ test("front testing loop blocks should work as expected", assertion => {
     finishedBlock.statementOption.setStatement("\"finished\"");
     frontTestingLoopBlock.next = finishedBlock;
 
-    structogram.setStartingBlock(assignmentBlock);
+    structogram.startingBlock = assignmentBlock;
 
     runStructogram(structogram);
 
@@ -257,7 +257,7 @@ test("back testing loop blocks should work as expected", assertion => {
     finishedBlock.statementOption.setStatement("\"finished\"");
     backTestingLoopBlock.next = finishedBlock;
 
-    structogram.setStartingBlock(assignmentBlock);
+    structogram.startingBlock = assignmentBlock;
 
     runStructogram(structogram);
 
@@ -355,7 +355,7 @@ test("a complex structogram should work as expected", assertion => {
     printBlock8.statementOption.setStatement("\"it's done\"");
     multiBlock.next = printBlock8;
 
-    structogram.setStartingBlock(assignmentBlocka);
+    structogram.startingBlock = assignmentBlocka;
 
     runStructogram(structogram);
 
@@ -369,7 +369,7 @@ test("assignment block should raise issues when expected", assertion => {
     const block = new AssignmentBlock(structogram);
     block.keyOption.setValue("a");
     block.statementOption.setStatement("\"hello\"");
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
 
     assertion.truthy(structogram.preRun().length > 0, "assignment block should raise an issue on the assignment of an undefined variable");
     
@@ -393,7 +393,7 @@ test("print block should raise issues when expected", assertion => {
 
     const block = new PrintBlock(structogram);
     block.statementOption.setStatement("an invalid statement");
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
 
     assertion.truthy(structogram.preRun().length > 0, "print block should raise an issue on the assignment of an undefined variable");
 });
@@ -403,7 +403,7 @@ test("truefalsebranching block should raise issues when expected", assertion => 
 
     const block = new TrueFalseBranchingBlock(structogram);
     block.conditionOption.setStatement("");
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
 
     assertion.truthy(structogram.preRun().length > 0, "truefalsebranching block should raise an issue if its condition is an invalid statement");
 
@@ -421,7 +421,7 @@ test("multibranching block should raise issues when expected", assertion => {
         "3 > 4",
         "invalid statement"
     ])
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
 
     assertion.truthy(structogram.preRun().length > 0, "multibranching block should raise an issue if at least one of its conditions is an invalid statement");
     
@@ -444,7 +444,7 @@ test("countingloop block should raise issues when expected", assertion => {
     block.fromOption.setStatement("1");
     block.toOption.setStatement("10");
     block.stepOption.setStatement("1");
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
     
     assertion.truthy(structogram.preRun().length > 0, "countingloop block should raise an issue on the usage of an undefined variable");
 
@@ -491,7 +491,7 @@ test("fronttestingloop block should raise issues when expected", assertion => {
 
     const block = new FrontTestingLoopBlock(structogram);
     block.conditionOption.setStatement("");
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
 
     assertion.truthy(structogram.preRun().length > 0, "fronttestingloop block should raise an issue if its condition is an invalid statement");
 
@@ -505,7 +505,7 @@ test("backtestingloop block should raise issues when expected", assertion => {
 
     const block = new BackTestingLoopBlock(structogram);
     block.conditionOption.setStatement("");
-    structogram.setStartingBlock(block);
+    structogram.startingBlock = block;
 
     assertion.truthy(structogram.preRun().length > 0, "backtestingloop block should raise an issue if its condition is an invalid statement");
 

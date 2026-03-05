@@ -173,6 +173,20 @@ export class ViewModel {
     }
 }
 
+class UndefinedBlockContext {
+    public readonly parent: StructogramBlock | undefined;
+    public readonly superBlock: StructogramBlock | undefined;
+    public readonly subBlockKey: string | undefined;
+    public readonly isStartBlock: boolean;
+
+    constructor(parent: StructogramBlock | undefined, superBlock: StructogramBlock | undefined, subBlockKey: string | undefined, isStartBlock: boolean) {
+        this.parent = parent;
+        this.superBlock = superBlock;
+        this.subBlockKey = subBlockKey;
+        this.isStartBlock = isStartBlock;
+    }
+}
+
 class StructogramRenderer {
     protected readonly viewModel: ViewModel;
     protected readonly blockResourceManager: ResourceManager = new ResourceManager();
@@ -260,7 +274,7 @@ class StructogramRenderer {
         this.optionListenerRemovers = [];
         this.structogramSVG.textContent = "";
         let block = this.structogram.startingBlock;
-        const height = this.resolveHTMLFor(this.structogramSVG, block, b => this.structogram.setStartingBlock(b));
+        const height = this.resolveHTMLFor(this.structogramSVG, block);
         setSize(this.structogramSVG, this.structogramWidth, height);
         this.updateStructogramTransformation();
     }
@@ -306,8 +320,7 @@ class StructogramRenderer {
         }
     }
 
-    protected resolveHTMLFor(parent: Element, block: StructogramBlock | undefined, noPreviousHandler: (b:StructogramBlock) => void, width: number = this.structogramWidth, xOffset: number = 0, _yOffset: number = 0): number {
-        if(!this.structogramSVG) return 0;
+    protected resolveHTMLFor(parent: Element, block: StructogramBlock | undefined, width: number = this.structogramWidth, xOffset: number = 0, _yOffset: number = 0): number {
         let prevBlock: StructogramBlock | undefined = undefined;
         let currentBlock: StructogramBlock | undefined = block;
         let yOffset = _yOffset;
@@ -343,11 +356,10 @@ class StructogramRenderer {
                 }
                 const subBlock = subBlocks[subBlockKeys[i]!];
                 if(subBlock) {
-                    const subBlockHeight = this.resolveHTMLFor(elem, subBlock, noPreviousHandler, newWidth, childXOffset+newWidth*i, childYOffset);
+                    const subBlockHeight = this.resolveHTMLFor(elem, subBlock, newWidth, childXOffset+newWidth*i, childYOffset);
                     if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
                 } else {
-                    const finalCurrentBlock = currentBlock;
-                    const subBlockHeight = this.onUndefinedBlock(elem, undefined, b => finalCurrentBlock.setSubBlock(subBlockKeys[i]!, b), newWidth, childXOffset+newWidth*i, childYOffset);
+                    const subBlockHeight = this.onUndefinedBlock(elem, new UndefinedBlockContext(undefined, currentBlock, subBlockKeys[i]!, false), newWidth, childXOffset+newWidth*i, childYOffset);
                     if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
                 }
             }
@@ -368,7 +380,7 @@ class StructogramRenderer {
             currentBlock = currentBlock?.next;
             yOffset += blockHeight;
         }
-        yOffset += this.onUndefinedBlock(parent, prevBlock, noPreviousHandler, width, xOffset, yOffset);
+        yOffset += this.onUndefinedBlock(parent, new UndefinedBlockContext(prevBlock, undefined, undefined, !prevBlock && (parent == this.structogramSVG)), width, xOffset, yOffset);
         return yOffset-_yOffset;
     }
 
@@ -376,115 +388,100 @@ class StructogramRenderer {
 
     }
 
-    protected onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, noPreviousHandler: (b:StructogramBlock) => void, width: number, xOffset: number, yOffset: number) {
+    protected onUndefinedBlock(parent: Element, context: UndefinedBlockContext, width: number, xOffset: number, yOffset: number) {
         return 0;
     }
 }
 
-class StructogramSegment {
-    public readonly svgElem: SVGSVGElement;
-    public readonly rootBlock: StructogramBlock;
-    private _x: number;
-    public get x(): number {
-        return this._x;
-    }
-    public set x(value: number) {
-        this._x = value;
-        applyTransformation(this.svgElem, this.x, this.y, 1);
-    }
-
-    private _y: number;
-    public get y(): number {
-        return this._y;
-    }
-    public set y(value: number) {
-        this._y = value;
-        applyTransformation(this.svgElem, this.x, this.y, 1);
-    }
-    public relMouseX = 0;
-    public relMouseY = 0;
-
-    constructor(svgElem: SVGSVGElement, rootBlock: StructogramBlock, x: number, y: number) {
-        this.svgElem = svgElem;
-        this.rootBlock = rootBlock;
-        this._x = x;
-        this._y = y;
-    }
-}
-
 class MovingBlock {
-    public associatedSegment: StructogramSegment | undefined;
-    public associatedElement: HTMLElement;
-    public blockParent: StructogramBlock | undefined;
+    public associatedElement: Element | undefined;
     public block: StructogramBlock;
     public readonly startX: number;
     public readonly startY: number;
 
-    constructor(block: StructogramBlock, associatedElement: HTMLElement, startX: number, startY: number) {
+    constructor(block: StructogramBlock, startX: number, startY: number) {
         this.block = block;
-        this.associatedElement = associatedElement;
         this.startX = startX;
         this.startY = startY;
     }
 }
 
 class StructogramBuilder extends StructogramRenderer {
-    private segments: StructogramSegment[] = [];
     private movingBlock: MovingBlock | undefined;
+
+    private addSegmentFor(block: StructogramBlock, x: number, y: number) {
+        const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
+        elem.id = `${block.id}-segment`;
+        setX(elem, x);
+        setY(elem, y);
+        elem.classList.add("opacity-50");
+        elem.classList.remove("structogram-svg");
+        this.renderTarget.appendChild(elem);
+        this.generateHTML();
+    }
+
+    private disconnectBlock(block: StructogramBlock) {
+        const structogram = this.structogram;
+        function isStartingBlock(block: StructogramBlock) {
+            return structogram.startingBlock == block;
+        }
+        function isSubBlock(block: StructogramBlock) {
+            return !!block.superBlock && !!block.subBlockKey;
+        }
+        function hasParent(block: StructogramBlock) {
+            return !!block.parent;
+        }
+        if(isStartingBlock(block)) {
+            structogram.startingBlock = undefined;
+        } else if(isSubBlock(block)) {
+            block.superBlock!.setSubBlock(block.subBlockKey!, undefined);
+        } else if(hasParent(block)){
+            block.parent!.next = undefined;
+        }
+    }
+
+    private xDivToSvg(x: number) {
+        return this.originOffsetX - this.originX + x / this.scale;
+    }
+
+    private yDivToSvg(y: number) {
+        return this.originOffsetY - this.originY + y / this.scale;
+    }
 
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(structogram, viewModel, document.querySelector("#build-view")!)
         this.mainDiv.addEventListener("mouseup", event => {
             if(event.button == 0) {
                 if(this.viewModel.toolbar.blockBrush) {
-                    const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
-                    const segment = new StructogramSegment(elem, this.viewModel.toolbar.applyBrush(), event.offsetX/this.scale - this.originX, event.offsetY/this.scale - this.originY);
-                    elem.addEventListener("mousedown", event => {
-                        if(event.button == 0) {
-                            if(this.movingBlock) {
-                                this.movingBlock.associatedSegment = segment;
-                                segment.relMouseX = event.offsetX/this.scale - this.originX - segment.x;
-                                segment.relMouseY = event.offsetY/this.scale - this.originY - segment.y;
-                            }
-                        }
-                    })
-                    this.renderTarget.appendChild(elem);
-                    this.segments.push(segment);
-                    this.generateHTML();
+                    const block = this.viewModel.toolbar.applyBrush();
+                    this.addSegmentFor(block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
+                    event.stopPropagation();
                 } else if(this.movingBlock) {
-                    if(!this.movingBlock.associatedSegment && (Math.abs(this.movingBlock.startX - event.clientX) > 5 || Math.abs(this.movingBlock.startY - event.clientY) > 5)) {
-                        const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
-                        const segment = new StructogramSegment(elem, this.movingBlock.block, event.offsetX/this.scale - this.originX, event.offsetY/this.scale - this.originY);
-                        elem.addEventListener("mousedown", event => {
-                            if(event.button == 0) {
-                                if(this.movingBlock) {
-                                    this.movingBlock.associatedSegment = segment;
-                                    segment.relMouseX = event.offsetX/this.scale - this.originX - segment.x;
-                                    segment.relMouseY = event.offsetY/this.scale - this.originY - segment.y;
-                                }
-                            }
-                        })
-                        this.renderTarget.appendChild(elem);
-                        this.segments.push(segment);
-                        if(this.movingBlock.blockParent) {
-                            this.movingBlock.blockParent.next = undefined;
-                        } else {
-                            structogram.setStartingBlock(undefined);
-                        }                    
+                    const elem = this.renderTarget.querySelector(`#${this.movingBlock.block.id}-segment`);
+                    if(!elem && (Math.abs(this.movingBlock.startX - event.clientX) > 5 || Math.abs(this.movingBlock.startY - event.clientY) > 5)) {
+                        this.addSegmentFor(this.movingBlock.block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
+                        this.disconnectBlock(this.movingBlock.block);
                     }
                     this.movingBlock = undefined;
+                    event.stopPropagation();
                 }
             }
         });
         this.mainDiv.addEventListener("mousemove", event => {
-            if(this.movingBlock && this.movingBlock.associatedSegment) {
-                const segment = this.movingBlock.associatedSegment;
-                segment.x = event.offsetX/this.scale - this.originX + 20/this.scale;
-                segment.y = event.offsetY/this.scale - this.originY;
+            if(this.movingBlock && this.movingBlock.associatedElement) {
+                setPosition(this.movingBlock.associatedElement, this.xDivToSvg(event.offsetX+10), this.yDivToSvg(event.offsetY));
             }
         })
         document.addEventListener("mouseup", event => {
-            if(event.button == 0) {
+            if(event.button == 0 && this.movingBlock) {
+                this.disconnectBlock(this.movingBlock.block);
+                this.structogram.removeBlock(this.movingBlock.block);
+                if(this.movingBlock.associatedElement) {
+                    this.renderTarget.removeChild(this.movingBlock.associatedElement);
+                }
+                if(this.viewModel.structogramSettings.currentBlock == this.movingBlock.block) {
+                    this.viewModel.structogramSettings.currentBlock = undefined;
+                }
                 this.movingBlock = undefined;
             }
         })
@@ -492,16 +489,13 @@ class StructogramBuilder extends StructogramRenderer {
 
     public override generateHTML(): void {
         super.generateHTML();
-        for(const segment of this.segments) {
-            this.resolveHTMLFor(segment.svgElem, segment.rootBlock, b => {}, this.structogramWidth, 0, 0);
-            applyTransformation(segment.svgElem, segment.x, segment.y, 1);
-        }
-    }
-
-    public override updateStructogramTransformation(): void {
-        super.updateStructogramTransformation();
-        for(const segment of this.segments) {
-            applyTransformation(segment.svgElem, segment.x, segment.y, 1);
+        for(const block of this.structogram.getIndependentRootBlocks()) {
+            const associatedElem = this.renderTarget.querySelector(`#${block.id}-segment`);
+            if(associatedElem instanceof SVGSVGElement) {
+                associatedElem.textContent = "";
+                const height = this.resolveHTMLFor(associatedElem, block, this.structogramWidth, 0, 0);
+                setHeight(associatedElem, height);
+            }
         }
     }
 
@@ -510,8 +504,11 @@ class StructogramBuilder extends StructogramRenderer {
         elem.addEventListener("mousedown", event => {
             if(event.button == 0) {
                 this.viewModel.structogramSettings.currentBlock = block;
-                this.movingBlock = new MovingBlock(block, elem, event.clientX, event.clientY);
-                this.movingBlock.blockParent = parent;
+                this.movingBlock = new MovingBlock(block, event.clientX, event.clientY);
+                const associatedElem = this.renderTarget.querySelector(`#${block.id}-segment`);
+                if(associatedElem) {
+                    this.movingBlock.associatedElement = associatedElem;
+                }
                 event.stopPropagation();
             }
         })
@@ -523,32 +520,36 @@ class StructogramBuilder extends StructogramRenderer {
         }
     }
 
-    protected override onUndefinedBlock(parent: Element, prevBlock: StructogramBlock | undefined, noPreviousHandler: (b:StructogramBlock) => void, width:number, xOffset: number, yOffset: number): number {
+    protected override onUndefinedBlock(parentElem: Element, context: UndefinedBlockContext, width:number, xOffset: number, yOffset: number): number {
         const elem = this.blockResourceManager.getHTMLForObject(undefined)!;
         setPosition(elem, xOffset, yOffset);
         setSize(elem, width, baseBlockHeight);
         elem.addEventListener("mouseup", event => {
             if(event.button == 0) {
+                let block = undefined;
                 if(this.viewModel.toolbar.blockBrush) {
-                    if(prevBlock) {
-                        prevBlock.next = this.viewModel.toolbar.applyBrush();
-                    } else {
-                        noPreviousHandler(this.viewModel.toolbar.applyBrush());
-                    }
+                    block = this.viewModel.toolbar.applyBrush();
                 } else if(this.movingBlock) {
-                    if(this.movingBlock.associatedSegment) {
-                        this.segments.splice(this.segments.indexOf(this.movingBlock.associatedSegment), 1);
-                        this.renderTarget.removeChild(this.movingBlock.associatedSegment.svgElem);
+                    block = this.movingBlock.block;
+                    if(this.movingBlock.associatedElement) {
+                        this.renderTarget.removeChild(this.movingBlock.associatedElement);
                     }
-                    if(prevBlock && prevBlock != this.movingBlock.block) {
-                        prevBlock.next = this.movingBlock.block;
-                    } else {
-                        noPreviousHandler(this.movingBlock.block);
+                    this.disconnectBlock(block);
+                    this.movingBlock = undefined;
+                }
+                if(block) {
+                    if(context.parent) {
+                        context.parent.next = block;
+                    } else if(context.superBlock && context.subBlockKey){
+                        context.superBlock.setSubBlock(context.subBlockKey, block);
+                    } else if(context.isStartBlock) {
+                        this.structogram.startingBlock = block;
                     }
+                    event.stopPropagation();
                 }
             }
         });
-        parent.appendChild(elem);
+        parentElem.appendChild(elem);
         return baseBlockHeight;
     }
 }
