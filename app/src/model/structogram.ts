@@ -1,5 +1,5 @@
 import EventEmitter2 from "eventemitter2";
-import {Memory, VariableCreationError, type VariableType} from "./memory";
+import {Memory, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, StringStatement, StatementParseError} from "./statement";
 import {type Primitive} from "./util";
 
@@ -30,16 +30,43 @@ export class StructogramIssues {
 }
 
 export class Structogram {
+    /**
+     * Emitted when something prints on the structogram. 
+     * Has a string argument which is the message printed.
+     */
     public static readonly printEvent = "structogram.print";
+
+    /**
+     * Emitted when the structogram structure is changed.
+     */
     public static readonly changedEvent = "structogram.changed";
-    public static readonly dataEvent = "structogram.data";
-    public static readonly inputDataEvent = "structogram.data.input";
-    public static readonly auxDataEvent = "structogram.data.aux";
-    public static readonly outputDataEvent = "structogram.data.output";
-    public static readonly dataClearEvent = "structogram.data.clear";
+
+    /**
+     * Emitted when an input is specified.
+     * Has 2 string arguments. The first one is the name and the second one is the type.
+     */
+    public static readonly inputSpecificationEvent = "structogram.specification.input";
+
+    /**
+     * Emitted when an auxiliary is specified.
+     * Has 2 string arguments. The first one is the name and the second one is the type.
+     */
+    public static readonly auxSpecificationEvent = "structogram.specification.aux";
+
+    /**
+     * Emitted when an output is specified.
+     * Has 2 string arguments. The first one is the name and the second one is the type.
+     */
+    public static readonly outputSpecificationEvent = "structogram.specification.output";
+    
+    /**
+     * Emitted when the specification is cleared.
+     */
+    public static readonly specificationClearEvent = "structogram.specification.clear";
+
     public readonly memory: Memory;
     public readonly emitter: EventEmitter2;
-    public _startingBlock: StructogramBlock | undefined;
+    private _startingBlock: StructogramBlock | undefined;
     private _currentBlock: StructogramBlock | undefined;
     private readonly idMap: Record<string, StructogramBlock> = {};
     private running = false;
@@ -70,22 +97,22 @@ export class Structogram {
         this._inData = {};
         this._auxData = {};
         this._outData = {};
-        this.emitter.emit(Structogram.dataClearEvent);
+        this.emitter.emit(Structogram.specificationClearEvent);
     }
 
     public defineInputData(key: string, type: VariableType) {
         this._inData[key] = type;
-        this.emitter.emit(Structogram.inputDataEvent, key, type);
+        this.emitter.emit(Structogram.inputSpecificationEvent, key, type);
     }
 
     public defineAuxData(key: string, type: VariableType) {
         this._auxData[key] = type;
-        this.emitter.emit(Structogram.auxDataEvent, key, type);
+        this.emitter.emit(Structogram.auxSpecificationEvent, key, type);
     }
 
     public defineOutputData(key: string, type: VariableType) {
         this._outData[key] = type;
-        this.emitter.emit(Structogram.outputDataEvent, key, type);
+        this.emitter.emit(Structogram.outputSpecificationEvent, key, type);
     }
 
     public get currentBlock() {

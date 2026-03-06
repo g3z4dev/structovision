@@ -397,10 +397,10 @@ class StructogramRenderer {
             let maxSubBlockHeight = 0;
             
             function resolveSubBlocks(renderer: StructogramRenderer, currentBlock: StructogramBlock, i: number) {
-                let subBlockXOffset = Number.parseInt(elem.dataset.childXOffset ?? "0");
-                let subBlockYOffset = Number.parseInt(elem.dataset.childYOffset ?? "0");
+                let subBlockXOffset = Number.parseInt(elem.dataset.subblockXOffset ?? "0");
+                let subBlockYOffset = Number.parseInt(elem.dataset.subblockYOffset ?? "0");
                 const newWidth = (width-subBlockXOffset)/subBlockCount;
-                const childHeader = elem.querySelector(".t-child-header") as HTMLElement | undefined;
+                const childHeader = elem.querySelector(".t-subblock-header") as HTMLElement | undefined;
                 if(childHeader) {
                     const header = childHeader.cloneNode(true) as HTMLElement;
                     elem.appendChild(header);
@@ -491,7 +491,13 @@ class MovingBlock {
     }
 }
 
+/**
+ * Represents an action that can be taken in the builder. Used for timeline management.
+ */
 abstract class BuilderAction {
+    /**
+     * Reverts the action and returns the action it performed to do said revertion.
+     */
     public abstract revert(): BuilderAction;
 }
 
@@ -736,6 +742,12 @@ class StructogramBuilder extends StructogramRenderer {
     public readonly toolbar = new BlockToolbar(this.structogram);
     public readonly structogramSettings = new StructogramSettings(this);
 
+    /**
+     * Creates an HTML element that can accomodate a block tree.
+     * @param block the first block of the tree 
+     * @param x x coordinate of the starting position
+     * @param y y coordinate of the starting positon
+     */
     private addSegmentFor(block: StructogramBlock, x: number, y: number) {
         const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
         elem.id = `${block.id}-segment`;
@@ -774,10 +786,20 @@ class StructogramBuilder extends StructogramRenderer {
         }
     }
 
+    /**
+     * Converts an x coordinate relative to the main div of the structogramview to be the coordinate system of the svg of the structogramview.
+     * @param x the coordinate relative to the main div
+     * @returns the coordinate in the coordinate system of the svg og the structogramview
+     */
     private xDivToSvg(x: number) {
         return this.originOffsetX - this.originX + x / this.scale;
     }
 
+    /**
+     * Converts an y coordinate relative to the main div of the structogramview to be the coordinate system of the svg of the structogramview.
+     * @param y the coordinate relative to the main div
+     * @returns the coordinate in the coordinate system of the svg og the structogramview
+     */
     private yDivToSvg(y: number) {
         return this.originOffsetY - this.originY + y / this.scale;
     }
@@ -823,7 +845,7 @@ class StructogramBuilder extends StructogramRenderer {
         });
     }
 
-    private setupTimeControlButtons() {
+    private setupTimeLineControlButtons() {
         this.undoButton.addEventListener("click", () => {
             this.timeLine.undo();
             this.updateHTML();
@@ -837,9 +859,7 @@ class StructogramBuilder extends StructogramRenderer {
         });
     }
 
-    constructor(structogram: Structogram, viewModel: ViewModel) {
-        super(structogram, viewModel, document.querySelector("#build-view")!)
-        this.toolbar.generateHTML();
+    private setupBlockDropping() {
         this.mainDiv.addEventListener("mouseup", event => {
             if(event.button == 0) {
                 if(this.toolbar.blockBrush) {
@@ -860,11 +880,6 @@ class StructogramBuilder extends StructogramRenderer {
                 }
             }
         });
-        this.mainDiv.addEventListener("mousemove", event => {
-            if(this.movingBlock && this.movingBlock.associatedElement) {
-                setPosition(this.movingBlock.associatedElement, this.xDivToSvg(event.offsetX+10), this.yDivToSvg(event.offsetY));
-            }
-        });
         document.addEventListener("mouseup", event => {
             if(event.button == 0 && this.movingBlock) {
                 this.timeLine.start();
@@ -881,8 +896,23 @@ class StructogramBuilder extends StructogramRenderer {
                 this.movingBlock = undefined;
             }
         });
+    }
+
+    private setupBlockMoving() {
+        this.mainDiv.addEventListener("mousemove", event => {
+            if(this.movingBlock && this.movingBlock.associatedElement) {
+                setPosition(this.movingBlock.associatedElement, this.xDivToSvg(event.offsetX+10), this.yDivToSvg(event.offsetY));
+            }
+        });
+    }
+
+    constructor(structogram: Structogram, viewModel: ViewModel) {
+        super(structogram, viewModel, document.querySelector("#build-view")!)
+        this.toolbar.generateHTML();
+        this.setupBlockDropping();
+        this.setupBlockMoving();
         this.setupPersistenceButtons(structogram);
-        this.setupTimeControlButtons();
+        this.setupTimeLineControlButtons();
         this.structogramSettings.emitter.addListener(StructogramSettings.blockOptionChanged, (option, newValues, oldValues) => {
             this.timeLine.start();
             this.timeLine.didAction(new OptionSetAction(option, newValues, oldValues));
@@ -991,6 +1021,10 @@ class StructogramBuilder extends StructogramRenderer {
     }
 }
 
+/**
+ * A simple class representing a window containing a list.
+ * Used for the error and result windows.
+ */
 class ListWindow {
     private window: HTMLElement;
     private list: HTMLElement;
@@ -1095,10 +1129,10 @@ class StructogramRunner extends StructogramRenderer {
         for(const [key, _] of structogram.inputData) {
             this.addInputEntry(key);
         }
-        viewModel.structogram.emitter.addListener(Structogram.inputDataEvent, (key, _) => {
+        viewModel.structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, _) => {
             this.addInputEntry(key);
         });
-        viewModel.structogram.emitter.addListener(Structogram.dataClearEvent, () => {
+        viewModel.structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             this.inputDataElem.textContent = "";
         });
     }
@@ -1915,16 +1949,16 @@ class StructogramSpecificator {
     constructor(viewModel: ViewModel) {
         this.viewModel = viewModel;
         this.reset();
-        viewModel.structogram.emitter.addListener(Structogram.inputDataEvent, (key, type) => {
+        viewModel.structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, type) => {
             this.addEntryTo("spec-in", `${key}: ${type}`);
         });
-        viewModel.structogram.emitter.addListener(Structogram.auxDataEvent, (key, type) => {
+        viewModel.structogram.emitter.addListener(Structogram.auxSpecificationEvent, (key, type) => {
             this.addEntryTo("spec-aux", `${key}: ${type}`);
         });
-        viewModel.structogram.emitter.addListener(Structogram.outputDataEvent, (key, type) => {
+        viewModel.structogram.emitter.addListener(Structogram.outputSpecificationEvent, (key, type) => {
             this.addEntryTo("spec-out", `${key}: ${type}`);
         });
-        viewModel.structogram.emitter.addListener(Structogram.dataClearEvent, () => {
+        viewModel.structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             setTemplateText(this.specificationElem, "spec-in", "");
             setTemplateText(this.specificationElem, "spec-aux", "");
             setTemplateText(this.specificationElem, "spec-out", "");
