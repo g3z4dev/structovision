@@ -185,24 +185,40 @@ export class Structogram {
         return this.running;
     }
 
-    public addBlock(block: StructogramBlock) {
+    public addBlock(block: StructogramBlock, supressEvent: boolean = false) {
         if(this.isRunning()) throw new Error("Cannot add block while structogram is running!");
         this.idMap[block.id] = block;
-        this.emitter.emit(Structogram.changedEvent, block);
+        let child = block.next;
+        while(child) {
+            this.addBlock(child, true);
+            child = child.next;
+        }
+        if(!supressEvent) this.emitter.emit(Structogram.changedEvent, block);
         block.emitter.addListener(StructogramBlock.childrenChanged, () => {
             this.emitter.emit(Structogram.changedEvent, block);
         });
     }
 
-    public removeBlock(block: StructogramBlock) {
+    public removeBlock(block: StructogramBlock, supressEvent: boolean = false) {
         if(this.isRunning()) throw new Error("Cannot remove block while structogram is running!");
         delete this.idMap[block.id];
-        this.emitter.emit(Structogram.changedEvent, block);
+        let child = block.next;
+        while(child) {
+            this.removeBlock(child, true);
+            child = child.next;
+        }
+        if(!supressEvent) this.emitter.emit(Structogram.changedEvent, block);
         block.emitter.removeAllListeners(StructogramBlock.childrenChanged);
     }
 
     public getIndependentRootBlocks(): StructogramBlock[] {
         return Object.values(this.idMap).filter(b => !b.parent && this.startingBlock != b && !b.superBlock);
+    }
+
+    public clearBlocks() {
+        for(const block of this.getIndependentRootBlocks()) {
+            this.removeBlock(block);
+        }
     }
 
     public set startingBlock(block: StructogramBlock | undefined) {
@@ -251,6 +267,16 @@ export class Structogram {
         loadWith(output, (key, type) => this.defineOutputData(key, type));
 
         this.startingBlock = StructogramBlock.BlockDataFactory.constructFromData(data["startingBlock"], this);
+    }
+
+    public restart() {
+        this.running = false;
+    }
+
+    public reset() {
+        this.clearData();
+        this.startingBlock = undefined;
+        this.clearBlocks();
     }
 
     public print(text: string) {
@@ -423,7 +449,7 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     public static readonly activeStepChanged = "structogramblock.activeStepChanged";
     protected static idSeq = 0;
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
-    protected owner: Structogram;
+    protected _associatedStructogram: Structogram;
     private _parent: StructogramBlock | undefined;
     protected _superBlock: StructogramBlock | undefined;
     protected _subBlockKey: string | undefined;
@@ -432,6 +458,10 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     public readonly emitter = new EventEmitter2();
     protected _activeStep: string = "ready";
 
+    public get associatedStructogram() {
+        return this._associatedStructogram;
+    }
+    
     public get activeStep() {
         return this._activeStep;
     }
@@ -442,7 +472,7 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
     }
 
     constructor(owner: Structogram) {
-        this.owner = owner;
+        this._associatedStructogram = owner;
         owner.addBlock(this);
     }
 
@@ -498,7 +528,7 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
             if(block.parent) {
                 throw new Error("Child block cannot become a subblock!");
             }
-            if(this.owner.startingBlock == block || block.owner.startingBlock == block) {
+            if(this._associatedStructogram.startingBlock == block || block._associatedStructogram.startingBlock == block) {
                 throw new Error("Starting block cannot become a subblock!");
             }
         }
@@ -586,8 +616,8 @@ export class AssignmentBlock extends SequenceBlock {
     private key: string | undefined;
     private statement: AnyStatement | undefined;
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
-    public readonly keyOption = new KeyOption(this.owner, "key", "the key we assign the value to");
-    public readonly statementOption = new AnyStatementOption(this.owner, "value", "the value to assign to the variable");
+    public readonly keyOption = new KeyOption(this._associatedStructogram, "key", "the key we assign the value to");
+    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to assign to the variable");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -595,7 +625,7 @@ export class AssignmentBlock extends SequenceBlock {
 
     public override run(): StructogramBlock | undefined {
         this.activeStep = "main";
-        this.owner.memory.setVariable(this.key!, this.statement?.evaluate() ?? 0);
+        this._associatedStructogram.memory.setVariable(this.key!, this.statement?.evaluate() ?? 0);
         return this.next;
     }
 
@@ -617,11 +647,11 @@ export class AssignmentBlock extends SequenceBlock {
                 issues.push(new StructogramIssues(this.id, error.message));
             }
         }
-        if(!this.owner.memory.hasVariable(this.key)) {
+        if(!this._associatedStructogram.memory.hasVariable(this.key)) {
             issues.push(new StructogramIssues(this.id, `Variable with key [${this.key}] is not defined!`));
-        } else if(this.owner.memory.getType(this.key) != this.statement?.getReturnType()) {
+        } else if(this._associatedStructogram.memory.getType(this.key) != this.statement?.getReturnType()) {
             issues.push(new StructogramIssues(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`));
-        } else if(this.owner.memory.isConstant(this.key)) {
+        } else if(this._associatedStructogram.memory.isConstant(this.key)) {
             issues.push(new StructogramIssues(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
         }
         return issues;
@@ -631,7 +661,7 @@ export class AssignmentBlock extends SequenceBlock {
 export class PrintBlock extends SequenceBlock {
     private statement: AnyStatement | undefined;
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
-    public readonly statementOption = new AnyStatementOption(this.owner, "value", "the value to print");
+    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to print");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -639,7 +669,7 @@ export class PrintBlock extends SequenceBlock {
 
     public override run(): StructogramBlock | undefined {
         this.activeStep = "main";
-        this.owner.print(this.statement?.evaluate()?.toString() ?? "null");
+        this._associatedStructogram.print(this.statement?.evaluate()?.toString() ?? "null");
         return this.next;
     }
 
@@ -678,7 +708,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         "false": undefined
     };
     public state: TrueFalseBranchingBlockStates = "ready";
-    public readonly conditionOption = new BooleanStatementOption(this.owner, "condition", "the condition");
+    public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition", "the condition");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -750,7 +780,7 @@ export class MultiBranchingBlock extends BracketBlock {
     public finished: boolean = false;
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     protected branchIndex = 0;
-    public readonly conditionListOption = new BooleanStatementListOption(this.owner, "conditions", "the list of conditions the branches have");
+    public readonly conditionListOption = new BooleanStatementListOption(this._associatedStructogram, "conditions", "the list of conditions the branches have");
 
     private fillOutBranches() {
         const statements = this.conditionListOption.getStatements();
@@ -875,10 +905,10 @@ export class CountingLoopBlock extends LoopBlock {
     private variableKey: string | undefined;
     private started: boolean = false;
     private checkedCondition = false;
-    public readonly variableKeyOption: KeyOption = new KeyOption(this.owner, "key", "the key of the variable the loop will use to iterate with");
-    public readonly fromOption: NumericStatementOption = new NumericStatementOption(this.owner, "from", "the number the calculation is starting from");
-    public readonly toOption: NumericStatementOption = new NumericStatementOption(this.owner, "to", "the number the calculation is ending at");
-    public readonly stepOption: NumericStatementOption = new NumericStatementOption(this.owner, "step", "the number the calculation is stepping with");
+    public readonly variableKeyOption: KeyOption = new KeyOption(this._associatedStructogram, "key", "the key of the variable the loop will use to iterate with");
+    public readonly fromOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "from", "the number the calculation is starting from");
+    public readonly toOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "to", "the number the calculation is ending at");
+    public readonly stepOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "step", "the number the calculation is stepping with");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -889,19 +919,19 @@ export class CountingLoopBlock extends LoopBlock {
             this.started = true;
             this.finished = false;
             this.activeStep = "init";
-            this.owner.memory.setVariable(this.variableKey!, this.from?.evaluate() ?? 0);
+            this._associatedStructogram.memory.setVariable(this.variableKey!, this.from?.evaluate() ?? 0);
             return this;
         } else if(!this.checkedCondition) {
             const lastStep = this.activeStep;
             this.activeStep = "condition";
-            this.checkedCondition = this.owner.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0);
+            this.checkedCondition = this._associatedStructogram.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0);
             if(this.checkedCondition) {
                 return lastStep == "init" ? this.loopStart : this;
             }
         } else {
             this.activeStep = "increment";
             this.checkedCondition = false;
-            this.owner.memory.changeVariable(this.variableKey!, v => v as number + (this.step?.evaluate() ?? 0));
+            this._associatedStructogram.memory.changeVariable(this.variableKey!, v => v as number + (this.step?.evaluate() ?? 0));
             return this.loopStart;
         }
         this.finished = true;
@@ -942,11 +972,11 @@ export class CountingLoopBlock extends LoopBlock {
         }
         
         this.variableKey = this.variableKeyOption.getKey();
-        if(!this.owner.memory.hasVariable(this.variableKey)) {
+        if(!this._associatedStructogram.memory.hasVariable(this.variableKey)) {
             issues.push(new StructogramIssues(this.id,`Variable with key [${this.variableKey}] is not defined!`))
-        } else if(this.owner.memory.getType(this.variableKey) != "number") {
+        } else if(this._associatedStructogram.memory.getType(this.variableKey) != "number") {
             issues.push(new StructogramIssues(this.id, `Block violates the type restrictions of the variable with key [${this.variableKey}]!`));
-        } else if (this.owner.memory.isConstant(this.variableKey)) {
+        } else if (this._associatedStructogram.memory.isConstant(this.variableKey)) {
             issues.push(new StructogramIssues(this.id, `Block tries to assign [${this.variableKey}] which is a constant variable!`));
         }
 
@@ -956,7 +986,7 @@ export class CountingLoopBlock extends LoopBlock {
 
 export abstract class ConditionalLoopBlock extends LoopBlock {
     protected condition: BooleanStatement | undefined;
-    public readonly conditionOption = new BooleanStatementOption(this.owner, "condition", "the condition of the loop");
+    public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition", "the condition of the loop");
 
     constructor(structogram: Structogram) {
         super(structogram);
