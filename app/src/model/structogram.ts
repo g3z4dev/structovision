@@ -175,7 +175,7 @@ export class Structogram {
         return issues;
     }
 
-    public runStep(): [string, Primitive][] {
+    public runStep(): void {
         if(!this.ready) {
             throw new Error("Cannot run before doing the preRun and addressing its issues!");
         }
@@ -193,19 +193,19 @@ export class Structogram {
         } else if(this.bracketBlockStack.length > 0) {
             this.currentBlock = this.bracketBlockStack.pop();
             if((this.currentBlock as BracketBlock).skipToNext()) {
-                return this.runStep();
+                this.runStep();
             }
         } else {
-            this.running = false;
-            this.ready = false;
-            this.currentBlock = this.startingBlock;
-            const results = [] as [string, Primitive][];
-            for(const [key, _] of this.outputData) {
-                results.push([key, this.memory.getVariable(key)]);
-            }
-            return results;
+            this.restart();
         }
-        return [];
+    }
+
+    public getResults() {
+        const results = [] as [string, Primitive][];
+        for(const [key, _] of this.outputData) {
+            results.push([key, this.memory.getVariable(key)]);
+        }
+        return results;
     }
 
     public isRunning() {
@@ -229,6 +229,11 @@ export class Structogram {
     public removeBlock(block: StructogramBlock, supressEvent: boolean = false) {
         if(this.isRunning()) throw new Error("Cannot remove block while structogram is running!");
         delete this.idMap[block.id];
+        for(const subBlock of Object.values(block.getSubBlocks())) {
+            if(subBlock) {
+                this.removeBlock(subBlock, true);
+            }
+        }
         let child = block.next;
         while(child) {
             this.removeBlock(child, true);
@@ -281,6 +286,7 @@ export class Structogram {
     }
 
     public loadData(data: any) {
+        this.reset();
         const input = data["input"];
         const aux = data["auxiliary"];
         const output = data["output"];
@@ -292,15 +298,18 @@ export class Structogram {
         loadWith(input, (key, type) => this.defineInputData(key, type));
         loadWith(aux, (key, type) => this.defineAuxData(key, type));
         loadWith(output, (key, type) => this.defineOutputData(key, type));
-
-        this.startingBlock = StructogramBlock.BlockDataFactory.constructFromData(data["startingBlock"], this);
+        if("startingBlock" in data) this.startingBlock = StructogramBlock.BlockDataFactory.constructFromData(data["startingBlock"], this);
     }
 
     public restart() {
         this.running = false;
+        this.ready = false;
+        this.bracketBlockStack = [];
+        this.currentBlock = this.startingBlock;
     }
 
     public reset() {
+        this.restart();
         this.clearData();
         this.startingBlock = undefined;
         this.clearBlocks();
@@ -379,6 +388,7 @@ export class BooleanStatementListOption extends BlockOption {
 
     public override setRawValues(data: string[]): void {
         this.statements = data;
+        this.emitter.emit(BlockOption.optionChangedEvent);
     }
 }
 
@@ -402,6 +412,7 @@ export abstract class StatementOption<T extends Primitive> extends BlockOption {
 
     public setRawValues(data: string[]): void {
         this.statement = data[0]!;
+        this.emitter.emit(BlockOption.optionChangedEvent);
     }
 }
 
@@ -634,6 +645,8 @@ export abstract class StructogramBlock implements TypeIdentifiable, Identifiable
 
 export abstract class SequenceBlock extends StructogramBlock {
 
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
+
     protected constructor(structogram: Structogram) {
         super(structogram);
     }
@@ -642,7 +655,6 @@ export abstract class SequenceBlock extends StructogramBlock {
 export class AssignmentBlock extends SequenceBlock {
     private key: string | undefined;
     private statement: AnyStatement | undefined;
-    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     public readonly keyOption = new KeyOption(this._associatedStructogram, "key", "the key we assign the value to");
     public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to assign to the variable");
 
@@ -687,7 +699,6 @@ export class AssignmentBlock extends SequenceBlock {
 
 export class PrintBlock extends SequenceBlock {
     private statement: AnyStatement | undefined;
-    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to print");
 
     constructor(structogram: Structogram) {
@@ -803,8 +814,8 @@ export class TrueFalseBranchingBlock extends BracketBlock {
 
 export class MultiBranchingBlock extends BracketBlock {
     private branches: BooleanStatement[] = [];
-    public foundBranch: boolean = false;
-    public finished: boolean = false;
+    private foundBranch: boolean = false;
+    private finished: boolean = false;
     protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     protected branchIndex = 0;
     public readonly conditionListOption = new BooleanStatementListOption(this._associatedStructogram, "conditions", "the list of conditions the branches have");
@@ -953,7 +964,11 @@ export class CountingLoopBlock extends LoopBlock {
             this.activeStep = "condition";
             this.checkedCondition = this._associatedStructogram.memory.getVariable(this.variableKey!) as number < (this.to?.evaluate() ?? 0);
             if(this.checkedCondition) {
-                return lastStep == "init" ? this.loopStart : this;
+                if(lastStep == "init") {
+                    this.checkedCondition = false;
+                    return this.loopStart;
+                }
+                return this;
             }
         } else {
             this.activeStep = "increment";

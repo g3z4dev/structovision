@@ -17,6 +17,7 @@
 
                     </div>
                     <div class="flex flex-row border-l border-gray-800" id="options">
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="new-button">new</button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="undo-button">undo</button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="redo-button">redo</button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="save-button">save</button>
@@ -45,6 +46,15 @@
             <div class="col-span-5 bg-gray-800" id="structogram-settings">
             </div>
         </div>
+        <div id="new-confirm" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
+            <div class="m-auto mt-5 w-1/2 h-1/4 flex flex-col bg-gray-800 rounded-md">
+                <p class="text-white basis-2/3 text-lg m-2 text-center">Are you sure you want a new structogram? This cannot be reverted!</p>
+                <div class="w-full flex flex-row items-center justify-center">
+                    <button id="new-confirm-yes" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5">Yes</button>
+                    <button id="new-confirm-no" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5">No</button>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="hidden h-screen overflow-hidden" id="structogram-runner">
         <div class="grid grid-cols-12 h-full">
@@ -67,6 +77,8 @@
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="faster-button">faster</button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="start-button">start</button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="pause-button">pause</button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="step-button">step</button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="reset-button">reset</button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="switch-to-builder-button">editor</button>
                     </div>
                 </div>
@@ -83,7 +95,7 @@
                     </ul>
                 </div>
                 <div class="w-full flex items-center justify-center">
-                    <button id="issues-ok" class="m-auto bg-blue-500 hover:bg-blue-400 w-1/5">Ok</button>
+                    <button id="issues-ok" class="m-auto bg-blue-500 text-gray-50 hover:bg-blue-400 w-1/5">Ok</button>
                 </div>
             </div>
         </div>
@@ -96,7 +108,7 @@
                     </ul>
                 </div>
                 <div class="w-full flex items-center justify-center">
-                    <button id="results-ok" class="m-auto bg-blue-500 hover:bg-blue-400 w-1/5">Ok</button>
+                    <button id="results-ok" class="m-auto bg-blue-500 text-gray-50 hover:bg-blue-400 w-1/5">Ok</button>
                 </div>
             </div>
         </div>
