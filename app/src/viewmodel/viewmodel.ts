@@ -39,9 +39,10 @@ const baseBlockWidth = 100;
 const baseBlockHeight = 30;
 const baseRunSpeed = 2000;
 const textPadding = 8;
-const runningClass = "fill-green-100";
-const selectedClass = "fill-cyan-100";
-const unselectedClass = "fill-white";
+const runningClass = ["fill-green-100"];
+const notRunningClass = ["fill-white", "hover:fill-cyan-50"];
+const selectedClass = ["fill-cyan-100"];
+const unselectedClass = ["fill-white", "hover:fill-cyan-50"];
 
 function setID(elem: Element, id: string) {
     elem.setAttribute("id", id);
@@ -748,7 +749,7 @@ class StructogramBuilder extends StructogramRenderer {
      * @param x x coordinate of the starting position
      * @param y y coordinate of the starting positon
      */
-    private addSegmentFor(block: StructogramBlock, x: number, y: number) {
+    private addSegmentFor(block: StructogramBlock, x: number, y: number): Element {
         const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
         elem.id = `${block.id}-segment`;
         setX(elem, x);
@@ -758,6 +759,7 @@ class StructogramBuilder extends StructogramRenderer {
         this.renderTarget.appendChild(elem);
         this.timeLine.didAction(new CreateSegmentAction(this.renderTarget, elem));
         this.updateHTML();
+        return elem;
     }
 
     private disconnectBlock(block: StructogramBlock) {
@@ -862,21 +864,26 @@ class StructogramBuilder extends StructogramRenderer {
     private setupBlockDropping() {
         this.mainDiv.addEventListener("mouseup", event => {
             if(event.button == 0) {
-                if(this.toolbar.blockBrush) {
-                    this.timeLine.start();
-                    const block = this.toolbar.applyBrush();
-                    this.timeLine.didAction(new AddBlockAction(block));
-                    this.addSegmentFor(block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
-                    event.stopPropagation();
-                } else if(this.movingBlock) {
-                    this.timeLine.start();
-                    const elem = this.renderTarget.querySelector(`#${this.movingBlock.block.id}-segment`);
-                    if(!elem && (Math.abs(this.movingBlock.startX - event.clientX) > 5 || Math.abs(this.movingBlock.startY - event.clientY) > 5)) {
-                        this.addSegmentFor(this.movingBlock.block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
-                        this.disconnectBlock(this.movingBlock.block);
-                    }
+                if(this.movingBlock) {
                     this.movingBlock = undefined;
                     event.stopPropagation();
+                }
+            }
+        });
+        this.mainDiv.addEventListener("mouseenter", event => {
+            if(this.toolbar.blockBrush) {
+                this.timeLine.start();
+                const block = this.toolbar.applyBrush();
+                this.timeLine.didAction(new AddBlockAction(block));
+                const segment = this.addSegmentFor(block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
+                this.movingBlock = new MovingBlock(block, event.offsetX, event.offsetY);
+                this.movingBlock.associatedElement = segment;
+            } else if(this.movingBlock) {
+                this.timeLine.start();
+                if(!this.movingBlock.associatedElement && (Math.abs(this.movingBlock.startX - event.clientX) > 5 || Math.abs(this.movingBlock.startY - event.clientY) > 5)) {
+                    const segment = this.addSegmentFor(this.movingBlock.block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
+                    this.disconnectBlock(this.movingBlock.block);
+                    this.movingBlock.associatedElement = segment;
                 }
             }
         });
@@ -900,8 +907,17 @@ class StructogramBuilder extends StructogramRenderer {
 
     private setupBlockMoving() {
         this.mainDiv.addEventListener("mousemove", event => {
-            if(this.movingBlock && this.movingBlock.associatedElement) {
-                setPosition(this.movingBlock.associatedElement, this.xDivToSvg(event.offsetX+10), this.yDivToSvg(event.offsetY));
+            if(this.movingBlock) {
+                if(this.movingBlock.associatedElement) {
+                    setPosition(this.movingBlock.associatedElement, this.xDivToSvg(event.offsetX+10), this.yDivToSvg(event.offsetY));
+                } else {
+                    if(Math.abs(this.movingBlock.startX - event.clientX) > 5 || Math.abs(this.movingBlock.startY - event.clientY) > 5) {
+                        this.timeLine.start();
+                        const segment = this.addSegmentFor(this.movingBlock.block, this.xDivToSvg(event.offsetX), this.yDivToSvg(event.offsetY));
+                        this.disconnectBlock(this.movingBlock.block);
+                        this.movingBlock.associatedElement = segment;
+                    }
+                }
             }
         });
     }
@@ -969,10 +985,8 @@ class StructogramBuilder extends StructogramRenderer {
             }
         })
         if(this.structogramSettings.currentBlock == block) {
-            for(const e of elem.querySelectorAll(`.${unselectedClass}`)) {
-                e.classList.remove(unselectedClass);
-                e.classList.add(selectedClass);
-            }
+            elem.classList.remove(...unselectedClass);
+            elem.classList.add(...selectedClass);
         }
     }
 
@@ -980,6 +994,14 @@ class StructogramBuilder extends StructogramRenderer {
         const elem = this.blockResourceManager.getHTMLForObject(undefined)!;
         setPosition(elem, xOffset, yOffset);
         setSize(elem, width, baseBlockHeight);
+        function highlight() {
+            elem.classList.remove("fill-white");
+            elem.classList.add("fill-green-50");
+        }
+        function unhighlight() {
+            elem.classList.add("fill-white");
+            elem.classList.remove("fill-green-50");
+        }
         elem.addEventListener("mouseup", event => {
             if(event.button == 0) {
                 let block = undefined;
@@ -1002,20 +1024,38 @@ class StructogramBuilder extends StructogramRenderer {
                         const parent = block.parent;
                         context.parent.next = block;
                         this.timeLine.didAction(new NextSetAction(context.parent, parent, block));
+                        unhighlight();
                     } else if(context.superBlock && context.subBlockKey){
                         const superBlock = block.superBlock;
                         const subBlockKey = block.subBlockKey;
                         context.superBlock.setSubBlock(context.subBlockKey, block);
                         this.timeLine.didAction(new SubBlockSetAction(context.superBlock, context.subBlockKey, superBlock, subBlockKey, block));
+                        unhighlight();
                     } else if(context.isStartBlock) {
                         const startingBlock = this.structogram.startingBlock;
                         this.structogram.startingBlock = block;
                         this.timeLine.didAction(new ChangeStartingBlockAction(this.structogram, block, startingBlock));
+                        unhighlight();
                     }
                     event.stopPropagation();
                 }
             }
         });
+        elem.addEventListener("mouseenter", () => {
+            if(this.movingBlock) {
+                highlight();
+            }
+        });
+        elem.addEventListener("mouseleave", () => {
+            unhighlight();
+        });
+
+        // event listener is required to prevent accidentally moving the parent element through an undefined block
+        elem.addEventListener("mousedown", event => {
+            if(event.button == 0) {
+                event.stopPropagation();
+            }
+        })
         parentElem.appendChild(elem);
         return baseBlockHeight;
     }
@@ -1070,20 +1110,18 @@ class StructogramRunner extends StructogramRenderer {
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this._currentBlock.id} > .${runningClass}, #${this._currentBlock.id} > svg.t-child-header > .${runningClass}`) ?? []) {
-                e?.classList.remove(runningClass);
-                e?.classList.add(unselectedClass);
-            }
+            const node = this.renderTarget.querySelector(`#${this._currentBlock.id}`);
+            node?.classList.remove(...runningClass);
+            node?.classList.add(...notRunningClass);
             currentBlock?.emitter.removeAllListeners(StructogramBlock.activeStepChanged);
         }
         this.activeBlockStep = undefined;
         this._currentBlock = currentBlock;
         if(currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${currentBlock.id} > .${unselectedClass}, #${currentBlock.id} > svg.t-child-header > .${unselectedClass}`) ?? []) {
-                e?.classList.remove(unselectedClass);
-                e?.classList.add(runningClass);
-                this.activeBlockStep = currentBlock.activeStep;
-            }
+            const node = this.renderTarget.querySelector(`#${currentBlock.id}`);
+            node?.classList.remove(...notRunningClass);
+            node?.classList.add(...runningClass);
+            this.activeBlockStep = currentBlock.activeStep;
             currentBlock.emitter.addListener(StructogramBlock.activeStepChanged, step => {
                 this.activeBlockStep = step;
             });
@@ -1094,13 +1132,13 @@ class StructogramRunner extends StructogramRenderer {
 
     protected set activeBlockStep(step: string | undefined) {
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-child-header .t-step-${this._activeBlockStep}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
                 e?.classList.remove("font-bold", "stroke-green-500");
             }
         }
         this._activeBlockStep = step;
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-child-header .t-step-${this._activeBlockStep}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
                 e?.classList.add("font-bold", "stroke-green-500");
             }
         }
@@ -1624,30 +1662,21 @@ class StructogramSettings {
     public set currentBlock(block: StructogramBlock | undefined) {
         if(this._currentBlock) {
             const node = document.querySelector(`#${this._currentBlock.id}`);
-            if(node) {
-                for(const e of node.querySelectorAll(`.${selectedClass}`)) {
-                    e.classList.remove(selectedClass);
-                    e.classList.add(unselectedClass);
-                }
-            }
+            node?.classList.remove(...selectedClass);
+            node?.classList.add(...unselectedClass);
         } else {
             const speci = document.querySelector("#specification");
             speci?.classList.remove("bg-cyan-100");
-            speci?.classList.add("bg-white");
+            speci?.classList.add("bg-white", "hover:bg-cyan-50");
         }
         this._currentBlock = block;
         if(this._currentBlock) {
             const node = document.querySelector(`#${this._currentBlock.id}`);
-            if(node) {
-                for(const e of node.querySelectorAll(`.${unselectedClass}`)) {
-                    e.classList.remove(unselectedClass);
-                    e.classList.add(selectedClass);
-                }
-            }
+            node?.classList.remove(...unselectedClass);
+            node?.classList.add(...selectedClass);
         } else {
             const speci = document.querySelector("#specification");
-            console.log(speci)
-            speci?.classList.remove("bg-white");
+            speci?.classList.remove("bg-white", "hover:bg-cyan-50");
             speci?.classList.add("bg-cyan-100");
         }
         this.generateHTML();
