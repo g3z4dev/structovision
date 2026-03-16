@@ -1,0 +1,8 @@
+export const baseBlockWidth = 100;
+export const baseBlockHeight = 30;
+export const baseRunSpeed = 2000;
+export const textPadding = 8;
+export const runningClass = ["fill-green-100"];
+export const notRunningClass = ["fill-white", "hover:fill-cyan-50"];
+export const selectedClass = ["fill-cyan-100"];
+export const unselectedClass = ["fill-white", "hover:fill-cyan-50"];

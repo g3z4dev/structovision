@@ -14,7 +14,53 @@
             <div class="col-span-7 flex flex-col ">
                 <div class="flex bg-gray-200 border-b border-b-gray-400 h-10">
                     <div class="flex flex-row" id="toolbar">
-
+                        <svg 
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full" 
+                        id="toolbar-assignment-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <line x1="10%" y1="50%" x2="90%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                        </svg>
+                        <svg
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        id="toolbar-print-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <line x1="30%" y1="10%" x2="60%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            <line x1="60%" y1="50%" x2="30%" y2="90%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                        </svg>
+                        <svg
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        id="toolbar-true-false-branching-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <line x1="0%" y1="50%" x2="10%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                        </svg>
+                        <svg
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        id="toolbar-multi-branching-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <line x1="50%" y1="0%" x2="50%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            <line x1="50%" y1="50%" x2="40%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                        </svg>
+                        <svg 
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        id="toolbar-counting-loop-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <line x1="10%" y1="20%" x2="60%" y2="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                        </svg>
+                        <svg 
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        id="toolbar-front-testing-loop-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                        </svg>
+                        <svg 
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        id="toolbar-back-testing-loop-block">
+                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            <rect width="80%" height="60%" x="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                        </svg>
                     </div>
                     <div class="flex flex-row border-l border-gray-800" id="options">
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="new-button">new</button>
@@ -29,7 +75,7 @@
                     <p>Aux: <span class="t-spec-aux"></span></p>
                     <p>Out: <span class="t-spec-out"></span></p>
                 </div>
-                <div id="build-view" class="basis-full w-full h-full overflow-clip bg-blue-50">
+                <div class="structogram-view basis-full w-full h-full overflow-clip bg-blue-50">
                     <svg width="100%" height="100%">
                         <svg width="8000" height="8000" class="render-target border border-red-600">
                             <svg x="4000" y="4000" class="align-middle m-0 structogram-svg bg-white">
@@ -62,7 +108,7 @@
                 <div class="bg-white border border-gray-800" id="input-data">
                     
                 </div>
-                <div class="basis-full w-full h-full overflow-hidden bg-blue-50" id="run-view">
+                <div class="structogram-view basis-full w-full h-full overflow-hidden bg-blue-50" id="run-view">
                     <svg width="100%" height="100%">
                         <svg width="8000" height="8000" class="render-target border border-red-600">
                             <svg x="4000" y="4000" class="align-middle m-0 structogram-svg">
@@ -84,6 +130,36 @@
                 </div>
             </div>
             <div class="col-span-6 bg-gray-900 flex flex-col h-full" id="program-views">
+                <div id="output-view" class="basis-1/3 bg-gray-800 m-1 overflow-hidden text-white h-full max-h-full">
+                    <p class="m-2">Logs</p>
+                    <div class="bg-gray-700 t-logs overflow-y-scroll h-full flex flex-col">
+                        <p class="t-log-template text-wrap mr-1 ml-1"></p>
+                    </div>
+                </div>
+                <div id="memory-view" class="basis-1/3 overflow-y-scroll bg-gray-700 m-1 h-full">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="border-2 border-blue-600 bg-blue-600 text-white">
+                                <th class="w-2/5 border-2 border-blue-600">Key</th>
+                                <th class="w-2/5 border-2 border-blue-600">Value</th>
+                                <th class="w-1/5 border-2 border-blue-600">Constant</th>
+                            </tr>
+                        </thead>
+                        <tbody class="t-memory-entries">
+                            <tr class="t-memory-template border border-blue-600 text-white">
+                                <td class="t-memory-key w-2/5 border border-blue-600"></td>
+                                <td class="t-memory-value w-2/5 border border-blue-600"></td>
+                                <td class="t-memory-constant w-1/5 border border-blue-600"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="logic-view" class="basis-1/3 bg-gray-800 m-1 h-full">
+                    <p class="text-white">Logic</p>
+                    <div class="t-logic bg-gray-700 flex flex-row flex-wrap w-full h-1/2 overflow-x-scroll">
+
+                    </div>
+                </div>
             </div>
         </div>
         <div id="issues" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
