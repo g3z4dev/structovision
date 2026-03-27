@@ -1,11 +1,7 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, type VariableType} from "./memory";
-import {AnyStatement, BooleanStatement, NumericStatement, Statement, StringStatement, StatementParseError} from "./statement";
-import {type Primitive} from "./util";
+import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError} from "./statement";
 
-export interface TypeIdentifiable {
-    getTypeIdentifier(): string;
-}
 
 export interface Identifiable {
     getID(): string;
@@ -201,7 +197,7 @@ export class Structogram {
     }
 
     public getResults() {
-        const results = [] as [string, Primitive][];
+        const results = [] as [string, MemoryType][];
         for(const [key, _] of this.outputData) {
             results.push([key, this.memory.getVariable(key)]);
         }
@@ -324,7 +320,7 @@ export class Structogram {
     }
 
     public createStringStatement(statement: string) {
-        return StringStatement.parse(statement, this.memory);
+        return CharStatement.parse(statement, this.memory);
     }
 
     public createBooleanStatement(statement: string) {
@@ -392,7 +388,7 @@ export class BooleanStatementListOption extends BlockOption {
     }
 }
 
-export abstract class StatementOption<T extends Primitive> extends BlockOption {
+export abstract class StatementOption<T> extends BlockOption {
     protected statement: string = "";
     
     public setStatement(statement: string) {
@@ -427,7 +423,7 @@ export class NumericStatementOption extends StatementOption<number> {
 }
 
 export class StringStatementOption extends StatementOption<string> {
-    public tryResolveStatement(): StringStatement {
+    public tryResolveStatement(): CharStatement {
         return this.structogram.createStringStatement(this.statement);
     }
 
@@ -446,7 +442,7 @@ export class BooleanStatementOption extends StatementOption<boolean> {
     }
 }
 
-export class AnyStatementOption extends StatementOption<Primitive> {
+export class AnyStatementOption extends StatementOption<MemoryType> {
     public tryResolveStatement(): AnyStatement {
         return this.structogram.createAnyStatement(this.statement);
     }

@@ -1,13 +1,8 @@
-import {type Primitive} from "./util.ts";
 import EventEmitter2 from "eventemitter2";
-
-class UtilityObject {
-
-}
-
-type MemoryValue = Primitive | UtilityObject;
+import type { _Value, Value, ValueType } from "./types";
 
 export type VariableType = "number" | "string" | "boolean";
+
 
 export class VariableCreationError extends Error {
 
@@ -65,28 +60,19 @@ export class Memory {
         return !onlyNumeric;
     }
 
-    public createVariable(key: string, type: VariableType, value: Primitive | undefined = undefined, constant: boolean = false) {
+    public createVariable(key: string, value: Value, constant: boolean = false) {
         if(Memory.forbiddenKeys.includes(key) || !this.validateKeyName(key)) {
             throw new VariableCreationError(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`);
         }
         if(key in this.variables) {
             throw new VariableCreationError(`Variable with key [${key}] is already defined!`);
         }
-        if(!value) {
-            if(type == "number") {
-                value = 0;
-            } else if(type == "string") {
-                value = "";
-            } else if(type == "boolean") {
-                value = false;
-            }
-        }
-        const entry = new MemoryEntry(key, value!, type, constant);
+        const entry = new MemoryEntry(key, value, constant);
         this.variables[key] = entry;
         this.emitter.emit(Memory.variableAddedEvent, key, entry);
     }
 
-    public setVariable(key: string, value: Primitive) {
+    public setVariable(key: string, value: Value) {
         if(key in this.variables) {
             this.variables[key]!.value = value;
             this.emitter.emit(Memory.variableChangedEvent, key, value);
@@ -95,7 +81,7 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
-    public getVariable(key: string): Primitive {
+    public getVariable(key: string): Value {
         if(key in this.variables) {
             this.emitter.emit(Memory.variableAccessedEvent, key);
             return this.variables[key]!.value;
@@ -109,10 +95,10 @@ export class Memory {
         return [...Object.entries(this.variables)];
     }
 
-    public getType(key: string): string {
+    public getType(key: string): ValueType {
         if(key in this.variables) {
             this.emitter.emit(Memory.variableAccessedEvent, key);
-            return this.variables[key]!.type;
+            return this.variables[key]!.value.getType();
         }
         
         throw new Error(`Variable with key [${key}] does not exist!`);
@@ -131,7 +117,7 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
-    public changeVariable(key: string, fn: (v:Primitive) => Primitive) {
+    public changeVariable(key: string, fn: (v:Value) => Value) {
         if(key in this.variables) {
             const value = fn(this.variables[key]!.value)
             this.variables[key]!.value = value;
@@ -149,14 +135,14 @@ export class Memory {
 
 export class MemoryEntry {
     public readonly key: string;
-    private _value: Primitive;
-    public readonly type: string;
+    private _value: Value;
+    public readonly type: ValueType;
     public readonly constant: boolean;
 
-    constructor(key: string, value: Primitive, type: VariableType, constant: boolean) {
+    constructor(key: string, value: Value, constant: boolean) {
         this.key = key;
         this._value = value;
-        this.type = type;
+        this.type = this._value.getType();
         this.constant = constant;
     }
 
@@ -164,12 +150,12 @@ export class MemoryEntry {
         return this._value;
     }
 
-    public set value(value: Primitive) {
+    public set value(value: Value) {
         if(this.constant) {
             throw new Error("Constant variable cannot be modified!");
         }
-        if((typeof value) != this.type) {
-            throw new Error(`Value must be of type [${this.type}] but is ${typeof value}!`);
+        if(!this.type.matches(value.getType())) {
+            throw new Error(`Value must be of type [${this.type.identifier}] but is [${value.getType().identifier}]!`);
         }
         this._value = value;
     }

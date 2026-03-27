@@ -1,7 +1,7 @@
 import {test, type IAssert} from "zora";
 import ee2 from "eventemitter2"
 import { Memory } from "@structovision/app/model/memory";
-import { NumericStatement, StringStatement } from "@structovision/app/model/statement";
+import { NumericStatement, CharStatement } from "@structovision/app/model/statement";
 import {Structogram, AssignmentBlock, PrintBlock, TrueFalseBranchingBlock, MultiBranchingBlock, CountingLoopBlock, FrontTestingLoopBlock, BackTestingLoopBlock} from "@structovision/app/model/structogram";
 import { cartesian } from "../testutil.ts";
 

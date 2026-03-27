@@ -1,6 +1,6 @@
 import EventEmitter2 from "eventemitter2";
-import {Memory} from "./memory.ts";
-import {type Primitive} from "./util.ts";
+import {booleanType, numberType, charType, UtilityArray, ValueType, UtilityObject, type _Value, type Primitive, anyType, TokenType, ObjectType, ArrayType, UtilityObjectTemplate, SinglyLinkedListNodeTemplate, DoublyLinkedListNodeTemplate, BinaryTreeNodeTemplate, type Value, SimpleValue, UtilityString, stringType, type Ordered} from "./types.ts";
+import type { Memory } from "./memory.ts";
 
 type OpeningBracket = "(";
 type ClosingBracket = ")";
@@ -22,10 +22,8 @@ export class StatementEvaluationError extends Error {
     }
 }
 
-
-
-function getAllSortedPairs(array: string[]): string[][] {
-    const pairs: string[][] = [];
+function getAllSortedPairs<T>(array: T[]): T[][] {
+    const pairs: T[][] = [];
     const sortedArray = array.sort();
     for(let i = 0; i < sortedArray.length; i++) {
         for(let j = i; j < sortedArray.length; j++) {
@@ -38,10 +36,10 @@ function getAllSortedPairs(array: string[]): string[][] {
 export abstract class Operator {
     protected precedence: number;
     protected representingChar: string;
-    protected returnType: string;
+    protected returnType: ValueType;
     protected rightToLeft: boolean;
 
-    protected constructor(priority: number, representingChar: string, returnType: string, rightToLeft: boolean) {
+    protected constructor(priority: number, representingChar: string, returnType: ValueType, rightToLeft: boolean) {
         this.precedence = priority;
         this.representingChar = representingChar;
         this.returnType = returnType;
@@ -63,26 +61,29 @@ export abstract class Operator {
         return this.representingChar;
     }
 
-    public getReturnType(): string {
+    public getReturnType(parameterTypes: ValueType[] = []): ValueType {
         return this.returnType;
     }
 
-    abstract apply(operands: Primitive[]): Primitive;
+    public getObjectIdentifier(): string | undefined {
+        return undefined;
+    }
+    abstract apply(operands: Value[]): Value;
     abstract getOperandCount(): number;
-    abstract isApplicableTo(types: string[]): boolean;
+    abstract isApplicableTo(types: ValueType[]): boolean;
 }
 
 class BinaryOperator extends Operator {
-    private operation: (a: Primitive, b: Primitive) => Primitive;
-    private operandTypePairs: string[];
+    private operation: (a: Value, b: Value) => Value;
+    private operandTypePairs: ValueType[][];
 
-    public constructor(priority: number, representingChar: string, operandTypePairs: string[][], returnType: string, operation: (a: Primitive, b: Primitive) => Primitive, rightToLeft: boolean = false) {
+    public constructor(priority: number, representingChar: string, operandTypePairs: ValueType[][], returnType: ValueType, operation: (a: Value, b: Value) => Value, rightToLeft: boolean = false) {
         super(priority, representingChar, returnType, rightToLeft);
         this.operation = operation;
-        this.operandTypePairs = operandTypePairs.map(pair => pair.sort().join(":"));
+        this.operandTypePairs = operandTypePairs;
     }
     
-    public override apply(operands: Primitive[]): Primitive {
+    public override apply(operands: Value[]): Value {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
         }
@@ -97,22 +98,32 @@ class BinaryOperator extends Operator {
         return 2;
     }
     
-    public isApplicableTo(types: string[]): boolean {
-        return this.operandTypePairs.includes(types.sort().join(":"));
+    public isApplicableTo(types: ValueType[]): boolean {
+        for(const pair of this.operandTypePairs) {
+            let pairCopy = [...pair];
+            for(const type of types) {
+                const idx = pairCopy.findIndex(t => t.matches(type));
+                if(idx >= 0) {
+                    pairCopy.splice(idx, 1);
+                }
+            }
+            if(pairCopy.length == 0) return true;
+        }
+        return false;
     }
 }
 
 class UnaryOperator extends Operator {
-    private operation: (a: Primitive) => Primitive;
-    private operandTypes: string[];
+    private operation: (a: Value) => Value;
+    private operandTypes: ValueType[];
 
-    public constructor(priority: number, representingChar: string, operandTypes: string[], returnType: string, operation: (a: Primitive) => Primitive) {
+    public constructor(priority: number, representingChar: string, operandTypes: ValueType[], returnType: ValueType, operation: (a: Value) => Value) {
         super(priority, representingChar, returnType, true);
         this.operation = operation;
         this.operandTypes = operandTypes;
     }
 
-    public override apply(operands: Primitive[]): Primitive {
+    public override apply(operands: Value[]): Value {
         if(operands.length != 1) {
             throw new StatementEvaluationError(`Unary expected 1 operands but received [${operands.length}!]`);
         }
@@ -125,16 +136,124 @@ class UnaryOperator extends Operator {
         return 1;
     }
 
-    public override isApplicableTo(types: string[]): boolean {
-        return this.operandTypes.includes(types[0]!);
+    public override isApplicableTo(types: ValueType[]): boolean {
+        return this.operandTypes.some(type => type.matches(types[0]!));
     }
 }
 
-const operandTokens: Set<string> = new Set();
+class ObjectConstructor extends Operator {
+    private template: UtilityObjectTemplate;
+    private operandCount: number;
+    private operandTypes: ValueType[];
+
+    public constructor(name: string, operandTypes: ValueType[], template: UtilityObjectTemplate) {
+        super(100, name, anyType, true);
+        this.template = template;
+        this.operandCount = operandTypes.length;
+        this.operandTypes = operandTypes;
+    }
+
+    public override apply(operands: Value[]): UtilityObject {
+        if(operands.length != this.operandCount) {
+            throw new StatementEvaluationError(`Unary expected 1 operands but received [${operands.length}!]`);
+        }
+
+        return this.template.construct(operands);
+    }
+
+    public override getOperandCount(): number {
+        return this.operandCount;
+    }
+
+    public override isApplicableTo(types: ValueType[]): boolean {
+        return this.operandTypes.some(type => type!.matches(types[0]!));
+    }
+
+    public override getReturnType(parameterTypes: ValueType[]): ValueType {
+        return this.template.getType(parameterTypes);
+    }
+}
+
+class ObjectGetOperator extends Operator {
+
+    public constructor() {
+        super(99, ".", new ValueType("unknown"), false);
+    }
+
+    public override apply(operands: Value[]): Value {
+        if(operands.length != 2) {
+            throw new StatementEvaluationError(`ObjectGetOperator expected 2 operands but received ${operands.length}!`);
+        }
+        if(!this.isApplicableTo(operands.map(o => o.getType()))) {
+            throw new StatementEvaluationError("Type mismatch! Expected an object and a token!");
+        }
+
+        const a = operands[0]! as UtilityObject;
+        const b = operands[1]! as SimpleValue;
+        
+        return a.get(b.value as string);
+    }
+
+    public override isApplicableTo(types: ValueType[]): boolean {
+        return types[0]!.identifier.startsWith("object") && types[1]!.identifier == "token";
+    }
+
+    public override getOperandCount(): number {
+        return 2;
+    }
+
+    public override getReturnType(parameterTypes: ValueType[]): ValueType {
+        if(parameterTypes.length != 2) throw new Error("Invalid number of parameter types!");
+        if(!(parameterTypes[0] instanceof ObjectType)) throw new Error("First parameter is not an object!");
+        if(!(parameterTypes[1] instanceof TokenType)) throw new Error("Second parameter is not a token!");
+        const objectType = parameterTypes[0]!;
+        const field = parameterTypes[1].token;
+        const type = objectType.getFieldType(field);
+        if(!type) throw new StatementParseError(`Calling non-existing field [${field}] on object [${objectType.identifier}]!`);
+        return type;
+    }
+}
+
+class ObjectIndexOperator extends Operator {
+
+    public constructor() {
+        super(99, "@", anyType, false);
+    }
+
+    public override apply(operands: Value[]): Value {
+        if(operands.length != 2) {
+            throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
+        }
+        if(!this.isApplicableTo(operands.map(o => o.getType()))) {
+            throw new StatementEvaluationError("Type mismatch! Expected an array or array like object and a number!");
+        }
+
+        const a = operands[0]! as UtilityArray;
+        const b = operands[1]! as SimpleValue;
+        
+        return a.indexGet(b.value as number);
+    }
+
+    public override isApplicableTo(types: ValueType[]): boolean {
+        return types[0]!.identifier == "array" && types[1]!.identifier == "number";
+    }
+
+    public override getOperandCount(): number {
+        return 2;
+    }
+
+    public getReturnType(parameterTypes: ValueType[]): ValueType {
+        if(parameterTypes.length != 2) throw new Error("Invalid number of parameter types!");
+        if(!(parameterTypes[0] instanceof ArrayType)) throw new Error("Invalid usage of return type!");
+        return parameterTypes[0]!.elementType;
+    }
+}
+
+const operatorTokens: Set<string> = new Set();
 const operatorsByOperandCount: Record<number, Record<string, Operator>> = {};
 
-function register(op: Operator) {
-    operandTokens.add(op.getRepresentingChar());
+function registerOperator(op: Operator) {
+    operatorTokens.add(op.getRepresentingChar());
     if(!(op.getOperandCount() in operatorsByOperandCount)) {
         operatorsByOperandCount[op.getOperandCount()] = {};
     }
@@ -142,75 +261,228 @@ function register(op: Operator) {
 }
 
 // Numeric Operators
-register(new BinaryOperator(4, "+", [["number", "number"]], "number", (a, b) => (a as number) + (b as number)));
-register(new BinaryOperator(4, "-", [["number", "number"]], "number", (a, b) => (a as number) - (b as number)));
-register(new BinaryOperator(5, "*", [["number", "number"]], "number", (a, b) => (a as number) * (b as number)));
-register(new BinaryOperator(5, "/", [["number", "number"]], "number", (a, b) => (a as number) / (b as number)));
-register(new BinaryOperator(5, "div", [["number", "number"]], "number", (a, b) => Math.floor((a as number) / (b as number))));
-register(new BinaryOperator(5, "mod", [["number", "number"]], "number", (a, b) => (a as number) % (b as number)));
-register(new BinaryOperator(6, "^", [["number", "number"]], "number", (a, b) => (a as number) ** (b as number), true));
-register(new UnaryOperator(7, "-", ["number"], "number", a => -(a as number)));
-register(new UnaryOperator(7, "sqrt", ["number"], "number", a => Math.sqrt((a as number))));
-register(new UnaryOperator(7, "log", ["number"], "number", a => Math.log2((a as number))));
-register(new UnaryOperator(7, "abs", ["number"], "number", a => Math.abs((a as number))));
-register(new UnaryOperator(7, "len", ["string"], "number", a => (a as string).length));
+registerOperator(new BinaryOperator(4, "+", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) + ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(4, "-", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) - ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "*", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) * ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "/", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "div", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(Math.floor(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number)))));
+registerOperator(new BinaryOperator(5, "mod", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) % ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(6, "^", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) ** ((b as SimpleValue).value as number)), true));
+registerOperator(new UnaryOperator(7, "-", [numberType], numberType, a => SimpleValue.number(-((a as SimpleValue).value as number))));
+registerOperator(new UnaryOperator(7, "sqrt", [numberType], numberType, a => SimpleValue.number(Math.sqrt(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "log", [numberType], numberType, a => SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "abs", [numberType], numberType, a => SimpleValue.number(Math.abs(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "len", [new ArrayType(anyType)], numberType, a => SimpleValue.number((a as UtilityArray).length)));
 
 // Logic Operators
-register(new BinaryOperator(1, "and", [["boolean", "boolean"]], "boolean", (a, b) => (a as boolean) && (b as boolean)));
-register(new BinaryOperator(0, "or", [["boolean", "boolean"]], "boolean", (a, b) => (a as boolean) || (b as boolean)));
-register(new UnaryOperator(7, "!", ["boolean"], "boolean", a => !(a as boolean)));
-register(new BinaryOperator(2, "=", getAllSortedPairs(["number", "string", "boolean"]), "boolean", (a, b) => a == b));
-register(new BinaryOperator(2, "!=", getAllSortedPairs(["number", "string", "boolean"]), "boolean", (a, b) => a != b));
-register(new BinaryOperator(3, "<", [["number", "number"], ["string", "string"]], "boolean", (a, b) => a < b));
-register(new BinaryOperator(3, "<=", [["number", "number"], ["string", "string"]], "boolean", (a, b) => a <= b));
-register(new BinaryOperator(3, ">", [["number", "number"], ["string", "string"]], "boolean", (a, b) => a > b));
-register(new BinaryOperator(3, ">=", [["number", "number"], ["string", "string"]], "boolean", (a, b) => a >= b));
+registerOperator(new BinaryOperator(1, "and", [[booleanType, booleanType]], booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) && ((b as SimpleValue).value as boolean))));
+registerOperator(new BinaryOperator(0, "or", [[booleanType, booleanType]], booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) || ((b as SimpleValue).value as boolean))));
+registerOperator(new UnaryOperator(7, "!", [booleanType], booleanType, a => SimpleValue.boolean((!(a as SimpleValue).value as boolean))));
+registerOperator(new BinaryOperator(2, "=", [[anyType, anyType]], booleanType, (a, b) => SimpleValue.boolean(a.equals(b))));
+registerOperator(new BinaryOperator(2, "!=", [[anyType, anyType]], booleanType, (a, b) => SimpleValue.boolean(!a.equals(b))));
+registerOperator(new BinaryOperator(3, "<", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && !(a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(3, "<=", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || !(a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(3, ">", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && (a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(3, ">=", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || (a as unknown as Ordered<T>).greaterThan(b))));
 
-// String Operators
-register(new BinaryOperator(4, "&", getAllSortedPairs(["number", "string", "boolean"]), "string", (a, b) => String(a) + String(b)));
+// Array Operators
+registerOperator(new class extends BinaryOperator {
+    public override isApplicableTo(types: ValueType[]): boolean {
+        return types[0]!.identifier == "array" && types[0]!.matches(types[1]!);
+    }
+
+    public getReturnType(parameterTypes: ValueType[]): ValueType {
+        return parameterTypes[0]!;
+    }
+}(4, "&", [[anyType, anyType]], anyType, (a, b) => (a as UtilityString).concat(b as UtilityString)));
+registerOperator(new UnaryOperator(100, "str", [numberType, charType, booleanType], stringType, a => new UtilityString([...(a as SimpleValue).value!.toString()].map(SimpleValue.char))));
+
+// Constructors
+registerOperator(new ObjectConstructor("s1l", [anyType], SinglyLinkedListNodeTemplate));
+registerOperator(new ObjectConstructor("s2l", [anyType], DoublyLinkedListNodeTemplate));
+registerOperator(new ObjectConstructor("btn", [anyType], BinaryTreeNodeTemplate));
+// Object Operators
+registerOperator(new ObjectGetOperator());
+const indexOperator = new ObjectIndexOperator();
+registerOperator(indexOperator);
 
 export abstract class Operand {
-    public abstract resolve(): Primitive;
-    public abstract getType(): string;
+    public abstract getType(): ValueType;
+    public abstract flatten(): (ResolvableOperand | Operator)[];
+}
+
+export abstract class ResolvableOperand extends Operand {
+    public abstract resolve(): Value;
     public abstract getRepresentation(): string;
 }
 
-class LiteralOperand extends Operand {
-    value: Primitive;
+export class GroupedOperand extends Operand {
+    public readonly tokens: (Operand | Operator)[];
+    public readonly type: ValueType;
 
-    protected constructor(value: Primitive) {
+    constructor(tokens: (Operand | Operator)[], type: ValueType) {
+        super();
+        this.tokens = tokens;
+        this.type = type;
+    }
+
+    public getType(): ValueType {
+        return this.type;
+    }
+
+    public override flatten(): (ResolvableOperand | Operator)[] {
+        return this.tokens.map(v => v instanceof Operand ? v.flatten() : v).flat();
+    }
+}
+
+function parseOperand(text: string, memory: Memory): ResolvableOperand {
+    if(memory.hasVariable(text)) {
+        return new VariableOperand(text, memory);
+    }
+    if(text.startsWith("{") && text.endsWith("}")) {
+        return ArrayLiteral.parse(text, memory);
+    }
+    if(text.startsWith("\"") && text.endsWith("\"")) {
+        return StringLiteral.parse(text);
+    }
+    return LiteralOperand.parse(text);
+}
+
+class LiteralOperand extends ResolvableOperand {
+    value: Value;
+
+    protected constructor(value: Value) {
         super();
         this.value = value;
     }
 
     public static parse(text: string): LiteralOperand {
         if(!isNaN(Number(text))) {
-            return new LiteralOperand(Number(text));
+            return new LiteralOperand(SimpleValue.number(Number(text)));
         } else if (text == "true") {
-            return new LiteralOperand(true);
+            return new LiteralOperand(SimpleValue.boolean(true));
         } else if (text == "false") {
-            return new LiteralOperand(false);
-        } else if (text.startsWith("\"") && text.endsWith("\"")) {
-            return new LiteralOperand(text.substring(1, text.length-1))
+            return new LiteralOperand(SimpleValue.boolean(false));
+        } else if (text.startsWith("\'") && text.endsWith("\'") && text.length == 3) {
+            return new LiteralOperand(SimpleValue.char(text.substring(1,2)));
         } else {
-            throw new StatementParseError(`Invalid literal [${text}]!`);
+            return new LiteralOperand(SimpleValue.token(text));
         }
     }
 
-    public override resolve(): Primitive {
+    public override resolve(): Value {
         return this.value;
     }
 
-    public override getType(): string {
-        return typeof this.value;
+    public override getType(): ValueType {
+        return this.value.getType();
     }
 
     public override getRepresentation() {
         return "";
     }
+
+    public override flatten(): (ResolvableOperand | Operator)[] {
+        return [this];
+    }
 }
 
-class VariableOperand extends Operand {
+class ArrayLiteral extends ResolvableOperand {
+    values: AnyStatement[];
+    type: ArrayType;
+
+    protected constructor(values: AnyStatement[], elementType: ValueType) {
+        super();
+        this.values = values;
+        this.type = new ArrayType(elementType);
+    }
+
+    private static splitElements(text: string) {
+        const tokens = [];
+        let currentToken = "";
+        let arrayDepth = 0;
+        for(const c of [...text]) {
+            if(c == "," && arrayDepth == 0) {
+                tokens.push(currentToken);
+                currentToken = "";
+                continue;
+            } else if(c == "{") {
+                arrayDepth += 1;
+            } else if(c == "}") {
+                arrayDepth -= 1;
+            }
+            currentToken += c;
+        }
+        tokens.push(currentToken);
+        return tokens;
+    }
+
+    public static parse(text: string, memory: Memory): ArrayLiteral {
+        if(!text.startsWith("{") || !text.endsWith("}")) {
+            throw new Error("Not an array literal!");
+        }
+        text = text.substring(1,text.length-1);
+        const values = ArrayLiteral.splitElements(text).map(token => AnyStatement.parse(token, memory));
+        for(let i = 0; i < values.length; i++) {
+            for(let j = i+1; j < values.length; j++) {
+                if(!values[i]!.getReturnType().matches(values[j]!.getReturnType())) throw new StatementParseError("Arrays cannot be heterogeneous!")
+            }
+        }
+        return new ArrayLiteral(values, values.length > 0 ? values[0]!.getReturnType() : anyType);
+    }
+
+    public resolve(): Value {
+        return new UtilityArray(this.values.map(v => v.evaluate()), this.type.elementType);
+    }
+
+    public getType(): ValueType {
+        return this.type;
+    }
+
+    public getRepresentation(): string {
+        return "";
+    }
+
+    public override flatten(): (ResolvableOperand | Operator)[] {
+        return [this];
+    }
+}
+
+class StringLiteral extends ResolvableOperand {
+    values: Value[];
+
+    protected constructor(values: Value[]) {
+        super();
+        this.values = values;
+    }
+
+    public static parse(text: string): StringLiteral {
+        if(!text.startsWith("\"") || !text.endsWith("\"")) {
+            throw new Error("Not a string literal!");
+        }
+        text = text.substring(1,text.length-1);
+        const values = [...text].map(token => SimpleValue.char(token));
+        return new StringLiteral(values);
+    }
+
+    public resolve(): Value {
+        return new UtilityString(this.values);
+    }
+
+    public getType(): ValueType {
+        return new ArrayType(charType);
+    }
+
+    public getRepresentation(): string {
+        return "";
+    }
+
+    public override flatten(): (ResolvableOperand | Operator)[] {
+        return [this];
+    }
+}
+
+class VariableOperand extends ResolvableOperand {
     private _key: string;
     private memory: Memory;
 
@@ -223,12 +495,12 @@ class VariableOperand extends Operand {
         }
     }
 
-    public override resolve(): Primitive {
+    public override resolve(): Value {
         return this.memory.getVariable(this.key);
     }
 
-    public override getType(): string {
-        return typeof this.memory.getVariable(this.key);
+    public override getType(): ValueType {
+        return this.memory.getType(this.key);
     }
 
     private set key(key: string) {
@@ -241,6 +513,10 @@ class VariableOperand extends Operand {
     
     public override getRepresentation() {
         return this.key;
+    }
+
+    public override flatten(): (ResolvableOperand | Operator)[] {
+        return [this];
     }
 }
 
@@ -264,16 +540,16 @@ export abstract class Statement<T> {
      * */
     public static readonly evaluationEnd = "statement.evaluation.end";
     public static readonly emitter: EventEmitter2 = new EventEmitter2();
-    protected evaluatableTokens: (Operand | Operator)[] = [];
-    protected readableTokens: (Operand | Operator | Bracket)[] = [];
-    protected returnType: string = "any";
+    protected evaluatableTokens: (ResolvableOperand | Operator)[] = [];
+    protected readableTokens: (ResolvableOperand | Operator | Bracket)[] = [];
+    protected returnType: ValueType = numberType;
 
     abstract evaluate(): T;
-    protected evaluateInternally(): Primitive {
+    protected evaluateInternally(): Value {
         Statement.emitter.emit(Statement.evaluationStart, this.readableTokens);
-        const operands: Primitive[] = [];
+        const operands: (Value)[] = [];
         for(const token of this.evaluatableTokens) {
-            if(token instanceof Operand) {
+            if(token instanceof ResolvableOperand) {
                 const resolvedOperand = token.resolve();
                 operands.push(resolvedOperand);
             } else {
@@ -290,23 +566,16 @@ export abstract class Statement<T> {
         return value;
     }
 
-    protected abstract assertReturnType(type: string): void;
-    public getReturnType(): string {
-        return this.returnType;
-    }
-
-    protected static parseOperand(text: string, memory: Memory): Operand {
-        if(memory.hasVariable(text)) {
-            return new VariableOperand(text, memory);
-        }
-        return LiteralOperand.parse(text);
+    protected assertReturnType(type: ValueType): void {
+        if(type instanceof TokenType) throw new StatementParseError("Tokens cannot be returned by a statement!");
     }
 
     protected static splitTokens(text: string): string[] {
         let currentToken = "";
         const tokens: string[] = [];
-        type TokenParseState = "none" | "number" | "string" | "alphanumeric" | "specialcharacter";
+        type TokenParseState = "none" | "number" | "string" | "alphanumeric" | "specialcharacter" | "array" | "char";
         let tokenParseState: TokenParseState = "none";
+        let arrayDepth = 0
 
         function flushCurrentToken() {
             if(currentToken.length > 0) {
@@ -336,7 +605,19 @@ export abstract class Statement<T> {
         }
 
         for(let c of text) {
-            if(c == "\"" || tokenParseState == "string" as TokenParseState) {
+            if(c == "{" || tokenParseState == "array" as TokenParseState) {
+                if(c == "{") arrayDepth += 1;
+                if(c == "}" && tokenParseState == "array" as TokenParseState) {
+                    currentToken += c;
+                    arrayDepth -= 1;
+                    if(arrayDepth == 0) {
+                        flushCurrentToken();
+                        tokenParseState = "none";
+                    }
+                } else {
+                    handleState(c, "array");
+                }
+            } else if(c == "\"" || tokenParseState == "string" as TokenParseState) {
                 if(c == "\"" && tokenParseState == "string" as TokenParseState) {
                     currentToken += c;
                     flushCurrentToken();
@@ -344,17 +625,25 @@ export abstract class Statement<T> {
                 } else {
                     handleState(c, "string");
                 }
+            } else if(c == "\'" || tokenParseState == "char" as TokenParseState) {
+                if(c == "\'" && tokenParseState == "char" as TokenParseState) {
+                    currentToken += c;
+                    flushCurrentToken();
+                    tokenParseState = "none";
+                } else {
+                    handleState(c, "char");
+                }
             } else if(c == " ") {
                 tokenParseState = "none";
                 flushCurrentToken();
-            } else if (c == "(" || c == ")") {
+            } else if (c == "(" || c == ")" || c == "[" || c == "]") {
                 tokenParseState = "none";
                 flushCurrentToken();
                 tokens.push(c);
             } else if(isNumeric(c) && (tokenParseState != "alphanumeric" as TokenParseState || !isAlphanumeric(c))) {
                 handleState(c, "number");
             } else if(isSpecialCharacter(c)) {
-                if(operandTokens.has(currentToken) && !operandTokens.has(currentToken+c)) {
+                if(operatorTokens.has(currentToken) && !operatorTokens.has(currentToken+c)) {
                     flushCurrentToken();
                 }
                 handleState(c, "specialcharacter");
@@ -372,31 +661,25 @@ export abstract class Statement<T> {
         if(text.length == 0) throw new StatementParseError("Cannot parse empty statement!");
         const tokens: string[] = this.splitTokens(text);
         const operators: (Operator | OpeningBracket)[] = [];
-        const operands: OperandGroup[] = [];
+        const operands: Operand[] = [];
 
         const partialParsedTokens: (string | Operand | Bracket)[] = tokens.map(token => {
-            if(operandTokens.has(token)) {
-                return token;
-            } else if (token == "(" || token == ")") {
-                return token;
-            } else {
-                return this.parseOperand(token, memory);
+            if(operatorTokens.has(token)) {
+                return [token];
+            } else if (token == "(" || token == ")" ) {
+                return [token];
+            } else if (token == "[") {
+                return ["@", "("];
+            } else if (token == "]") {
+                return [")"];
+            } else { 
+                return [parseOperand(token, memory)];
             }
-        });
-
-        class OperandGroup {
-            tokens: (Operand | Operator)[];
-            type: string;
-
-            constructor(tokens: (Operand | Operator)[], type: string) {
-                this.tokens = tokens;
-                this.type = type;
-            }
-        }
+        }).flat();
 
         function fullyParseTokens(): (Operand | Operator | Bracket)[] {
             const parsedTokens: (Operand | Operator | Bracket)[] = [];
-            for(let i = 0; i < tokens.length; i++) {
+            for(let i = 0; i < partialParsedTokens.length; i++) {
 
                 const token = partialParsedTokens[i]!;
                 if(token instanceof Operand || token == "(" || token == ")") {
@@ -408,7 +691,7 @@ export abstract class Statement<T> {
                 }
 
                 function decideOperandCount(): number {
-                    const afterOperand = () => partialParsedTokens[i-1] instanceof Operand || partialParsedTokens[i-1] == ")";
+                    const afterOperand = () => partialParsedTokens[i-1] instanceof Operand || partialParsedTokens[i-1] == ")" || partialParsedTokens[i-1] == "]";
                     const afterOperator = () => !(partialParsedTokens[i-1] instanceof Operand);
                     if((i == 0 || i == tokens.length-1) && partialParsedTokens[i+1] instanceof Operand) {
                         return 1;
@@ -430,24 +713,27 @@ export abstract class Statement<T> {
 
         const parsedTokens: (Operand | Operator | Bracket)[] = fullyParseTokens();
 
-        function arrangeIntoPostfix(): (Operand | Operator)[] {
+        function arrangeIntoPostfix(): (Operator | ResolvableOperand)[] {
+            function applyOperator(operator: Operator) {
+                const postFix: (Operand | Operator)[] = []
+                const _operands = [];
+                for(let i = 0; i < operator.getOperandCount(); i++) {
+                    _operands.push(operands.pop()!);
+                }
+                if(!operator.isApplicableTo(_operands.map(operand => operand.getType()).reverse())) {
+                    throw new StatementParseError(`Operator type mismatch! [${operator.getRepresentingChar()}] is not applicable to [${_operands.map(operand => operand.getType().identifier).reverse()}]!`);
+                }
+                postFix.push(..._operands);
+                postFix.push(operator);
+                operands.push(new GroupedOperand(postFix, operator.getReturnType(_operands.map(op => op.getType()).reverse())));
+            }
             function flushOperatorsWhile(condition: () => boolean) {
                 while(condition()) {
                     const lastOp = operators.pop() as Operator;
-                    const postFix: (Operand | Operator)[] = []
-                    const _operands = [];
-                    for(let i = 0; i < lastOp.getOperandCount(); i++) {
-                        _operands.push(operands.pop()!);
-                    }
-                    if(!lastOp.isApplicableTo(_operands.map(operand => operand.type))) {
-                        throw new StatementParseError(`Operator type mismatch! [${lastOp.getRepresentingChar()}] is not applicable to [${_operands.map(operand => operand.type)}]!`);
-                    }
-                    postFix.push(..._operands.map(operand => operand.tokens).flat());
-                    postFix.push(lastOp);
-                    operands.push(new OperandGroup(postFix.flat(), lastOp.getReturnType()));
+                    applyOperator(lastOp);
                 }
             }
-
+            
             let bracketDepth = 0;
             for(let token of parsedTokens) {
                 if(token instanceof Operator) {
@@ -463,11 +749,12 @@ export abstract class Statement<T> {
                         flushOperatorsWhile(() => operators.at(-1) != "(");
                         operators.pop();
                     } else {
-                        operands.push(new OperandGroup([token], token.getType()));
+                        operands.push(new GroupedOperand([token], token.getType()));
                     }
                 }
             }
 
+            // TODO add tests for this
             if(bracketDepth != 0) {
                 if(bracketDepth < 0) {
                     throw new StatementParseError("At least one closing bracket is missing its opening bracket!");
@@ -478,25 +765,31 @@ export abstract class Statement<T> {
 
             flushOperatorsWhile(() => operators.length > 0);
 
-            statement.assertReturnType(operands[0]!.type);
-            statement.returnType = operands[0]!.type;
+            if(operands.length > 1) throw new StatementParseError("Statement result is ambigous!");
+            statement.assertReturnType(operands[0]!.getType());
+            statement.returnType = operands[0]!.getType();
 
-            return operands[0]!.tokens!;
+            return operands[0]!.flatten();
         }
 
         statement.evaluatableTokens.push(...arrangeIntoPostfix());
-        statement.readableTokens.push(...parsedTokens);
+        statement.readableTokens.push(...parsedTokens.map(v => v instanceof Operand ? v.flatten() : v).flat());
+    }
+
+    public getReturnType() {
+        return this.returnType;
     }
 }
 
 export class NumericStatement extends Statement<number> {
     public override evaluate(): number {
-        return this.evaluateInternally() as number;
+        return (this.evaluateInternally() as SimpleValue).value as number;
     }
 
-    protected override assertReturnType(type: string): void {
-        if(type != "number") {
-            throw new StatementParseError(`Numeric statement expects to get a number as its result but instead received [${type}]!`);
+    protected override assertReturnType(type: ValueType): void {
+        super.assertReturnType(type);
+        if(!numberType.matches(type)) {
+            throw new StatementParseError(`Numeric statement expects to get a number as its result but instead received [${type.identifier}]!`);
         }
     }
 
@@ -512,14 +805,39 @@ export class NumericStatement extends Statement<number> {
     }
 }
 
-export class StringStatement extends Statement<string> {
+export class CharStatement extends Statement<string> {
     public override evaluate(): string {
-        return this.evaluateInternally() as string;
+        return (this.evaluateInternally() as SimpleValue).value as string;
     }
 
-    protected override assertReturnType(type: string): void {
-        if(type != "string") {
-            throw new StatementParseError(`String statement expects to get a string as its result but instead received [${type}]!`);
+    protected override assertReturnType(type: ValueType): void {
+        super.assertReturnType(type);
+        if(!charType.matches(type)) {
+            throw new StatementParseError(`Char statement expects to get a char as its result but instead received [${type.identifier}]!`);
+        }
+    }
+
+    protected constructor() {
+        super();
+    }
+
+    public static parse(text: string, memory: Memory): CharStatement {
+        const statement = new CharStatement();
+        Statement.parseInto<string>(statement, text, memory);
+
+        return statement;
+    }
+}
+
+export class StringStatement extends Statement<string> {
+    public override evaluate(): string {
+        return (this.evaluateInternally() as UtilityString).getString();
+    }
+
+    protected override assertReturnType(type: ValueType): void {
+        super.assertReturnType(type);
+        if(!stringType.matches(type)) {
+            throw new StatementParseError(`String statement expects to get a string as its result but instead received [${type.identifier}]!`);
         }
     }
 
@@ -537,11 +855,12 @@ export class StringStatement extends Statement<string> {
 
 export class BooleanStatement extends Statement<boolean> {
     public override evaluate(): boolean {
-        return this.evaluateInternally() as boolean;
+        return (this.evaluateInternally() as SimpleValue).value as boolean;
     }
 
-    protected override assertReturnType(type: string): void {
-        if(type != "boolean") {
+    protected override assertReturnType(type: ValueType): void {
+        super.assertReturnType(type);
+        if(!booleanType.matches(type)) {
             throw new StatementParseError(`Boolean statement expects to get a boolean as its result but instead received [${type}]!`);
         }
     }
@@ -558,8 +877,8 @@ export class BooleanStatement extends Statement<boolean> {
     }
 }
 
-export class AnyStatement extends Statement<Primitive> {
-    public override evaluate(): Primitive {
+export class AnyStatement extends Statement<any> {
+    public override evaluate(): Value {
         return this.evaluateInternally();
     }
 
@@ -567,13 +886,9 @@ export class AnyStatement extends Statement<Primitive> {
         super();
     }
 
-    protected override assertReturnType(type: string): void {
-        return;
-    }
-
     public static parse(text: string, memory: Memory): AnyStatement {
         const statement = new AnyStatement();
-        Statement.parseInto<Primitive>(statement, text, memory);
+        Statement.parseInto<any>(statement, text, memory);
 
         return statement;
     }
