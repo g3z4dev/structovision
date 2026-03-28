@@ -1,5 +1,5 @@
 import EventEmitter2 from "eventemitter2";
-import type { _Value, Value, ValueType } from "./types";
+import { SimpleValue, type _Value, type Value, type ValueType } from "./types";
 
 export type VariableType = "number" | "string" | "boolean";
 
@@ -60,7 +60,7 @@ export class Memory {
         return !onlyNumeric;
     }
 
-    public createVariable(key: string, value: Value, constant: boolean = false) {
+    public createVariable(key: string, value: ValueType, constant: boolean = false) {
         if(Memory.forbiddenKeys.includes(key) || !this.validateKeyName(key)) {
             throw new VariableCreationError(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`);
         }
@@ -98,7 +98,7 @@ export class Memory {
     public getType(key: string): ValueType {
         if(key in this.variables) {
             this.emitter.emit(Memory.variableAccessedEvent, key);
-            return this.variables[key]!.value.getType();
+            return this.variables[key]!.type;
         }
         
         throw new Error(`Variable with key [${key}] does not exist!`);
@@ -139,10 +139,10 @@ export class MemoryEntry {
     public readonly type: ValueType;
     public readonly constant: boolean;
 
-    constructor(key: string, value: Value, constant: boolean) {
+    constructor(key: string, type: ValueType, constant: boolean) {
         this.key = key;
-        this._value = value;
-        this.type = this._value.getType();
+        this._value = SimpleValue.undefined();
+        this.type = type;
         this.constant = constant;
     }
 
@@ -151,7 +151,7 @@ export class MemoryEntry {
     }
 
     public set value(value: Value) {
-        if(this.constant) {
+        if(this.constant && this._value.getType().identifier != "undefined") {
             throw new Error("Constant variable cannot be modified!");
         }
         if(!this.type.matches(value.getType())) {

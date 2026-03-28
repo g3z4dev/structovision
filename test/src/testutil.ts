@@ -1,7 +1,8 @@
 import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, UtilityArray, UtilityString, type Value } from "@structovision/app/model/types";
+import type { IAssert } from "zora";
 
-export function cartesian<T>(ar1: T[], ar2: T[]): [T, T][] {
-    return ar1.flatMap(a => ar2.map(b => [a, b] as [T, T]));
+export function cartesian<T, J>(ar1: T[], ar2: J[]): [T, J][] {
+    return ar1.flatMap(a => ar2.map(b => [a, b] as [T, J]));
 }
 
 export function str(text: string) {
@@ -54,4 +55,8 @@ export function b(b: boolean) {
 
 export function ud() {
     return SimpleValue.undefined();
+}
+
+export function jsonEqual(assertion: IAssert, a: any, b: any, text: string) {
+    assertion.equal(JSON.stringify(a), JSON.stringify(b), text);
 }

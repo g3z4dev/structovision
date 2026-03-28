@@ -4,13 +4,13 @@ import { StructogramRenderer } from "./structogramrenderer";
 import { ListWindow, parseIntoHTML, setID, setTemplateText, wait } from "./util";
 import EventEmitter2 from "eventemitter2";
 import { Memory, type MemoryEntry } from "../model/memory";
-import { Operand, Operator, Statement, type Bracket } from "../model/statement";
-import type { Primitive } from "../model/util";
+import { Operand, Operator, ResolvableOperand, Statement, type Bracket } from "../model/statement";
 
 import operatorTemplate from "../../resources/program-views/logic-view-templates/operator.html";
 import operandTemplate from "../../resources/program-views/logic-view-templates/operand.html";
 
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
+import type { Value } from "../model/types";
 
 export class StructogramRunner extends StructogramRenderer {
     private _currentBlock: StructogramBlock | undefined;
@@ -381,7 +381,7 @@ class LogicView extends ProgramView implements AnimatedView {
         this.logicElem.appendChild(elem);
     }
 
-    private addOperand(operand: Operand | string) {
+    private addOperand(operand: ResolvableOperand | string) {
         const elem = this.operandTemplateElem.cloneNode(true) as HTMLElement;
         if(operand instanceof Operand) {
             setTemplateText(elem, "representation", operand.getRepresentation());
@@ -396,9 +396,9 @@ class LogicView extends ProgramView implements AnimatedView {
     constructor(runner: StructogramRunner) {
         super(document.querySelector("#logic-view")!, runner);
         this.reset();
-        Statement.emitter.on(Statement.evaluationStart, (statementTokens: (Operand | Operator | Bracket)[]) =>{
+        Statement.emitter.on(Statement.evaluationStart, (statementTokens: (ResolvableOperand | Operator | Bracket)[]) =>{
             for(const token of statementTokens) {
-                if(token instanceof Operand) {
+                if(token instanceof ResolvableOperand) {
                     this.addOperand(token);
                 } else {
                     this.addOperator(token);
@@ -406,7 +406,7 @@ class LogicView extends ProgramView implements AnimatedView {
             }
         });
         
-        Statement.emitter.on(Statement.evaluationEnd, (result: Primitive) =>{
+        Statement.emitter.on(Statement.evaluationEnd, (result: Value) =>{
             this.addOperator("->");
             this.addOperand(result.toString());
         });

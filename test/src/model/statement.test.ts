@@ -1,7 +1,7 @@
 import {test, type IAssert} from "zora";
 import {BooleanStatement, NumericStatement, CharStatement, StatementParseError, AnyStatement, StringStatement} from "@structovision/app/model/statement";
 import { Memory } from "@structovision/app/model/memory";
-import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, UtilityArray, UtilityString, type Primitive, type Value } from "@structovision/app/model/types";
+import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityArray, UtilityString, type Primitive, type Value } from "@structovision/app/model/types";
 import { array, b, boolArray, btn, c, charArray, n, numArray, s1l, s2l, str, ud } from "../testutil.ts";
 
 const placeholderMemory: Memory = new Memory();
@@ -168,30 +168,39 @@ test("complex statements with numeric, string and boolean components should work
 
 test("numeric statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", n(7));
-    mem.createVariable("b", n(5));
+    mem.createVariable("a", numberType);
+    mem.createVariable("b", numberType);
+    mem.setVariable("a", n(7));
+    mem.setVariable("b", n(5));
     testNumericStatement(assertion, "a+b", 12, mem);
 });
 
 test("string statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", str("hello"));
-    mem.createVariable("b", str("world"));
+    mem.createVariable("a", stringType);
+    mem.createVariable("b", stringType);
+    mem.setVariable("a", str("hello"));
+    mem.setVariable("b", str("world"));
     testStringStatement(assertion, "a&b", "helloworld", mem);
 });
 
 test("boolean statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", b(true));
-    mem.createVariable("b", b(false));
+    mem.createVariable("a", booleanType);
+    mem.createVariable("b", booleanType);
+    mem.setVariable("a", b(true));
+    mem.setVariable("b", b(false));
     testBooleanStatement(assertion, "a or b", true, mem);
 });
 
 test("any statements with variables should work as intended", assertion => {
     const mem = new Memory();
-    mem.createVariable("a", n(1));
-    mem.createVariable("b", str("text"));
-    mem.createVariable("c", b(false));
+    mem.createVariable("a", numberType);
+    mem.createVariable("b", stringType);
+    mem.createVariable("c", booleanType);
+    mem.setVariable("a", n(1));
+    mem.setVariable("b", str("text"));
+    mem.setVariable("c", b(false));
     testAnyStatement(assertion, "a", n(1), mem);
     testAnyStatement(assertion, "b", str("text"), mem);
     testAnyStatement(assertion, "c", b(false), mem);
@@ -282,4 +291,12 @@ test("statements should not be able to access fields of objects that does not ex
     assertion.throws(() => AnyStatement.parse('s1l(3).alma', placeholderMemory), StatementParseError, "Any statement should throw an error if trying to access a field of an s1l that does not exist");
     assertion.throws(() => AnyStatement.parse("s2l('a').parent", placeholderMemory), StatementParseError, "Any statement should throw an error if trying to access a field of an s2l that does not exist");
     assertion.throws(() => AnyStatement.parse('btn(false).next', placeholderMemory), StatementParseError, "Any statement should throw an error if trying to access a field of an btn that does not exist");
+});
+
+test("statements should be return an undefined value if there is one undefined operand", (assertion) => {
+    const mem = new Memory();
+    mem.createVariable("a", numberType);
+    testAnyStatementObject(assertion, "s1l(a).key", ud(), mem);
+    testAnyStatementObject(assertion, "len {1,2,a}", ud(), mem);
+    testAnyStatementObject(assertion, "(3+5)/4+len(\"alma\")*a", ud(), mem);
 });

@@ -27,7 +27,7 @@ export class ValueType {
     }
 
     public matches(type: ValueType) {
-        return this.identifier == type.identifier;
+        return this.identifier == type.identifier || type.identifier == "undefined";
     }
 }
 
@@ -76,7 +76,7 @@ export class ObjectType extends ValueType {
     }
 
     public matches(type: ValueType): boolean {
-        return super.matches(type) && type instanceof ObjectType && this.fieldsMatching(type);
+        return type.identifier == "undefined" || super.matches(type) && type instanceof ObjectType && this.fieldsMatching(type);
     }
 }
 
@@ -89,7 +89,7 @@ export class ArrayType extends ValueType {
     }
 
     public matches(type: ValueType): boolean {
-        return super.matches(type) && type instanceof ArrayType && this.elementType.matches(type.elementType);
+        return type.identifier == "undefined" || super.matches(type) && type instanceof ArrayType && this.elementType.matches(type.elementType);
     }
 }
 
@@ -103,13 +103,23 @@ export class AnyType extends ValueType {
     }
 }
 
+export class UndefinedType extends ValueType {
+    constructor() {
+        super("undefined");
+    }
+
+    public override matches(type: ValueType): boolean {
+        return true;
+    }
+}
+
 export class AnyOrderableType extends ValueType {
     constructor() {
         super("any");
     }
 
     public override matches(type: ValueType): boolean {
-        return type.orderable;
+        return type.identifier == "undefined" || type.orderable;
     }
 }
 
@@ -131,6 +141,7 @@ export const numberType = new ValueType("number", true);
 export const charType = new ValueType("char", true);
 export const booleanType = new ValueType("boolean");
 export const anyType = new AnyType();
+export const undefinedType = new UndefinedType();
 export const stringType = new ArrayType(charType, true);
 
 // Field definitions
@@ -227,7 +238,7 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
     }
 
     public static undefined() {
-        return new SimpleValue(undefined, anyType);
+        return new SimpleValue(undefined, undefinedType);
     }
 
     public greaterThan(other: SimpleValue): boolean {
@@ -362,6 +373,10 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
 
     public getType(): ArrayType {
         return stringType;
+    }
+
+    public static create(text: string) {
+        return new UtilityString([...text].map(t => SimpleValue.char(t)));
     }
 
     public getString() {

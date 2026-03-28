@@ -1,4 +1,4 @@
-import type { TypeIdentifiable } from "../model/structogram";
+import type { ClassIdentifiable } from "../model/types";
 
 export function setID(elem: Element, id: string) {
     elem.setAttribute("id", id);
@@ -105,9 +105,9 @@ export class ResourceManager {
         this.resourceCache[typeID] = html;
     }
 
-    public getHTMLForObject(object: TypeIdentifiable | undefined) {
+    public getHTMLForObject(object: ClassIdentifiable | undefined) {
         if(object) {
-            return this.getHTMLFor(object.getTypeIdentifier());
+            return this.getHTMLFor(object.getClassIdentifier());
         }
         return this.getHTMLFor("undefined");
     }

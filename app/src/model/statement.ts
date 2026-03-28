@@ -68,6 +68,11 @@ export abstract class Operator {
     public getObjectIdentifier(): string | undefined {
         return undefined;
     }
+
+    protected hasUndefinedOperand(operands: Value[]) {
+        return operands.some(op => op.getType().identifier == "undefined");
+    }
+
     abstract apply(operands: Value[]): Value;
     abstract getOperandCount(): number;
     abstract isApplicableTo(types: ValueType[]): boolean;
@@ -87,6 +92,7 @@ class BinaryOperator extends Operator {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
         }
+        if(this.hasUndefinedOperand(operands)) return SimpleValue.undefined();
 
         const a = operands[0]!;
         const b = operands[1]!;
@@ -99,6 +105,7 @@ class BinaryOperator extends Operator {
     }
     
     public isApplicableTo(types: ValueType[]): boolean {
+        if(types.some(t => t.identifier == "undefined")) return true;
         for(const pair of this.operandTypePairs) {
             let pairCopy = [...pair];
             for(const type of types) {
@@ -127,6 +134,7 @@ class UnaryOperator extends Operator {
         if(operands.length != 1) {
             throw new StatementEvaluationError(`Unary expected 1 operands but received [${operands.length}!]`);
         }
+        if(this.hasUndefinedOperand(operands)) return SimpleValue.undefined();
 
         const a = operands[0]!;
         return this.operation(a);
@@ -153,10 +161,11 @@ class ObjectConstructor extends Operator {
         this.operandTypes = operandTypes;
     }
 
-    public override apply(operands: Value[]): UtilityObject {
+    public override apply(operands: Value[]): Value {
         if(operands.length != this.operandCount) {
             throw new StatementEvaluationError(`Unary expected 1 operands but received [${operands.length}!]`);
         }
+        if(this.hasUndefinedOperand(operands)) return SimpleValue.undefined();
 
         return this.template.construct(operands);
     }
@@ -184,6 +193,7 @@ class ObjectGetOperator extends Operator {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`ObjectGetOperator expected 2 operands but received ${operands.length}!`);
         }
+        if(this.hasUndefinedOperand(operands)) return SimpleValue.undefined();
         if(!this.isApplicableTo(operands.map(o => o.getType()))) {
             throw new StatementEvaluationError("Type mismatch! Expected an object and a token!");
         }
@@ -195,6 +205,7 @@ class ObjectGetOperator extends Operator {
     }
 
     public override isApplicableTo(types: ValueType[]): boolean {
+        if(types.some(t => t.identifier == "undefined")) return true;
         return types[0]!.identifier.startsWith("object") && types[1]!.identifier == "token";
     }
 
@@ -224,6 +235,7 @@ class ObjectIndexOperator extends Operator {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
         }
+        if(this.hasUndefinedOperand(operands)) return SimpleValue.undefined();
         if(!this.isApplicableTo(operands.map(o => o.getType()))) {
             throw new StatementEvaluationError("Type mismatch! Expected an array or array like object and a number!");
         }
@@ -235,6 +247,7 @@ class ObjectIndexOperator extends Operator {
     }
 
     public override isApplicableTo(types: ValueType[]): boolean {
+        if(types.some(t => t.identifier == "undefined")) return true;
         return types[0]!.identifier == "array" && types[1]!.identifier == "number";
     }
 
@@ -288,6 +301,7 @@ registerOperator(new BinaryOperator(3, ">=", [[numberType, numberType], [charTyp
 // Array Operators
 registerOperator(new class extends BinaryOperator {
     public override isApplicableTo(types: ValueType[]): boolean {
+        if(types.some(t => t.identifier == "undefined")) return true;
         return types[0]!.identifier == "array" && types[0]!.matches(types[1]!);
     }
 
@@ -432,7 +446,9 @@ class ArrayLiteral extends ResolvableOperand {
     }
 
     public resolve(): Value {
-        return new UtilityArray(this.values.map(v => v.evaluate()), this.type.elementType);
+        const evaluatedValues = this.values.map(v => v.evaluate());
+        if(evaluatedValues.some(v => v.getType().identifier == "undefined")) return SimpleValue.undefined();
+        return new UtilityArray(evaluatedValues, this.type.elementType);
     }
 
     public getType(): ValueType {
@@ -783,7 +799,9 @@ export abstract class Statement<T> {
 
 export class NumericStatement extends Statement<number> {
     public override evaluate(): number {
-        return (this.evaluateInternally() as SimpleValue).value as number;
+        const result = this.evaluateInternally();
+        if(result.getType().identifier == "undefined") return 0;
+        return (result as SimpleValue).value as number;
     }
 
     protected override assertReturnType(type: ValueType): void {
@@ -807,7 +825,9 @@ export class NumericStatement extends Statement<number> {
 
 export class CharStatement extends Statement<string> {
     public override evaluate(): string {
-        return (this.evaluateInternally() as SimpleValue).value as string;
+        const result = this.evaluateInternally();
+        if(result.getType().identifier == "undefined") return "a";
+        return (result as SimpleValue).value as string;
     }
 
     protected override assertReturnType(type: ValueType): void {
@@ -831,7 +851,9 @@ export class CharStatement extends Statement<string> {
 
 export class StringStatement extends Statement<string> {
     public override evaluate(): string {
-        return (this.evaluateInternally() as UtilityString).getString();
+        const result = this.evaluateInternally();
+        if(result.getType().identifier == "undefined") return "";
+        return (result as UtilityString).getString();
     }
 
     protected override assertReturnType(type: ValueType): void {
@@ -855,7 +877,9 @@ export class StringStatement extends Statement<string> {
 
 export class BooleanStatement extends Statement<boolean> {
     public override evaluate(): boolean {
-        return (this.evaluateInternally() as SimpleValue).value as boolean;
+        const result = this.evaluateInternally();
+        if(result.getType().identifier == "undefined") return false;
+        return (result as SimpleValue).value as boolean;
     }
 
     protected override assertReturnType(type: ValueType): void {
