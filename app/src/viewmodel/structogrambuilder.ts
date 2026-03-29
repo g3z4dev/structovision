@@ -4,13 +4,19 @@ import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, Coun
 import { baseBlockHeight, selectedClass, unselectedClass } from "./constants";
 import { StructogramRenderer, UndefinedBlockContext } from "./structogramrenderer";
 import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
-import type { Primitive } from "../model/util";
 
 import statementOptionTemplate from "../../resources/settings/structogram-options/statementoption.html";
 import booleanStatementListOptionTemplate from "../../resources/settings/structogram-options/booleanstatementlistoption.html";
 import keyOptionTemplate from "../../resources/settings/structogram-options/keyoption.html";
 import dataSettingsTemplate from "../../resources/settings/datasettings.html";
+import { booleanType, numberType, SimpleValue, stringType, typeIdentifierToType, typeRegistry, ValueType, type Value } from "../model/types";
 
+
+const strToType: Record<string, ValueType> = {
+    "number": numberType,
+    "string": stringType,
+    "boolean": booleanType
+}
 /**
  * Represents a block that is currently being dragged by the mouse with all of its context clues included.
  */
@@ -211,9 +217,9 @@ class SpecificationChangeAction extends BuilderAction {
             }
         }
 
-        loader(this.oldInput, (key, type) => this.structogram.defineInputData(key, type as VariableType));
-        loader(this.oldAux, (key, type) => this.structogram.defineAuxData(key, type as VariableType));
-        loader(this.oldOutput, (key, type) => this.structogram.defineOutputData(key, type as VariableType));
+        loader(this.oldInput, (key, type) => this.structogram.defineInputData(key, strToType[type]!));
+        loader(this.oldAux, (key, type) => this.structogram.defineAuxData(key, strToType[type]!));
+        loader(this.oldOutput, (key, type) => this.structogram.defineOutputData(key, strToType[type]!));
 
         return new SpecificationChangeAction(this.structogram, this.oldInput, this.oldAux, this.oldOutput, this.newInput, this.newAux, this.newOutput);
     }
@@ -770,7 +776,7 @@ abstract class OptionHandler {
     }
 }
 
-class StatementOptionHandler<J extends Primitive> extends OptionHandler {
+class StatementOptionHandler<J extends Value> extends OptionHandler {
     protected override applyLogic(option: StatementOption<J>, block: StructogramBlock, node: Element): void {
         node.innerHTML = 
             node.innerHTML
@@ -905,17 +911,17 @@ class SpecificationSettingHandler {
 
         const inputEntries = this.parseEntryElems(inputDataEntries);
         for(const [key, type] of inputEntries) {
-            this.structogramBuilder.structogram.defineInputData(key, type);
+            this.structogramBuilder.structogram.defineInputData(key, typeIdentifierToType(type));
         }
 
         const auxEntries = this.parseEntryElems(auxDataEntries);
         for(const [key, type] of auxEntries) {
-            this.structogramBuilder.structogram.defineAuxData(key, type);
+            this.structogramBuilder.structogram.defineAuxData(key, typeIdentifierToType(type));
         }
 
         const outputEntries = this.parseEntryElems(outputDataEntries);
         for(const [key, type] of outputEntries) {
-            this.structogramBuilder.structogram.defineOutputData(key, type);
+            this.structogramBuilder.structogram.defineOutputData(key, typeIdentifierToType(type));
         }
 
         this.emitter.emit(SpecificationSettingHandler.specificationChanged, inputEntries, auxEntries, outputEntries, oldInput, oldAux, oldOutput);
@@ -929,7 +935,7 @@ class SpecificationSettingHandler {
         this.setupDataSettings(this.structogramBuilder.structogram.outputData, this.outDataElem, "Output");
     }
 
-    private loadEntriesFor(entries: [string, VariableType][], target: HTMLElement) {
+    private loadEntriesFor(entries: [string, ValueType][], target: HTMLElement) {
         const entriesElem = target.querySelector(".t-entries") as HTMLElement;
         entriesElem.textContent = "";
         for(const [key, entry] of entries) {
@@ -944,22 +950,22 @@ class SpecificationSettingHandler {
         this.loadEntriesFor(this.structogramBuilder.structogram.outputData, this.outDataElem);
     }
 
-    private setupDataSettings(entries: [string, VariableType][], target: HTMLElement, name: string) {
+    private setupDataSettings(entries: [string, ValueType][], target: HTMLElement, name: string) {
         this.loadEntriesFor(entries, target);
         setTemplateText(target, "name", name);
         const entriesElem = target.querySelector(".t-entries") as HTMLElement;
         const addButton = target.querySelector(".t-add-button") as HTMLButtonElement;
         addButton.addEventListener("click", () =>  {
-            this.addEntry("", "number", entriesElem);
+            this.addEntry("", numberType, entriesElem);
         });
     }
 
-    private addEntry(key: string, type: VariableType, entriesElem: HTMLElement) {
+    private addEntry(key: string, type: ValueType, entriesElem: HTMLElement) {
         const entryElem = this.entryTemplateElem?.cloneNode(true) as HTMLElement;
         const textfield = entryElem.querySelector(`.t-key-textfield`) as HTMLFormElement;
         textfield.value = key;
         const select = entryElem.querySelector(`.t-type-selector`) as HTMLSelectElement;
-        select.value = type;
+        select.value = type.getIdentifier();
         const removeButton = entryElem.querySelector(`.t-del-button`) as HTMLButtonElement;
         entriesElem.appendChild(entryElem);
         removeButton.addEventListener("click", () => {
@@ -999,13 +1005,13 @@ class StructogramSettings {
     constructor(structogramBuilder: StructogramBuilder) {
         this.specificationSettingsHandler = new SpecificationSettingHandler(structogramBuilder);
         this.optionResourceManager.register("anystatementoption", statementOptionTemplate);
-        this.optionHandlers["anystatementoption"] = new StatementOptionHandler<Primitive>(this.optionResourceManager);
+        this.optionHandlers["anystatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
         this.optionResourceManager.register("numericstatementoption", statementOptionTemplate);
-        this.optionHandlers["numericstatementoption"] = new StatementOptionHandler<number>(this.optionResourceManager);
+        this.optionHandlers["numericstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
         this.optionResourceManager.register("stringstatementoption", statementOptionTemplate);
-        this.optionHandlers["stringstatementoption"] = new StatementOptionHandler<string>(this.optionResourceManager);
+        this.optionHandlers["stringstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
         this.optionResourceManager.register("booleanstatementoption", statementOptionTemplate);
-        this.optionHandlers["booleanstatementoption"] = new StatementOptionHandler<boolean>(this.optionResourceManager);
+        this.optionHandlers["booleanstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
         this.optionResourceManager.register("booleanstatementlistoption", booleanStatementListOptionTemplate);
         this.optionHandlers["booleanstatementlistoption"] = new BooleanStatementListOptionHandler(this.optionResourceManager);
         this.optionResourceManager.register("keyoption", keyOptionTemplate);
@@ -1028,8 +1034,8 @@ class StructogramSettings {
         this.structogramSettingsElem.textContent = "";
         if(this._currentBlock) {
             for(const option of this._currentBlock.getOptions()) {
-                if(option.getTypeIdentifier() in this.optionHandlers) {
-                    const node = this.optionHandlers[option.getTypeIdentifier()]!.getHTMLNodeFor(option, this._currentBlock);
+                if(option.getClassIdentifier() in this.optionHandlers) {
+                    const node = this.optionHandlers[option.getClassIdentifier()]!.getHTMLNodeFor(option, this._currentBlock);
                     if(node) this.structogramSettingsElem.appendChild(node);
                 }
             }

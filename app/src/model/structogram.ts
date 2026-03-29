@@ -1,7 +1,7 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement} from "./statement";
-import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType } from "./types";
+import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, typeIdentifierToType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType } from "./types";
 
 
 export interface Identifiable {
@@ -98,17 +98,17 @@ export class Structogram {
 
     public defineInputData(key: string, type: ValueType) {
         this._inData[key] = type;
-        this.emitter.emit(Structogram.inputSpecificationEvent, key, type);
+        this.emitter.emit(Structogram.inputSpecificationEvent, key, type.getIdentifier());
     }
 
     public defineAuxData(key: string, type: ValueType) {
         this._auxData[key] = type;
-        this.emitter.emit(Structogram.auxSpecificationEvent, key, type);
+        this.emitter.emit(Structogram.auxSpecificationEvent, key, type.getIdentifier());
     }
 
     public defineOutputData(key: string, type: ValueType) {
         this._outData[key] = type;
-        this.emitter.emit(Structogram.outputSpecificationEvent, key, type);
+        this.emitter.emit(Structogram.outputSpecificationEvent, key, type.getIdentifier());
     }
 
     public get currentBlock() {
@@ -270,13 +270,13 @@ export class Structogram {
     public getData() {
         return {
             "input": this.inputData.map(data => {
-                return {"key": data[0], "type": data[1]}
+                return {"key": data[0], "type": data[1].getIdentifier()}
             }),
             "auxiliary": this.auxData.map(data => {
-                return {"key": data[0], "type": data[1]}
+                return {"key": data[0], "type": data[1].getIdentifier()}
             }),
             "output": this.outputData.map(data => {
-                return {"key": data[0], "type": data[1]}
+                return {"key": data[0], "type": data[1].getIdentifier()}
             }),
             "startingBlock": this.startingBlock?.getData()
         }   
@@ -288,8 +288,10 @@ export class Structogram {
         const aux = data["auxiliary"];
         const output = data["output"];
         
+        
+
         function loadWith(entries: any, loader:(a: string, type: ValueType) => void) {
-            for(const entry of entries) loader(entry["key"], entry["type"]);
+            for(const entry of entries) loader(entry["key"], typeIdentifierToType(entry["type"]));
         }
 
         loadWith(input, (key, type) => this.defineInputData(key, type));

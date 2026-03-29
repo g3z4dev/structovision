@@ -316,7 +316,7 @@ class MemoryView extends ProgramView {
     private addEntry(key: string, value: MemoryEntry) {
         const memoryEntry = this.memoryTemplateElem.cloneNode(true) as HTMLElement;
         setTemplateText(memoryEntry, "memory-key", key);
-        setTemplateText(memoryEntry, "memory-value", value.value.toString());
+        setTemplateText(memoryEntry, "memory-value", value.value.asString());
         setTemplateText(memoryEntry, "memory-constant", value.constant.toString());
         setID(memoryEntry, `v-${key}`);
         this.memoryViewEntriesElem.appendChild(memoryEntry);
@@ -331,7 +331,7 @@ class MemoryView extends ProgramView {
         });
         memory.emitter.addListener(Memory.variableChangedEvent, (key, value) => {
             const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
-            setTemplateText(memoryEntry, "memory-value", value);
+            setTemplateText(memoryEntry, "memory-value", value.asString());
             memoryEntry.classList.add(...this.changedStyle);
         });
         memory.emitter.addListener(Memory.variableAccessedEvent, key => {
@@ -383,9 +383,9 @@ class LogicView extends ProgramView implements AnimatedView {
 
     private addOperand(operand: ResolvableOperand | string) {
         const elem = this.operandTemplateElem.cloneNode(true) as HTMLElement;
-        if(operand instanceof Operand) {
+        if(operand instanceof ResolvableOperand) {
             setTemplateText(elem, "representation", operand.getRepresentation());
-            setTemplateText(elem, "value", operand.resolve().toString());
+            setTemplateText(elem, "value", operand.resolve().asString());
         } else {
             setTemplateText(elem, "representation", "");
             setTemplateText(elem, "value", operand);
@@ -408,7 +408,7 @@ class LogicView extends ProgramView implements AnimatedView {
         
         Statement.emitter.on(Statement.evaluationEnd, (result: Value) =>{
             this.addOperator("->");
-            this.addOperand(result.toString());
+            this.addOperand(result.asString());
         });
     }
 

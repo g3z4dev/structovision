@@ -151,11 +151,11 @@ export class MemoryEntry {
     }
 
     public set value(value: Value) {
-        if(this.constant && this._value.getType().identifier != "undefined") {
+        if(this.constant && this._value.getType().baseIdentifier != "undefined") {
             throw new Error("Constant variable cannot be modified!");
         }
         if(!this.type.matches(value.getType())) {
-            throw new Error(`Value must be of type [${this.type.identifier}] but is [${value.getType().identifier}]!`);
+            throw new Error(`Value must be of type [${this.type.baseIdentifier}] but is [${value.getType().baseIdentifier}]!`);
         }
         this._value = value;
     }

@@ -36,12 +36,14 @@ function getAllSortedPairs<T>(array: T[]): T[][] {
 export abstract class Operator {
     protected precedence: number;
     protected representingChar: string;
+    private condition: (ops: ValueType[]) => boolean;
     protected returnType: ValueType;
     protected rightToLeft: boolean;
 
-    protected constructor(priority: number, representingChar: string, returnType: ValueType, rightToLeft: boolean) {
+    protected constructor(priority: number, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, rightToLeft: boolean) {
         this.precedence = priority;
         this.representingChar = representingChar;
+        this.condition = condition;
         this.returnType = returnType;
         this.rightToLeft = rightToLeft;
     }
@@ -70,22 +72,39 @@ export abstract class Operator {
     }
 
     protected hasUndefinedOperand(operands: Value[]) {
-        return operands.some(op => op.getType().identifier == "undefined");
+        return operands.some(op => op.getType().getIdentifier() == "undefined");
     }
 
     abstract apply(operands: Value[]): Value;
     abstract getOperandCount(): number;
-    abstract isApplicableTo(types: ValueType[]): boolean;
+    public isApplicableTo(types: ValueType[]): boolean {
+        if(types.some(t => t.getIdentifier() == "undefined")) return true;
+        return this.condition(types);
+    }
 }
 
 class BinaryOperator extends Operator {
     private operation: (a: Value, b: Value) => Value;
-    private operandTypePairs: ValueType[][];
 
-    public constructor(priority: number, representingChar: string, operandTypePairs: ValueType[][], returnType: ValueType, operation: (a: Value, b: Value) => Value, rightToLeft: boolean = false) {
-        super(priority, representingChar, returnType, rightToLeft);
+    public constructor(priority: number, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value, b: Value) => Value, rightToLeft: boolean = false) {
+        super(priority, representingChar, condition, returnType, rightToLeft);
         this.operation = operation;
-        this.operandTypePairs = operandTypePairs;
+    }
+
+    public static matchesSomePairsFn(operandTypePairs: ValueType[][]) {
+        return (types: ValueType[]) => {
+            for(const pair of operandTypePairs) {
+                let pairCopy = [...pair];
+                for(const type of types) {
+                    const idx = pairCopy.findIndex(t => t.matches(type));
+                    if(idx >= 0) {
+                        pairCopy.splice(idx, 1);
+                    }
+                }
+                if(pairCopy.length == 0) return true;
+            }
+            return false;
+        }
     }
     
     public override apply(operands: Value[]): Value {
@@ -103,31 +122,18 @@ class BinaryOperator extends Operator {
     public override getOperandCount(): number {
         return 2;
     }
-    
-    public isApplicableTo(types: ValueType[]): boolean {
-        if(types.some(t => t.identifier == "undefined")) return true;
-        for(const pair of this.operandTypePairs) {
-            let pairCopy = [...pair];
-            for(const type of types) {
-                const idx = pairCopy.findIndex(t => t.matches(type));
-                if(idx >= 0) {
-                    pairCopy.splice(idx, 1);
-                }
-            }
-            if(pairCopy.length == 0) return true;
-        }
-        return false;
-    }
 }
 
 class UnaryOperator extends Operator {
     private operation: (a: Value) => Value;
-    private operandTypes: ValueType[];
 
-    public constructor(priority: number, representingChar: string, operandTypes: ValueType[], returnType: ValueType, operation: (a: Value) => Value) {
-        super(priority, representingChar, returnType, true);
+    public constructor(priority: number, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value) => Value) {
+        super(priority, representingChar, condition, returnType, true);
         this.operation = operation;
-        this.operandTypes = operandTypes;
+    }
+    
+    public static matchesSomeFn(operandTypes: ValueType[]) {
+        return (types: ValueType[]) => operandTypes.some(type => type.matches(types[0]!));
     }
 
     public override apply(operands: Value[]): Value {
@@ -143,22 +149,16 @@ class UnaryOperator extends Operator {
     public override getOperandCount(): number {
         return 1;
     }
-
-    public override isApplicableTo(types: ValueType[]): boolean {
-        return this.operandTypes.some(type => type.matches(types[0]!));
-    }
 }
 
 class ObjectConstructor extends Operator {
     private template: UtilityObjectTemplate;
     private operandCount: number;
-    private operandTypes: ValueType[];
 
     public constructor(name: string, operandTypes: ValueType[], template: UtilityObjectTemplate) {
-        super(100, name, anyType, true);
+        super(100, name, UnaryOperator.matchesSomeFn(operandTypes), anyType, true);
         this.template = template;
         this.operandCount = operandTypes.length;
-        this.operandTypes = operandTypes;
     }
 
     public override apply(operands: Value[]): Value {
@@ -174,10 +174,6 @@ class ObjectConstructor extends Operator {
         return this.operandCount;
     }
 
-    public override isApplicableTo(types: ValueType[]): boolean {
-        return this.operandTypes.some(type => type!.matches(types[0]!));
-    }
-
     public override getReturnType(parameterTypes: ValueType[]): ValueType {
         return this.template.getType(parameterTypes);
     }
@@ -186,7 +182,7 @@ class ObjectConstructor extends Operator {
 class ObjectGetOperator extends Operator {
 
     public constructor() {
-        super(99, ".", new ValueType("unknown"), false);
+        super(99, ".", types => types[0]!.getIdentifier().startsWith("object") && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
     }
 
     public override apply(operands: Value[]): Value {
@@ -204,11 +200,6 @@ class ObjectGetOperator extends Operator {
         return a.get(b.value as string);
     }
 
-    public override isApplicableTo(types: ValueType[]): boolean {
-        if(types.some(t => t.identifier == "undefined")) return true;
-        return types[0]!.identifier.startsWith("object") && types[1]!.identifier == "token";
-    }
-
     public override getOperandCount(): number {
         return 2;
     }
@@ -220,7 +211,7 @@ class ObjectGetOperator extends Operator {
         const objectType = parameterTypes[0]!;
         const field = parameterTypes[1].token;
         const type = objectType.getFieldType(field);
-        if(!type) throw new StatementParseError(`Calling non-existing field [${field}] on object [${objectType.identifier}]!`);
+        if(!type) throw new StatementParseError(`Calling non-existing field [${field}] on object [${objectType.getIdentifier()}]!`);
         return type;
     }
 }
@@ -228,7 +219,7 @@ class ObjectGetOperator extends Operator {
 class ObjectIndexOperator extends Operator {
 
     public constructor() {
-        super(99, "@", anyType, false);
+        super(99, "@", types => types[0]!.getIdentifier().startsWith("array") && types[1]!.getIdentifier() == "number", anyType, false);
     }
 
     public override apply(operands: Value[]): Value {
@@ -244,11 +235,6 @@ class ObjectIndexOperator extends Operator {
         const b = operands[1]! as SimpleValue;
         
         return a.indexGet(b.value as number);
-    }
-
-    public override isApplicableTo(types: ValueType[]): boolean {
-        if(types.some(t => t.identifier == "undefined")) return true;
-        return types[0]!.identifier == "array" && types[1]!.identifier == "number";
     }
 
     public override getOperandCount(): number {
@@ -274,42 +260,37 @@ function registerOperator(op: Operator) {
 }
 
 // Numeric Operators
-registerOperator(new BinaryOperator(4, "+", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) + ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(4, "-", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) - ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(5, "*", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) * ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(5, "/", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(5, "div", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(Math.floor(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number)))));
-registerOperator(new BinaryOperator(5, "mod", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) % ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(6, "^", [[numberType, numberType]], numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) ** ((b as SimpleValue).value as number)), true));
-registerOperator(new UnaryOperator(7, "-", [numberType], numberType, a => SimpleValue.number(-((a as SimpleValue).value as number))));
-registerOperator(new UnaryOperator(7, "sqrt", [numberType], numberType, a => SimpleValue.number(Math.sqrt(((a as SimpleValue).value as number)))));
-registerOperator(new UnaryOperator(7, "log", [numberType], numberType, a => SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))));
-registerOperator(new UnaryOperator(7, "abs", [numberType], numberType, a => SimpleValue.number(Math.abs(((a as SimpleValue).value as number)))));
-registerOperator(new UnaryOperator(7, "len", [new ArrayType(anyType)], numberType, a => SimpleValue.number((a as UtilityArray).length)));
+registerOperator(new BinaryOperator(4, "+", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) + ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(4, "-", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) - ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "*", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) * ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "/", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "div", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(Math.floor(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number)))));
+registerOperator(new BinaryOperator(5, "mod", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) % ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(6, "^", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) ** ((b as SimpleValue).value as number)), true));
+registerOperator(new UnaryOperator(7, "-", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(-((a as SimpleValue).value as number))));
+registerOperator(new UnaryOperator(7, "sqrt", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.sqrt(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "log", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "abs", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.abs(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "len", types => types[0]!.baseIdentifier == "array", numberType, a => SimpleValue.number((a as UtilityArray).length)));
 
 // Logic Operators
-registerOperator(new BinaryOperator(1, "and", [[booleanType, booleanType]], booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) && ((b as SimpleValue).value as boolean))));
-registerOperator(new BinaryOperator(0, "or", [[booleanType, booleanType]], booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) || ((b as SimpleValue).value as boolean))));
-registerOperator(new UnaryOperator(7, "!", [booleanType], booleanType, a => SimpleValue.boolean((!(a as SimpleValue).value as boolean))));
-registerOperator(new BinaryOperator(2, "=", [[anyType, anyType]], booleanType, (a, b) => SimpleValue.boolean(a.equals(b))));
-registerOperator(new BinaryOperator(2, "!=", [[anyType, anyType]], booleanType, (a, b) => SimpleValue.boolean(!a.equals(b))));
-registerOperator(new BinaryOperator(3, "<", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && !(a as unknown as Ordered<T>).greaterThan(b))));
-registerOperator(new BinaryOperator(3, "<=", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || !(a as unknown as Ordered<T>).greaterThan(b))));
-registerOperator(new BinaryOperator(3, ">", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && (a as unknown as Ordered<T>).greaterThan(b))));
-registerOperator(new BinaryOperator(3, ">=", [[numberType, numberType], [charType, charType], [stringType, stringType]], booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || (a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(1, "and", BinaryOperator.matchesSomePairsFn([[booleanType, booleanType]]), booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) && ((b as SimpleValue).value as boolean))));
+registerOperator(new BinaryOperator(0, "or", BinaryOperator.matchesSomePairsFn([[booleanType, booleanType]]), booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) || ((b as SimpleValue).value as boolean))));
+registerOperator(new UnaryOperator(7, "!", UnaryOperator.matchesSomeFn([booleanType]), booleanType, a => SimpleValue.boolean((!(a as SimpleValue).value as boolean))));
+registerOperator(new BinaryOperator(2, "=", BinaryOperator.matchesSomePairsFn([[anyType, anyType]]), booleanType, (a, b) => SimpleValue.boolean(a.equals(b))));
+registerOperator(new BinaryOperator(2, "!=", BinaryOperator.matchesSomePairsFn([[anyType, anyType]]), booleanType, (a, b) => SimpleValue.boolean(!a.equals(b))));
+registerOperator(new BinaryOperator(3, "<", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && !(a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(3, "<=", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || !(a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(3, ">", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && (a as unknown as Ordered<T>).greaterThan(b))));
+registerOperator(new BinaryOperator(3, ">=", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || (a as unknown as Ordered<T>).greaterThan(b))));
 
 // Array Operators
 registerOperator(new class extends BinaryOperator {
-    public override isApplicableTo(types: ValueType[]): boolean {
-        if(types.some(t => t.identifier == "undefined")) return true;
-        return types[0]!.identifier == "array" && types[0]!.matches(types[1]!);
-    }
-
     public getReturnType(parameterTypes: ValueType[]): ValueType {
         return parameterTypes[0]!;
     }
-}(4, "&", [[anyType, anyType]], anyType, (a, b) => (a as UtilityString).concat(b as UtilityString)));
-registerOperator(new UnaryOperator(100, "str", [numberType, charType, booleanType], stringType, a => new UtilityString([...(a as SimpleValue).value!.toString()].map(SimpleValue.char))));
+}(4, "&", types => types[0]!.getIdentifier().startsWith("array") && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityString).concat(b as UtilityString)));
+registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([numberType, charType, booleanType]), stringType, a => new UtilityString([...(a as SimpleValue).value!.toString()].map(SimpleValue.char))));
 
 // Constructors
 registerOperator(new ObjectConstructor("s1l", [anyType], SinglyLinkedListNodeTemplate));
@@ -447,7 +428,7 @@ class ArrayLiteral extends ResolvableOperand {
 
     public resolve(): Value {
         const evaluatedValues = this.values.map(v => v.evaluate());
-        if(evaluatedValues.some(v => v.getType().identifier == "undefined")) return SimpleValue.undefined();
+        if(evaluatedValues.some(v => v.getType().getIdentifier() == "undefined")) return SimpleValue.undefined();
         return new UtilityArray(evaluatedValues, this.type.elementType);
     }
 
@@ -737,7 +718,7 @@ export abstract class Statement<T> {
                     _operands.push(operands.pop()!);
                 }
                 if(!operator.isApplicableTo(_operands.map(operand => operand.getType()).reverse())) {
-                    throw new StatementParseError(`Operator type mismatch! [${operator.getRepresentingChar()}] is not applicable to [${_operands.map(operand => operand.getType().identifier).reverse()}]!`);
+                    throw new StatementParseError(`Operator type mismatch! [${operator.getRepresentingChar()}] is not applicable to [${_operands.map(operand => operand.getType().getIdentifier()).reverse()}]!`);
                 }
                 postFix.push(..._operands);
                 postFix.push(operator);
@@ -800,14 +781,14 @@ export abstract class Statement<T> {
 export class NumericStatement extends Statement<number> {
     public override evaluate(): number {
         const result = this.evaluateInternally();
-        if(result.getType().identifier == "undefined") return 0;
+        if(result.getType().getIdentifier() == "undefined") return 0;
         return (result as SimpleValue).value as number;
     }
 
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!numberType.matches(type)) {
-            throw new StatementParseError(`Numeric statement expects to get a number as its result but instead received [${type.identifier}]!`);
+            throw new StatementParseError(`Numeric statement expects to get a number as its result but instead received [${type.getIdentifier()}]!`);
         }
     }
 
@@ -826,14 +807,14 @@ export class NumericStatement extends Statement<number> {
 export class CharStatement extends Statement<string> {
     public override evaluate(): string {
         const result = this.evaluateInternally();
-        if(result.getType().identifier == "undefined") return "a";
+        if(result.getType().getIdentifier() == "undefined") return "a";
         return (result as SimpleValue).value as string;
     }
 
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!charType.matches(type)) {
-            throw new StatementParseError(`Char statement expects to get a char as its result but instead received [${type.identifier}]!`);
+            throw new StatementParseError(`Char statement expects to get a char as its result but instead received [${type.getIdentifier()}]!`);
         }
     }
 
@@ -852,14 +833,14 @@ export class CharStatement extends Statement<string> {
 export class StringStatement extends Statement<string> {
     public override evaluate(): string {
         const result = this.evaluateInternally();
-        if(result.getType().identifier == "undefined") return "";
+        if(result.getType().getIdentifier() == "undefined") return "";
         return (result as UtilityString).getString();
     }
 
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!stringType.matches(type)) {
-            throw new StatementParseError(`String statement expects to get a string as its result but instead received [${type.identifier}]!`);
+            throw new StatementParseError(`String statement expects to get a string as its result but instead received [${type.getIdentifier()}]!`);
         }
     }
 
@@ -878,7 +859,7 @@ export class StringStatement extends Statement<string> {
 export class BooleanStatement extends Statement<boolean> {
     public override evaluate(): boolean {
         const result = this.evaluateInternally();
-        if(result.getType().identifier == "undefined") return false;
+        if(result.getType().getIdentifier() == "undefined") return false;
         return (result as SimpleValue).value as boolean;
     }
 

@@ -7,6 +7,7 @@ export interface ClassIdentifiable {
 export interface Value {
     getType(): ValueType;
     equals(t: Value): boolean;
+    asString(): string;
 }
 
 export interface Ordered<T> {
@@ -18,16 +19,20 @@ export type _Value = Primitive | UtilityObject | UtilityArray | undefined;
 type ValueTypeFunction = (typeParameter: ValueType[]) => ValueType;
 
 export class ValueType {
-    public readonly identifier: string;
+    public readonly baseIdentifier: string;
     public readonly orderable: boolean;
 
     constructor(identifier: string, orderable: boolean = false) {
-        this.identifier = identifier;
+        this.baseIdentifier = identifier;
         this.orderable = orderable;
     }
 
     public matches(type: ValueType) {
-        return this.identifier == type.identifier || type.identifier == "undefined";
+        return this.getIdentifier() == type.getIdentifier() || type.baseIdentifier == "undefined";
+    }
+
+    public getIdentifier() {
+        return this.baseIdentifier;
     }
 }
 
@@ -75,8 +80,8 @@ export class ObjectType extends ValueType {
         return true;
     }
 
-    public matches(type: ValueType): boolean {
-        return type.identifier == "undefined" || super.matches(type) && type instanceof ObjectType && this.fieldsMatching(type);
+    public override getIdentifier(): string {
+        return `${this.baseIdentifier}<${this.typeParameter[0]!.getIdentifier()}>`
     }
 }
 
@@ -88,8 +93,8 @@ export class ArrayType extends ValueType {
         this.elementType = elementType;
     }
 
-    public matches(type: ValueType): boolean {
-        return type.identifier == "undefined" || super.matches(type) && type instanceof ArrayType && this.elementType.matches(type.elementType);
+    public override getIdentifier(): string {
+        return `${this.baseIdentifier}<${this.elementType.getIdentifier()}>`
     }
 }
 
@@ -119,7 +124,7 @@ export class AnyOrderableType extends ValueType {
     }
 
     public override matches(type: ValueType): boolean {
-        return type.identifier == "undefined" || type.orderable;
+        return type.getIdentifier() == "undefined" || type.orderable;
     }
 }
 
@@ -253,6 +258,10 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
         }
         return false;
     }
+
+    public asString(): string {
+        return this.value?.toString() ?? "undefined";
+    }
 }
 
 export class UtilityObjectTemplate {
@@ -353,6 +362,10 @@ export class UtilityArray implements ClassIdentifiable, Value {
         // todo type check
         return new UtilityArray(this.elements.concat(other.elements), this.elementType);
     }
+
+    public asString(): string {
+        return "{" + this.elements.map(e => e.asString()).join() + "}"
+    }
 }
 
 export class UtilityString extends UtilityArray implements Ordered<UtilityString> {
@@ -435,6 +448,10 @@ export class UtilityObject implements ClassIdentifiable, Value {
         }
         return false;
     }
+
+    public asString(): string {
+        return this.id;
+    }
 }
 
 export const SinglyLinkedListNodeTemplate = 
@@ -457,3 +474,31 @@ export const BinaryTreeNodeTemplate =
         .addSelfReferentialField("left", "getset")
         .addSelfReferentialField("right", "getset")
         .build();
+
+export const typeRegistry: Record<string, (v: ValueType) => ValueType> = {};
+
+function registerType(type: ValueType, factory: (v: ValueType) => ValueType) {
+    typeRegistry[type.baseIdentifier] = factory;
+}
+
+registerType(numberType, v => numberType);
+registerType(charType, v => charType);
+registerType(booleanType, v => booleanType);
+registerType(new ArrayType(numberType), v => new ArrayType(v));
+registerType(SinglyLinkedListNodeTemplate.getType([numberType]), v => SinglyLinkedListNodeTemplate.getType([v]));
+registerType(DoublyLinkedListNodeTemplate.getType([numberType]), v => DoublyLinkedListNodeTemplate.getType([v]));
+registerType(BinaryTreeNodeTemplate.getType([numberType]), v => BinaryTreeNodeTemplate.getType([v]));
+
+function splitTypeTokens(typeIdentifier: string) {
+    return typeIdentifier.split("<").map(t => t.split(">")[0]!);
+}
+
+export function typeIdentifierToType(typeIdentifier: string): ValueType {
+    const typeTokens = splitTypeTokens(typeIdentifier);
+    const types = typeTokens.map(t => typeRegistry[t]).reverse();
+    let lastType = types[0]!(undefinedType);
+    for(let i = 1; i < types.length; i++) {
+        lastType = types[i]!(lastType);
+    }
+    return lastType;
+}
