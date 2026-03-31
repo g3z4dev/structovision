@@ -1,6 +1,6 @@
 import EventEmitter2 from "eventemitter2";
 import type { VariableType } from "../model/memory";
-import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, TrueFalseBranchingBlock, type BlockOption, type StructogramBlock } from "../model/structogram";
+import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, StructogramIssue, TrueFalseBranchingBlock, type BlockOption, type StructogramBlock } from "../model/structogram";
 import { baseBlockHeight, selectedClass, unselectedClass } from "./constants";
 import { StructogramRenderer, UndefinedBlockContext } from "./structogramrenderer";
 import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
@@ -490,7 +490,7 @@ export class StructogramBuilder extends StructogramRenderer {
     }
 
     constructor(structogram: Structogram) {
-        super(structogram, document.querySelector("#structogram-builder")!)
+        super(structogram, document.querySelector("#structogram-builder")!, "builder")
         this.toolbar.generateHTML();
         this.setupBlockDropping();
         this.setupBlockMoving();
@@ -540,7 +540,7 @@ export class StructogramBuilder extends StructogramRenderer {
     }
 
     protected override onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement): void {
-        setID(elem, block.getID());
+        super.onBlockAdded(block, parent, elem);
         elem.addEventListener("mousedown", event => {
             if(event.button == 0) {
                 this.structogramSettings.currentBlock = block;
@@ -626,6 +626,10 @@ export class StructogramBuilder extends StructogramRenderer {
         })
         parentElem.appendChild(elem);
         return baseBlockHeight;
+    }
+
+    public override runFrame(delta: number) {
+        super.runFrame(delta);
     }
 }
 

@@ -290,7 +290,7 @@ registerOperator(new class extends BinaryOperator {
         return parameterTypes[0]!;
     }
 }(4, "&", types => types[0]!.getIdentifier().startsWith("array") || types[0]!.getIdentifier() == "string" && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityString).concat(b as UtilityString)));
-registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([numberType, charType, booleanType]), stringType, a => new UtilityString([...(a as SimpleValue).value!.toString()].map(SimpleValue.char))));
+registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([anyType]), stringType, a => new UtilityString([...a.asString()].map(SimpleValue.char))));
 
 // Constructors
 registerOperator(new ObjectConstructor("s1l", [anyType], SinglyLinkedListNodeTemplate));

@@ -1,17 +1,17 @@
 import EventEmitter2 from "eventemitter2";
-import { Structogram } from "../model/structogram";
+import { Structogram, StructogramIssue } from "../model/structogram";
 import { StructogramBuilder } from "./structogrambuilder";
 import { StructogramRunner } from "./structogramrunner";
 
 type ViewMode = "builder" | "runner";
 
 export class ViewModel {
-    private emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
-    public structogram: Structogram = new Structogram(this.emitter);
-    public readonly structogramBuilder = new StructogramBuilder(this.structogram);
-    public readonly structogramRunner = new StructogramRunner(this.structogram);
+    public readonly structogram: Structogram;
+    public readonly structogramBuilder;
+    public readonly structogramRunner;
     private readonly switchToBuilderButton = document.querySelector("#switch-to-builder-button") as HTMLButtonElement;
     private readonly switchToRunnerButton = document.querySelector("#switch-to-runner-button") as HTMLButtonElement;
+    protected issues: StructogramIssue[] = [];
     private _mode: ViewMode = "builder";
    
     /**
@@ -36,7 +36,10 @@ export class ViewModel {
         return this._mode;
     }
 
-    constructor() {
+    constructor(structogram: Structogram) {
+        this.structogram = structogram;
+        this.structogramBuilder = new StructogramBuilder(this.structogram);
+        this.structogramRunner = new StructogramRunner(this.structogram);
         this.structogramBuilder.updateHTML();
         this.structogram.emitter.addListener(Structogram.changedEvent, () => {
             this.structogramBuilder.updateHTML();
@@ -51,5 +54,25 @@ export class ViewModel {
                 this.mode = "runner";
             }
         });
+    }
+
+    public begin() {
+        requestAnimationFrame(timestamp => this.runFrame(timestamp));
+    }
+
+    private lastTimestamp = -1;
+
+    private runFrame(timestamp: number, delta: number = 0) {
+        if(this.lastTimestamp < 0) {
+            this.lastTimestamp = timestamp;
+        }
+        if(this.mode == "builder") {
+            this.structogramBuilder.runFrame(delta);
+        } else {
+            this.structogramRunner.runFrame(delta);
+        }
+        const _delta = timestamp - this.lastTimestamp;
+        this.lastTimestamp = timestamp;
+        requestAnimationFrame(timestamp => this.runFrame(timestamp, _delta));
     }
 }

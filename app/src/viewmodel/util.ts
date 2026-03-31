@@ -57,10 +57,6 @@ export function applyTransformation(elem: Element, x: number, y: number, scale: 
     elem.setAttribute("transform", `scale(${scale}, ${scale}) translate(${x},${y}) `);
 }
 
-export async function wait(ms: number) {
-    await new Promise(r => setTimeout(r, ms));
-}
-
 /**
  * Takes an element and searches for a child node in it that has a given class with a prefix "t-", if it finds a node
  * like that it replaces the text content within it to a given text.

@@ -1,5 +1,5 @@
-import { BlockOption, type Structogram, type StructogramBlock } from "../model/structogram";
-import { applyTransformation, centerX, getX, getY, ResourceManager, setPosition, setSize, setTemplateText, setX, setY } from "./util";
+import { BlockOption, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
+import { applyTransformation, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
 import printBlockTemplate from "../../resources/blocks/printblock.html";
@@ -43,6 +43,7 @@ export class StructogramRenderer {
     protected structogramWidth = 1024;
     protected scale = 1;
     protected rightClickDown = false;
+    protected idPrefix;
 
     /**
      * This is potentially a temporary solution for removing specified listeners from an emitter.
@@ -50,7 +51,7 @@ export class StructogramRenderer {
      */
     private optionListenerRemovers: (() => void)[] = [];
 
-    constructor(structogram: Structogram, mainElement: HTMLElement) {
+    constructor(structogram: Structogram, mainElement: HTMLElement, idPrefix: string) {
         this.mainElement = mainElement;
         this.viewElement = mainElement.querySelector(".structogram-view") as HTMLElement;
         this.renderTarget = this.viewElement.querySelector(".render-target") as SVGSVGElement;
@@ -67,6 +68,23 @@ export class StructogramRenderer {
         this.blockResourceManager.register("undefined", undefinedBlockTemplate);
         this.structogram = structogram;
         this.setUpMovement();
+        this.idPrefix = idPrefix;
+        this.structogram.emitter.addListener(Structogram.issuesChangedEvent, (oldIssues: StructogramIssue[], newIssues: StructogramIssue[]) => {
+            for(const issue of oldIssues) {
+                const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`);
+                if(block) {
+                    block.classList.remove("fill-red-100");
+                    block.classList.add("fill-white");
+                }
+            }
+            for(const issue of newIssues) {
+                const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`);
+                if(block) {
+                    block.classList.add("fill-red-100");
+                    block.classList.remove("fill-white");
+                }
+            }
+        });
     }
 
     /**
@@ -275,10 +293,14 @@ export class StructogramRenderer {
      * This method is called when a block has been resolved into an HTML element.
      * @param block the block that has been resolved
      * @param parent the parent block
-     * @param elem the HTML element it was resolve into
+     * @param elem the HTML element it was resolved into
      */
     protected onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement) {
-
+        elem.id = this.idPrefix + "-" + block.getID();
+        if(this.structogram.issues.map(i => i.id).includes(block.getID())) {
+            elem.classList.add("fill-red-100");
+            elem.classList.remove("fill-white");
+        }
     }
 
     /**
@@ -301,5 +323,9 @@ export class StructogramRenderer {
 
     public hide() {
         this.mainElement.classList.add("hidden");
+    }
+
+    public runFrame(delta: number) {
+
     }
 }

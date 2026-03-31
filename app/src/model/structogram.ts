@@ -8,7 +8,7 @@ export interface Identifiable {
     getID(): string;
 }
 
-export class StructogramIssues {
+export class StructogramIssue {
     private _id: string;
     private _message: string;
 
@@ -59,6 +59,12 @@ export class Structogram {
      * Emitted when the specification is cleared.
      */
     public static readonly specificationClearEvent = "structogram.specification.clear";
+    
+    /**
+     * Emitted when the issues change.
+     * Has 2 StructogramIssue[] arguments. The first one is the previous issues and the second one are the current ones.
+     */
+    public static readonly issuesChangedEvent = "structogram.issues.changes";
 
     public readonly memory: Memory;
     public readonly emitter: EventEmitter2;
@@ -71,6 +77,7 @@ export class Structogram {
     private _inData: Record<string, ValueType> = {};
     private _auxData: Record<string, ValueType> = {};
     private _outData: Record<string, ValueType> = {};
+    private currentIssues: StructogramIssue[] = [];
 
     public get inputData() {
         return Object.entries(this._inData);
@@ -82,6 +89,17 @@ export class Structogram {
 
     public get outputData() {
         return Object.entries(this._outData);
+    }
+
+    public get issues() {
+        return [...this.currentIssues];
+    }
+
+    private set issues(issues: StructogramIssue[]) {
+        const lastIssues = this.issues;
+        this.currentIssues = issues;
+        const currentIssues = this.issues;
+        this.emitter.emit(Structogram.issuesChangedEvent, lastIssues, currentIssues);
     }
 
     constructor(emitter: EventEmitter2) {
@@ -119,42 +137,42 @@ export class Structogram {
         this._currentBlock = currentBlock;
     }
 
-    private createVariables(input: string[]): StructogramIssues[] {
+    private createVariables(input: string[]): StructogramIssue[] {
         const issues = [];
         if(input.length != this.inputData.length) {
-            return [new StructogramIssues("specification", "Missing inputs!")]
+            return [new StructogramIssue("specification", "Missing inputs!")]
         }
         const usedKeys = new Set<string>();
         for(let i = 0; i < input.length; i++) {
             const [key, type] = this.inputData[i]!;
             if(usedKeys.has(key)) {
-                return [new StructogramIssues("specification", "Duplicate key in data specification is not allowed!")]
+                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
             }
             usedKeys.add(key);
             try {
                 const statement = AnyStatement.parse(input[i]!, this.memory);
                 if(!type.matches(statement.getReturnType())) {
-                    issues.push(new StructogramIssues("specification", "Wrong type returned by statement given to input data!"));
+                    issues.push(new StructogramIssue("specification", "Wrong type returned by statement given to input data!"));
                 } else {
                     this.memory.createVariable(key, type, true);
                     this.memory.setVariable(key, statement.evaluate());
                 }
             } catch (error) {
                 if(error instanceof StatementParseError) {
-                    issues.push(new StructogramIssues("specification", error.message));
+                    issues.push(new StructogramIssue("specification", error.message));
                 }
             }
         }
         for(const [key, type] of Object.entries(this._auxData)) {
             if(usedKeys.has(key)) {
-                return [new StructogramIssues("specification", "Duplicate key in data specification is not allowed!")]
+                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
             }
             usedKeys.add(key);
             this.memory.createVariable(key, type);
         }
         for(const [key, type] of Object.entries(this._outData)) {
             if(usedKeys.has(key)) {
-                return [new StructogramIssues("specification", "Duplicate key in data specification is not allowed!")]
+                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
             }
             usedKeys.add(key);
             this.memory.createVariable(key, type);
@@ -162,13 +180,14 @@ export class Structogram {
         return issues;
     }
 
-    public preRun(input: string[] = []): StructogramIssues[] {
+    public preRun(input: string[] = []): StructogramIssue[] {
         this.memory.clear();
         const issues = this.createVariables(input);
         issues.push(...Object.values(this.idMap).map(block => block.parseAndCheckForIssues()).flat());
         if(issues.length == 0) {
             this.ready = true;
         }
+        this.issues = issues;
         return issues;
     }
 
@@ -588,7 +607,7 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     public abstract run(): StructogramBlock | undefined;
     public abstract getOptions(): BlockOption[];
     public abstract getClassIdentifier(): string;
-    public abstract parseAndCheckForIssues(): StructogramIssues[];
+    public abstract parseAndCheckForIssues(): StructogramIssue[];
 
     public getData(): any {
         return {
@@ -675,22 +694,22 @@ export class AssignmentBlock extends SequenceBlock {
         return [this.keyOption, this.statementOption];
     }
 
-    public override parseAndCheckForIssues(): StructogramIssues[] {
+    public override parseAndCheckForIssues(): StructogramIssue[] {
         this.key = this.keyOption.getKey();
         const issues = [];
         try {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssues(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message));
             }
         }
         if(!this._associatedStructogram.memory.hasVariable(this.key)) {
-            issues.push(new StructogramIssues(this.id, `Variable with key [${this.key}] is not defined!`));
+            issues.push(new StructogramIssue(this.id, `Variable with key [${this.key}] is not defined!`));
         } else if(!this._associatedStructogram.memory.getType(this.key).matches(this.statement?.getReturnType() ?? undefinedType)) {
-            issues.push(new StructogramIssues(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`));
+            issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`));
         } else if(this._associatedStructogram.memory.isConstant(this.key)) {
-            issues.push(new StructogramIssues(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
+            issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
         }
         return issues;
     }
@@ -718,12 +737,12 @@ export class PrintBlock extends SequenceBlock {
         return [this.statementOption];
     }
 
-    public override parseAndCheckForIssues(): StructogramIssues[] {
+    public override parseAndCheckForIssues(): StructogramIssue[] {
         try {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssues(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message)];
             }
         }
 
@@ -792,12 +811,12 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         return [this.conditionOption];
     }
 
-    public override parseAndCheckForIssues(): StructogramIssues[] {
+    public override parseAndCheckForIssues(): StructogramIssue[] {
         try {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssues(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message)];
             }
         }
 
@@ -883,12 +902,12 @@ export class MultiBranchingBlock extends BracketBlock {
         this.subBlocks["branch"+index] = block;
     }
 
-    public override parseAndCheckForIssues(): StructogramIssues[] {
+    public override parseAndCheckForIssues(): StructogramIssue[] {
         try {
             this.branches = this.conditionListOption.tryResolveStatements();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssues(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message)];
             }
         }
 
@@ -988,37 +1007,37 @@ export class CountingLoopBlock extends LoopBlock {
         return "countingloopblock";
     }
 
-    public override parseAndCheckForIssues(): StructogramIssues[] {
+    public override parseAndCheckForIssues(): StructogramIssue[] {
         const issues = [];
         try {
             this.from = this.fromOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssues(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message));
             }
         }
         try {
             this.to = this.toOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssues(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message));
             }
         }
         try {
             this.step = this.stepOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssues(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message));
             }
         }
         
         this.variableKey = this.variableKeyOption.getKey();
         if(!this._associatedStructogram.memory.hasVariable(this.variableKey)) {
-            issues.push(new StructogramIssues(this.id,`Variable with key [${this.variableKey}] is not defined!`))
+            issues.push(new StructogramIssue(this.id,`Variable with key [${this.variableKey}] is not defined!`))
         } else if(!this._associatedStructogram.memory.getType(this.variableKey).matches(numberType)) {
-            issues.push(new StructogramIssues(this.id, `Block violates the type restrictions of the variable with key [${this.variableKey}]!`));
+            issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.variableKey}]!`));
         } else if (this._associatedStructogram.memory.isConstant(this.variableKey)) {
-            issues.push(new StructogramIssues(this.id, `Block tries to assign [${this.variableKey}] which is a constant variable!`));
+            issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.variableKey}] which is a constant variable!`));
         }
 
         return issues;
@@ -1037,12 +1056,12 @@ export abstract class ConditionalLoopBlock extends LoopBlock {
         return [this.conditionOption];
     }
 
-    public override parseAndCheckForIssues(): StructogramIssues[] {
+    public override parseAndCheckForIssues(): StructogramIssue[] {
         try {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssues(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message)];
             }
         }
 

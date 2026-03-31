@@ -1,7 +1,7 @@
-import { Structogram, StructogramBlock } from "../model/structogram";
+import { Structogram, StructogramBlock, StructogramIssue } from "../model/structogram";
 import { baseRunSpeed, notRunningClass, runningClass } from "./constants";
 import { StructogramRenderer } from "./structogramrenderer";
-import { ListWindow, parseIntoHTML, setID, setTemplateText, wait } from "./util";
+import { ListWindow, parseIntoHTML, setID, setTemplateText } from "./util";
 import EventEmitter2 from "eventemitter2";
 import { Memory, type MemoryEntry } from "../model/memory";
 import { Operand, Operator, ResolvableOperand, Statement, type Bracket } from "../model/statement";
@@ -12,21 +12,22 @@ import operandTemplate from "../../resources/program-views/logic-view-templates/
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
 import type { Value } from "../model/types";
 
+type RunMode = "onestep" | "run" | "paused";
+
 export class StructogramRunner extends StructogramRenderer {
     private _currentBlock: StructogramBlock | undefined;
     private _activeBlockStep: string | undefined;
-    private paused: boolean = false;
     private prepared: boolean = false;
-    private autoRunning: boolean = false;
     private readonly inputDataElem = document.querySelector("#input-data") as HTMLElement;
     private readonly runIssueWindow = new ListWindow("issues", "issues-ok");
     private readonly runResultsWindow = new ListWindow("results", "results-ok");
     public readonly timeControl = new TimeControl(this);
     public readonly programViewManager = new ProgramViewManager(this);
+    private runMode: RunMode = "paused";
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
-            const node = this.renderTarget.querySelector(`#${this._currentBlock.id}`);
+            const node = this.renderTarget.querySelector(`#${this.idPrefix}-${this._currentBlock.id}`);
             node?.classList.remove(...runningClass);
             node?.classList.add(...notRunningClass);
             currentBlock?.emitter.removeAllListeners(StructogramBlock.activeStepChanged);
@@ -34,7 +35,7 @@ export class StructogramRunner extends StructogramRenderer {
         this.activeBlockStep = undefined;
         this._currentBlock = currentBlock;
         if(currentBlock) {
-            const node = this.renderTarget.querySelector(`#${currentBlock.id}`);
+            const node = this.renderTarget.querySelector(`#${this.idPrefix}-${currentBlock.id}`);
             node?.classList.remove(...notRunningClass);
             node?.classList.add(...runningClass);
             this.activeBlockStep = currentBlock.activeStep;
@@ -48,13 +49,13 @@ export class StructogramRunner extends StructogramRenderer {
 
     protected set activeBlockStep(step: string | undefined) {
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.idPrefix}-${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
                 e?.classList.remove("font-bold", "stroke-green-500");
             }
         }
         this._activeBlockStep = step;
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
+            for(const e of this.renderTarget.querySelectorAll(`#${this.idPrefix}-${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
                 e?.classList.add("font-bold", "stroke-green-500");
             }
         }
@@ -68,6 +69,14 @@ export class StructogramRunner extends StructogramRenderer {
         return this._currentBlock;
     }
 
+    public get stepLength() {
+        return baseRunSpeed / this.timeControl.currentSpeed
+    }
+
+    public get animationProgress() {
+        return this.timeElapsed / this.stepLength;
+    }
+
     public addInputEntry(key: string) {
         const entry = parseIntoHTML(inputDataEntryTemplate);
         setTemplateText(entry, "key", key);
@@ -79,7 +88,7 @@ export class StructogramRunner extends StructogramRenderer {
     }
 
     constructor(structogram: Structogram) {
-        super(structogram, document.querySelector("#structogram-runner")!)
+        super(structogram, document.querySelector("#structogram-runner")!, "runner")
         for(const [key, _] of structogram.inputData) {
             this.addInputEntry(key);
         }
@@ -116,22 +125,21 @@ export class StructogramRunner extends StructogramRenderer {
 
     public restart() {
         this.structogram.restart();
-        this.paused = true;
+        this.runMode = "paused";
         this.currentBlock = undefined;
         this.prepared = false;
     }
 
-    public async start() {
-        this.autoRunning = true;
-        this.paused = false;
-        while (!this.paused && this._step()) {
-            await wait(baseRunSpeed / this.timeControl.currentSpeed);
-        }
-        this.autoRunning = false;
+    public start() {
+        this.timeElapsed = 0;
+        this.runMode = "run";
+        this._step();
     }
 
     public step() {
-        if(!this.autoRunning) {
+        if(this.runMode != "run") {
+            this.timeElapsed = 0;
+            this.runMode = "onestep";
             this._step();
         }
     }
@@ -154,16 +162,34 @@ export class StructogramRunner extends StructogramRenderer {
     }
 
     public pause() {
-        this.paused = true;
-    }
-
-    protected override onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement): void {
-        setID(elem, block.getID());
+        this.runMode = "paused";
     }
 
     public override updateHTML(): void {
         super.updateHTML();
         this.restart();
+    }
+
+    private timeElapsed = 0;
+
+    public override runFrame(delta: number) {
+        super.runFrame(delta);
+        if(this.runMode != "paused") {
+            this.timeElapsed += delta;
+            if(this.timeElapsed > this.stepLength) { 
+                this.timeElapsed = 0;
+                if(!this.structogram.isRunning()) {
+                    this.runMode = "paused";
+                }
+                if(this.runMode == "onestep") {
+                    this.runMode = "paused";
+                } else if(this.runMode == "run") {
+                    if(!this._step()) {
+                        this.runMode = "paused";
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -312,6 +338,8 @@ class MemoryView extends ProgramView {
     private memoryTemplateElem = this.viewElem.querySelector(".t-memory-template")!.cloneNode(true) as HTMLElement;
     private readonly changedStyle = ["bg-orange-600"];
     private readonly accessedStyle = ["bg-green-600"];
+    private changedElems: HTMLElement[] = [];
+    private accessedElems: HTMLElement[] = [];
 
     private addEntry(key: string, value: MemoryEntry) {
         const memoryEntry = this.memoryTemplateElem.cloneNode(true) as HTMLElement;
@@ -332,10 +360,12 @@ class MemoryView extends ProgramView {
         memory.emitter.addListener(Memory.variableChangedEvent, (key, value) => {
             const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
             setTemplateText(memoryEntry, "memory-value", value.asString());
+            this.changedElems.push(memoryEntry);
             memoryEntry.classList.add(...this.changedStyle);
         });
         memory.emitter.addListener(Memory.variableAccessedEvent, key => {
             const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
+            this.accessedElems.push(memoryEntry);
             memoryEntry.classList.add(...this.accessedStyle);
         });
     }
