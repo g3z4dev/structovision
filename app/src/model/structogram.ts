@@ -1,7 +1,7 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement} from "./statement";
-import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, typeIdentifierToType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType } from "./types";
+import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType } from "./types";
 
 
 export interface Identifiable {
@@ -291,7 +291,7 @@ export class Structogram {
         
 
         function loadWith(entries: any, loader:(a: string, type: ValueType) => void) {
-            for(const entry of entries) loader(entry["key"], typeIdentifierToType(entry["type"]));
+            for(const entry of entries) loader(entry["key"], parseType(entry["type"]));
         }
 
         loadWith(input, (key, type) => this.defineInputData(key, type));

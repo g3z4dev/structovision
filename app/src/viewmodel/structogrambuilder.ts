@@ -9,7 +9,8 @@ import statementOptionTemplate from "../../resources/settings/structogram-option
 import booleanStatementListOptionTemplate from "../../resources/settings/structogram-options/booleanstatementlistoption.html";
 import keyOptionTemplate from "../../resources/settings/structogram-options/keyoption.html";
 import dataSettingsTemplate from "../../resources/settings/datasettings.html";
-import { booleanType, numberType, SimpleValue, stringType, typeIdentifierToType, typeRegistry, ValueType, type Value } from "../model/types";
+import { booleanType, numberType, SimpleValue, stringType, parseType, typeRegistry, ValueType, type Value, TypeParseError } from "../model/types";
+import { Translator } from "./lang";
 
 
 const strToType: Record<string, ValueType> = {
@@ -217,9 +218,9 @@ class SpecificationChangeAction extends BuilderAction {
             }
         }
 
-        loader(this.oldInput, (key, type) => this.structogram.defineInputData(key, strToType[type]!));
-        loader(this.oldAux, (key, type) => this.structogram.defineAuxData(key, strToType[type]!));
-        loader(this.oldOutput, (key, type) => this.structogram.defineOutputData(key, strToType[type]!));
+        loader(this.oldInput, (key, type) => this.structogram.defineInputData(key, parseType(type)));
+        loader(this.oldAux, (key, type) => this.structogram.defineAuxData(key, parseType(type)));
+        loader(this.oldOutput, (key, type) => this.structogram.defineOutputData(key, parseType(type)));
 
         return new SpecificationChangeAction(this.structogram, this.oldInput, this.oldAux, this.oldOutput, this.newInput, this.newAux, this.newOutput);
     }
@@ -911,17 +912,38 @@ class SpecificationSettingHandler {
 
         const inputEntries = this.parseEntryElems(inputDataEntries);
         for(const [key, type] of inputEntries) {
-            this.structogramBuilder.structogram.defineInputData(key, typeIdentifierToType(type));
+            try {
+                this.structogramBuilder.structogram.defineInputData(key, parseType(type));
+            } catch(error) {
+                if(error instanceof TypeParseError) {
+                    //TODO dynamic highlight
+                    alert("bad type");
+                }
+            }
         }
 
         const auxEntries = this.parseEntryElems(auxDataEntries);
         for(const [key, type] of auxEntries) {
-            this.structogramBuilder.structogram.defineAuxData(key, typeIdentifierToType(type));
+            try {
+                this.structogramBuilder.structogram.defineAuxData(key, parseType(type));
+            } catch(error) {
+                if(error instanceof TypeParseError) {
+                    //TODO dynamic highlight
+                    alert("bad type");
+                }
+            }
         }
 
         const outputEntries = this.parseEntryElems(outputDataEntries);
         for(const [key, type] of outputEntries) {
-            this.structogramBuilder.structogram.defineOutputData(key, typeIdentifierToType(type));
+            try {
+                this.structogramBuilder.structogram.defineOutputData(key, parseType(type));
+            } catch(error) {
+                if(error instanceof TypeParseError) {
+                    //TODO dynamic highlight
+                    alert("bad type");
+                }
+            }
         }
 
         this.emitter.emit(SpecificationSettingHandler.specificationChanged, inputEntries, auxEntries, outputEntries, oldInput, oldAux, oldOutput);
@@ -962,10 +984,11 @@ class SpecificationSettingHandler {
 
     private addEntry(key: string, type: ValueType, entriesElem: HTMLElement) {
         const entryElem = this.entryTemplateElem?.cloneNode(true) as HTMLElement;
+        Translator.translateContent(entryElem);
         const textfield = entryElem.querySelector(`.t-key-textfield`) as HTMLFormElement;
         textfield.value = key;
-        const select = entryElem.querySelector(`.t-type-selector`) as HTMLSelectElement;
-        select.value = type.getIdentifier();
+        const typeSelectorField = entryElem.querySelector(`.t-type-selector`) as HTMLSelectElement;
+        typeSelectorField.value = type.getIdentifier();
         const removeButton = entryElem.querySelector(`.t-del-button`) as HTMLButtonElement;
         entriesElem.appendChild(entryElem);
         removeButton.addEventListener("click", () => {
@@ -975,7 +998,7 @@ class SpecificationSettingHandler {
         textfield.addEventListener("change", () => {
             this.flushToStructogram();
         });
-        select.addEventListener("change", () => {
+        typeSelectorField.addEventListener("change", () => {
             this.flushToStructogram();
         });
     }

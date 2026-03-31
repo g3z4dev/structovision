@@ -19,7 +19,7 @@ export type _Value = Primitive | UtilityObject | UtilityArray | undefined;
 type ValueTypeFunction = (typeParameter: ValueType[]) => ValueType;
 
 export class ValueType {
-    public readonly baseIdentifier: string;
+    public baseIdentifier: string;
     public readonly orderable: boolean;
 
     constructor(identifier: string, orderable: boolean = false) {
@@ -94,7 +94,18 @@ export class ArrayType extends ValueType {
     }
 
     public override getIdentifier(): string {
-        return `${this.baseIdentifier}<${this.elementType.getIdentifier()}>`
+        return `${this.baseIdentifier}<${this.elementType.getIdentifier()}>`;
+    }
+}
+
+export class StringType extends ArrayType {
+    constructor() {
+        super(charType, true);
+        this.baseIdentifier = "string";
+    }
+
+    public override getIdentifier(): string {
+        return "string";
     }
 }
 
@@ -147,7 +158,7 @@ export const charType = new ValueType("char", true);
 export const booleanType = new ValueType("boolean");
 export const anyType = new AnyType();
 export const undefinedType = new UndefinedType();
-export const stringType = new ArrayType(charType, true);
+export const stringType = new StringType();
 
 // Field definitions
 
@@ -400,6 +411,10 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
         // todo type check
         return new UtilityString(this.elements.concat(other.elements));
     }
+
+    public getClassIdentifier(): string {
+        return "string"
+    }
 }
 
 export class UtilityObject implements ClassIdentifiable, Value {
@@ -485,6 +500,7 @@ registerType(numberType, v => numberType);
 registerType(charType, v => charType);
 registerType(booleanType, v => booleanType);
 registerType(new ArrayType(numberType), v => new ArrayType(v));
+registerType(stringType, v => stringType);
 registerType(SinglyLinkedListNodeTemplate.getType([numberType]), v => SinglyLinkedListNodeTemplate.getType([v]));
 registerType(DoublyLinkedListNodeTemplate.getType([numberType]), v => DoublyLinkedListNodeTemplate.getType([v]));
 registerType(BinaryTreeNodeTemplate.getType([numberType]), v => BinaryTreeNodeTemplate.getType([v]));
@@ -493,9 +509,19 @@ function splitTypeTokens(typeIdentifier: string) {
     return typeIdentifier.split("<").map(t => t.split(">")[0]!);
 }
 
-export function typeIdentifierToType(typeIdentifier: string): ValueType {
+export class TypeParseError extends Error {
+    constructor(m: string) {
+        super(m);
+
+        Object.setPrototypeOf(this, TypeParseError.prototype);
+    }
+}
+
+export function parseType(typeIdentifier: string): ValueType {
     const typeTokens = splitTypeTokens(typeIdentifier);
+    if(typeTokens.some(t => !(t in typeRegistry))) throw new TypeParseError("Invalid type identifier!");
     const types = typeTokens.map(t => typeRegistry[t]).reverse();
+    if(types.length == 0) return undefinedType;
     let lastType = types[0]!(undefinedType);
     for(let i = 1; i < types.length; i++) {
         lastType = types[i]!(lastType);
