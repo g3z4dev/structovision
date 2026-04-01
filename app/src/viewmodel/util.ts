@@ -33,6 +33,32 @@ export function setPosition(elem: Element, x: number, y: number) {
     setY(elem, y);
 }
 
+export function setX1(elem: Element, x: number) {
+    elem.setAttribute("x1", `${x}`);
+}
+
+export function setY1(elem: Element, y: number) {
+    elem.setAttribute("y1", `${y}`);
+}
+
+export function setPosition1(elem: Element, x: number, y: number) {
+    setX1(elem, x);
+    setY1(elem, y);
+}
+
+export function setX2(elem: Element, x: number) {
+    elem.setAttribute("x2", `${x}`);
+}
+
+export function setY2(elem: Element, y: number) {
+    elem.setAttribute("y2", `${y}`);
+}
+
+export function setPosition2(elem: Element, x: number, y: number) {
+    setX2(elem, x);
+    setY2(elem, y);
+}
+
 export function setWidth(elem: Element, width: number) {
     elem.setAttribute("width", `${width}`);
 }
@@ -153,4 +179,8 @@ export class ListWindow {
     public hide() {
         this.window.classList.add("hidden");
     }
+}
+
+export function lerp(v1: number, v2: number, t: number) {
+    return v1 + (v2-v1)*t;
 }

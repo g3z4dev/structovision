@@ -2,7 +2,7 @@ import {test, type IAssert} from "zora";
 import {BooleanStatement, NumericStatement, CharStatement, StatementParseError, AnyStatement, StringStatement} from "@structovision/app/model/statement";
 import { Memory } from "@structovision/app/model/memory";
 import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityArray, UtilityString, type Primitive, type Value } from "@structovision/app/model/types";
-import { array, b, boolArray, btn, c, charArray, n, numArray, s1l, s2l, str, ud } from "../testutil.ts";
+import { array, b, boolArray, btn, c, charArray, jsonEqual, n, numArray, s1l, s2l, str, ud } from "../testutil.ts";
 
 const placeholderMemory: Memory = new Memory();
 
@@ -27,7 +27,7 @@ function testAnyStatement(assertion: IAssert, statement: string, result: Value, 
 }
 
 function testAnyStatementObject(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory) {
-    assertion.equal(JSON.stringify(AnyStatement.parse(statement, memory).evaluate()), JSON.stringify(result), `${statement} should be ${result}`);
+    jsonEqual(assertion, AnyStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
 }
 
 test("statements with one literal should work correctly", (assertion) => {

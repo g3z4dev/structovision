@@ -1,7 +1,7 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement} from "./statement";
-import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType } from "./types";
+import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject } from "./types";
 
 
 export interface Identifiable {
@@ -682,7 +682,16 @@ export class AssignmentBlock extends SequenceBlock {
 
     public override run(): StructogramBlock | undefined {
         this.activeStep = "main";
-        this._associatedStructogram.memory.setVariable(this.key!, this.statement!.evaluate());
+        const keyTokens = this.key!.split(".");
+        if(keyTokens.length == 1) {
+            this._associatedStructogram.memory.setVariable(this.key!, this.statement!.evaluate());
+        } else {
+            let object = this._associatedStructogram.memory.getVariable(keyTokens[0]!);
+            for(let i = 1; i < keyTokens.length-1; i++) {
+                object = (object as UtilityObject).get(keyTokens[i]!);
+            }
+            (object as UtilityObject).set(keyTokens.at(-1)!, this.statement!.evaluate());
+        }
         return this.next;
     }
 
@@ -696,7 +705,40 @@ export class AssignmentBlock extends SequenceBlock {
 
     public override parseAndCheckForIssues(): StructogramIssue[] {
         this.key = this.keyOption.getKey();
+        const keyTokens = this.key.split(".");
+        const memoryKey = keyTokens[0]!;
         const issues = [];
+        const memory = this._associatedStructogram.memory;
+
+        function verifyFieldsExist() {
+            let type = memory.getType(memoryKey);
+            if(keyTokens.length <= 1) return true;
+            for(let i = 1; i < keyTokens.length; i++) {
+                if(!(type instanceof ObjectType)) return false;
+                if(!type.hasField(keyTokens[i]!)) return false;
+                type = type.getFieldType(keyTokens[i]!);
+            }
+            return true;
+        }
+
+        function getObjectOrFieldType() {
+            let type = memory.getType(memoryKey);
+            if(keyTokens.length <= 1) return type;
+            for(let i = 1; i < keyTokens.length; i++) {
+                type = (type as ObjectType).getFieldType(keyTokens[i]!);
+            }
+            return type;
+        }
+
+        function isFieldSetable() {
+            let type = memory.getType(memoryKey);
+            if(keyTokens.length <= 1) return true;
+            for(let i = 1; i < keyTokens.length-1; i++) {
+                type = (type as ObjectType).getFieldType(keyTokens[i]!);
+            }
+            return (type as ObjectType).canBeSet(keyTokens.at(-1)!);
+        }
+
         try {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
@@ -704,11 +746,15 @@ export class AssignmentBlock extends SequenceBlock {
                 issues.push(new StructogramIssue(this.id, error.message));
             }
         }
-        if(!this._associatedStructogram.memory.hasVariable(this.key)) {
-            issues.push(new StructogramIssue(this.id, `Variable with key [${this.key}] is not defined!`));
-        } else if(!this._associatedStructogram.memory.getType(this.key).matches(this.statement?.getReturnType() ?? undefinedType)) {
+        if(!memory.hasVariable(memoryKey)) {
+            issues.push(new StructogramIssue(this.id, `Variable with key [${memoryKey}] is not defined!`));
+        } else if(!verifyFieldsExist()) {
+            issues.push(new StructogramIssue(this.id, `[${this.key}] does not exist!`));
+        } else if(!getObjectOrFieldType().matches(this.statement?.getReturnType() ?? undefinedType)) {
             issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`));
-        } else if(this._associatedStructogram.memory.isConstant(this.key)) {
+        } else if(!isFieldSetable()) {
+            issues.push(new StructogramIssue(this.id, `[${this.key}] cannot be set!`));
+        } else if(keyTokens.length == 1 && this._associatedStructogram.memory.isConstant(this.key)) {
             issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
         }
         return issues;

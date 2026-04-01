@@ -57,6 +57,11 @@ export function ud() {
     return SimpleValue.undefined();
 }
 
+// we need to scrub the uniqueness of objects to compare them by json
+function scrubID(jsonText: string) {
+    jsonText.replace(new RegExp("\"object\d+\""), "\"object\"");
+}
+
 export function jsonEqual(assertion: IAssert, a: any, b: any, text: string) {
-    assertion.equal(JSON.stringify(a), JSON.stringify(b), text);
+    assertion.equal(scrubID(JSON.stringify(a)), scrubID(JSON.stringify(b)), text);
 }

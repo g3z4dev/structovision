@@ -111,7 +111,7 @@ test("Memory should be 'strongly-typed' and should not allow a variable to chang
     for(const [type, value] of cartesian(types, values).filter(([t, v]) => !v.getType().matches(t))) {
         mem.clear();
         mem.createVariable("a", type);
-        assertion.throws(() => mem.setVariable("a", value), Error, `setting a variable of type ${type.identifier} to a value of type ${value.getType().identifier} should throw an error`);
+        assertion.throws(() => mem.setVariable("a", value), Error, `setting a variable of type ${type.getIdentifier()} to a value of type ${value.getType().getIdentifier()} should throw an error`);
     }
 });
 

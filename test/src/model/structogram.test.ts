@@ -2,7 +2,7 @@ import {test} from "zora";
 import ee2 from "eventemitter2"
 import {Structogram, AssignmentBlock, PrintBlock, TrueFalseBranchingBlock, MultiBranchingBlock, CountingLoopBlock, FrontTestingLoopBlock, BackTestingLoopBlock} from "@structovision/app/model/structogram";
 import { cartesian, jsonEqual, n } from "../testutil.ts";
-import { booleanType, numberType, SimpleValue, stringType } from "@structovision/app/model/types";
+import { booleanType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityObject } from "@structovision/app/model/types";
 
 function createBasicStructogram(): [ee2.EventEmitter2, Structogram] {
     const emitter = new ee2.EventEmitter2();
@@ -545,4 +545,23 @@ test("invalid input should result in an issue being raised", assertion => {
     assertion.truthy(structogram.preRun(["1","3"]).length > 0, `too many inputs should raise an issue`);
     assertion.truthy(structogram.preRun([]).length > 0, `missing input should raise an issue`);
     assertion.truthy(structogram.preRun(["invalid"]).length > 0, `invalid input should raise an issue`);
+});
+
+test("assignment blocks should work as expected with fields", assertion => {
+    const [_, structogram] = createBasicStructogram();
+
+    structogram.defineAuxData("a", SinglyLinkedListNodeTemplate.getType([numberType]));
+
+    const assignmentBlock1 = new AssignmentBlock(structogram);
+    assignmentBlock1.keyOption.setKey("a");
+    assignmentBlock1.statementOption.setStatement("s1l(3)");
+    structogram.startingBlock = assignmentBlock1;
+    const assignmentBlock2 = new AssignmentBlock(structogram);
+    assignmentBlock2.keyOption.setKey("a.next");
+    assignmentBlock2.statementOption.setStatement("s1l(4)");
+    assignmentBlock1.next = assignmentBlock2;
+    
+    runStructogram(structogram);
+
+    jsonEqual(assertion, (structogram.memory.getVariable("a") as UtilityObject).get("next"), SinglyLinkedListNodeTemplate.construct([SimpleValue.number(4)]), "a stuctrogram should be able to assign a field's value")
 });

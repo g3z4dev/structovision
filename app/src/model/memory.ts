@@ -69,7 +69,7 @@ export class Memory {
         }
         const entry = new MemoryEntry(key, value, constant);
         this.variables[key] = entry;
-        this.emitter.emit(Memory.variableAddedEvent, key, entry);
+        this.emitter.emit(Memory.variableAddedEvent, entry);
     }
 
     public setVariable(key: string, value: Value) {
@@ -91,8 +91,12 @@ export class Memory {
     }
 
     // todo test if this exposes the inner state or not
-    public getEntries(): [string, MemoryEntry][] {
-        return [...Object.entries(this.variables)];
+    public getEntries(): MemoryEntry[] {
+        return [...Object.values(this.variables)];
+    }
+
+    public getAllValuesWithBaseIdentifier(id: string) {
+        return this.getEntries().filter(value => value.type.baseIdentifier == id);
     }
 
     public getType(key: string): ValueType {

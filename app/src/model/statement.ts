@@ -182,7 +182,7 @@ class ObjectConstructor extends Operator {
 class ObjectGetOperator extends Operator {
 
     public constructor() {
-        super(99, ".", types => types[0]!.getIdentifier().startsWith("object") && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
+        super(99, ".", types => types[0]!.hasFields() && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
     }
 
     public override apply(operands: Value[]): Value {
@@ -210,9 +210,8 @@ class ObjectGetOperator extends Operator {
         if(!(parameterTypes[1] instanceof TokenType)) throw new Error("Second parameter is not a token!");
         const objectType = parameterTypes[0]!;
         const field = parameterTypes[1].token;
-        const type = objectType.getFieldType(field);
-        if(!type) throw new StatementParseError(`Calling non-existing field [${field}] on object [${objectType.getIdentifier()}]!`);
-        return type;
+        if(!objectType.hasField(field)) throw new StatementParseError(`Calling non-existing field [${field}] on object [${objectType.getIdentifier()}]!`);
+        return objectType.getFieldType(field);
     }
 }
 
@@ -271,7 +270,7 @@ registerOperator(new UnaryOperator(7, "-", UnaryOperator.matchesSomeFn([numberTy
 registerOperator(new UnaryOperator(7, "sqrt", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.sqrt(((a as SimpleValue).value as number)))));
 registerOperator(new UnaryOperator(7, "log", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))));
 registerOperator(new UnaryOperator(7, "abs", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.abs(((a as SimpleValue).value as number)))));
-registerOperator(new UnaryOperator(7, "len", types => types[0]!.baseIdentifier == "array", numberType, a => SimpleValue.number((a as UtilityArray).length)));
+registerOperator(new UnaryOperator(7, "len", types => types[0]!.baseIdentifier == "array" || types[0]!.baseIdentifier == "string", numberType, a => SimpleValue.number((a as UtilityArray).length)));
 
 // Logic Operators
 registerOperator(new BinaryOperator(1, "and", BinaryOperator.matchesSomePairsFn([[booleanType, booleanType]]), booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) && ((b as SimpleValue).value as boolean))));
@@ -467,7 +466,7 @@ class StringLiteral extends ResolvableOperand {
     }
 
     public getType(): ValueType {
-        return new ArrayType(charType);
+        return stringType;
     }
 
     public getRepresentation(): string {
