@@ -7,9 +7,11 @@ export interface ClassIdentifiable {
 }
 
 export interface Value {
+    get id(): string;
     getType(): ValueType;
     equals(t: Value): boolean;
     asString(): string;
+    tryClone(): Value;
 }
 
 export interface Ordered<T> {
@@ -239,6 +241,8 @@ export interface UtilityObjectTemplateBuilder {
 }
 
 export class SimpleValue implements Value, Ordered<SimpleValue> {
+    protected static idSeq = 0;
+    public readonly id: string = `simplevalue${SimpleValue.idSeq++}`;
     public value: Primitive | undefined;
     public readonly type: ValueType;
 
@@ -287,6 +291,10 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
 
     public asString(): string {
         return this.value?.toString() ?? "undefined";
+    }
+
+    public tryClone(): SimpleValue {
+        return new SimpleValue(this.value, this.type);
     }
 }
 
@@ -341,7 +349,10 @@ export class UtilityObjectTemplate {
 export class UtilityArray implements ClassIdentifiable, Value {
     protected elements: Value[];
     protected elementType: ValueType;
-    public static readonly id = "array";
+    protected static idSeq = 0;
+    public readonly id: string = `array${UtilityArray.idSeq++}`;
+    public static readonly emitter = new EventEmitter2();
+    public static readonly elementChanged = "utilityarray.element.changed";
 
     constructor(values: Value[], elementType: ValueType) {
         UtilityArray.ensureValuesAreHomogenous(values)
@@ -362,7 +373,9 @@ export class UtilityArray implements ClassIdentifiable, Value {
     }
 
     public indexSet(idx: number, value: Value): void {
-        this.elements[idx] = value;
+        console.log(idx)
+        this.elements[idx] = value.tryClone();
+        UtilityArray.emitter.emit(UtilityArray.elementChanged, this, idx, this.elements[idx]);
     }
 
     public get length() {
@@ -374,7 +387,7 @@ export class UtilityArray implements ClassIdentifiable, Value {
     }
 
     public getClassIdentifier(): string {
-        return UtilityArray.id;
+        return "array";
     }
 
     public equals(t: Value): boolean {
@@ -391,6 +404,10 @@ export class UtilityArray implements ClassIdentifiable, Value {
 
     public asString(): string {
         return "{" + this.elements.map(e => e.asString()).join() + "}"
+    }
+
+    public tryClone(): UtilityArray {
+        return this;
     }
 }
 
@@ -484,6 +501,10 @@ export class UtilityObject implements ClassIdentifiable, Value {
 
     public asString(): string {
         return this.id;
+    }
+
+    public tryClone(): UtilityObject {
+        return this;
     }
 }
 

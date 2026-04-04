@@ -74,8 +74,9 @@ export class Memory {
 
     public setVariable(key: string, value: Value) {
         if(key in this.variables) {
+            const prevValue = this.variables[key]!.value;
             this.variables[key]!.value = value;
-            this.emitter.emit(Memory.variableChangedEvent, key, value);
+            this.emitter.emit(Memory.variableChangedEvent, key, prevValue, value);
             return;
         }
         throw new Error(`Variable with key [${key}] does not exist!`);
@@ -123,9 +124,10 @@ export class Memory {
 
     public changeVariable(key: string, fn: (v:Value) => Value) {
         if(key in this.variables) {
+            const prevValue = this.variables[key]!.value;
             const value = fn(this.variables[key]!.value)
             this.variables[key]!.value = value;
-            this.emitter.emit(Memory.variableChangedEvent, key, value);
+            this.emitter.emit(Memory.variableChangedEvent, key, prevValue, value);
             return;
         }
         

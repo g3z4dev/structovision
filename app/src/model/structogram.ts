@@ -1,7 +1,7 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement} from "./statement";
-import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject } from "./types";
+import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
 
 
 export interface Identifiable {
@@ -670,6 +670,10 @@ export abstract class SequenceBlock extends StructogramBlock {
     }
 }
 
+function isNumeric(text: string) {
+    return [...text].every(c => "0" <= c && c <= "9");
+}
+
 export class AssignmentBlock extends SequenceBlock {
     private key: string | undefined;
     private statement: AnyStatement | undefined;
@@ -682,15 +686,24 @@ export class AssignmentBlock extends SequenceBlock {
 
     public override run(): StructogramBlock | undefined {
         this.activeStep = "main";
-        const keyTokens = this.key!.split(".");
+        const keyTokens = this.key!.split(new RegExp("\\.|\\[|\\]")).filter(s => s.length > 0);
         if(keyTokens.length == 1) {
             this._associatedStructogram.memory.setVariable(this.key!, this.statement!.evaluate());
         } else {
             let object = this._associatedStructogram.memory.getVariable(keyTokens[0]!);
             for(let i = 1; i < keyTokens.length-1; i++) {
-                object = (object as UtilityObject).get(keyTokens[i]!);
+                const token = keyTokens[i];
+                if(object instanceof UtilityArray) {
+                    object.indexGet(Number(token));
+                } else {
+                    object = (object as UtilityObject).get(keyTokens[i]!);
+                }
             }
-            (object as UtilityObject).set(keyTokens.at(-1)!, this.statement!.evaluate());
+            if(object instanceof UtilityArray) {
+                object.indexSet(Number(keyTokens.at(-1)!), this.statement!.evaluate());
+            } else {
+                (object as UtilityObject).set(keyTokens.at(-1)!, this.statement!.evaluate());
+            }
         }
         return this.next;
     }
@@ -705,8 +718,8 @@ export class AssignmentBlock extends SequenceBlock {
 
     public override parseAndCheckForIssues(): StructogramIssue[] {
         this.key = this.keyOption.getKey();
-        const keyTokens = this.key.split(".");
-        const memoryKey = keyTokens[0]!;
+        const keyTokens = this.key.split(new RegExp("\\.|\\[|\\]")).filter(s => s.length > 0);
+        let memoryKey = keyTokens[0]!;
         const issues = [];
         const memory = this._associatedStructogram.memory;
 
@@ -714,9 +727,15 @@ export class AssignmentBlock extends SequenceBlock {
             let type = memory.getType(memoryKey);
             if(keyTokens.length <= 1) return true;
             for(let i = 1; i < keyTokens.length; i++) {
-                if(!(type instanceof ObjectType)) return false;
-                if(!type.hasField(keyTokens[i]!)) return false;
-                type = type.getFieldType(keyTokens[i]!);
+                const token = keyTokens[i]!;
+                if(isNumeric(token)) {
+                    if(!(type instanceof ArrayType)) return false;
+                    type = type.elementType;
+                } else {
+                    if(!(type instanceof ObjectType)) return false;
+                    if(!type.hasField(keyTokens[i]!)) return false;
+                    type = type.getFieldType(keyTokens[i]!);
+                }
             }
             return true;
         }
@@ -725,7 +744,12 @@ export class AssignmentBlock extends SequenceBlock {
             let type = memory.getType(memoryKey);
             if(keyTokens.length <= 1) return type;
             for(let i = 1; i < keyTokens.length; i++) {
-                type = (type as ObjectType).getFieldType(keyTokens[i]!);
+                const token = keyTokens[i]!;
+                if(isNumeric(token) && type instanceof ArrayType) {
+                    type = type.elementType;
+                } else {
+                    type = (type as ObjectType).getFieldType(keyTokens[i]!);
+                }
             }
             return type;
         }
@@ -734,9 +758,14 @@ export class AssignmentBlock extends SequenceBlock {
             let type = memory.getType(memoryKey);
             if(keyTokens.length <= 1) return true;
             for(let i = 1; i < keyTokens.length-1; i++) {
-                type = (type as ObjectType).getFieldType(keyTokens[i]!);
+                const token = keyTokens[i]!;
+                if(isNumeric(token) && type instanceof ArrayType) {
+                    type = type.elementType;
+                } else {
+                    type = (type as ObjectType).getFieldType(keyTokens[i]!);
+                }
             }
-            return (type as ObjectType).canBeSet(keyTokens.at(-1)!);
+            return type instanceof ArrayType || (type as ObjectType).canBeSet(keyTokens.at(-1)!);
         }
 
         try {

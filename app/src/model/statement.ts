@@ -542,7 +542,7 @@ export abstract class Statement<T> {
 
     abstract evaluate(): T;
     protected evaluateInternally(): Value {
-        Statement.emitter.emit(Statement.evaluationStart, this.readableTokens);
+        Statement.emitter.emit(Statement.evaluationStart, this, this.readableTokens);
         const operands: (Value)[] = [];
         for(const token of this.evaluatableTokens) {
             if(token instanceof ResolvableOperand) {
@@ -558,7 +558,7 @@ export abstract class Statement<T> {
             }
         }
         const value = operands.pop()!;
-        Statement.emitter.emit(Statement.evaluationEnd, value);
+        Statement.emitter.emit(Statement.evaluationEnd, this, value);
         return value;
     }
 

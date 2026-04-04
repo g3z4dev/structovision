@@ -10,7 +10,7 @@ import operatorTemplate from "../../resources/program-views/logic-view-templates
 import operandTemplate from "../../resources/program-views/logic-view-templates/operand.html";
 
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
-import { SimpleValue, UtilityObject, type Value } from "../model/types";
+import { SimpleValue, UtilityArray, UtilityObject, type Value } from "../model/types";
 
 type RunMode = "onestep" | "run" | "paused";
 
@@ -334,6 +334,7 @@ class MemoryView extends ProgramView {
     private memoryTemplateElem = this.viewElem.querySelector(".t-memory-template")!.cloneNode(true) as HTMLElement;
     private readonly changedStyle = ["bg-orange-600"];
     private readonly accessedStyle = ["bg-green-600"];
+    private valueIDToMemoryKey: Record<string, string> = {};
     private changedElems: HTMLElement[] = [];
     private accessedElems: HTMLElement[] = [];
 
@@ -350,10 +351,13 @@ class MemoryView extends ProgramView {
         super(document.querySelector("#memory-view")!, runner);
         this.reset();
         const memory = this.runner.structogram.memory;
-        memory.emitter.addListener(Memory.variableAddedEvent, (entry) => {   
+        memory.emitter.addListener(Memory.variableAddedEvent, (entry: MemoryEntry) => {
+            this.valueIDToMemoryKey[entry.value.id] = entry.key;   
             this.addEntry(entry);
         });
-        memory.emitter.addListener(Memory.variableChangedEvent, (key, value) => {
+        memory.emitter.addListener(Memory.variableChangedEvent, (key: string, prevValue: Value, value: Value) => {
+            if(prevValue.id in this.valueIDToMemoryKey && prevValue.id != value.id) delete this.valueIDToMemoryKey[prevValue.id];
+            this.valueIDToMemoryKey[value.id] = key;
             const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
             setTemplateText(memoryEntry, "memory-value", value.asString());
             this.changedElems.push(memoryEntry);
@@ -363,6 +367,15 @@ class MemoryView extends ProgramView {
             const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
             this.accessedElems.push(memoryEntry);
             memoryEntry.classList.add(...this.accessedStyle);
+        });
+        UtilityArray.emitter.on(UtilityArray.elementChanged, (array: UtilityArray, _idx: number, value: Value) => {
+            const key = this.valueIDToMemoryKey[array.id];
+            if(key) {
+                const memoryEntry = this.memoryViewEntriesElem.querySelector(`#v-${key}`) as HTMLElement;
+                setTemplateText(memoryEntry, "memory-value", array.asString());
+                this.changedElems.push(memoryEntry);
+                memoryEntry.classList.add(...this.changedStyle);
+            }
         });
     }
 
@@ -422,19 +435,33 @@ class LogicView extends ProgramView implements AnimatedView {
     constructor(runner: StructogramRunner) {
         super(document.querySelector("#logic-view")!, runner);
         this.reset();
-        Statement.emitter.on(Statement.evaluationStart, (statementTokens: (ResolvableOperand | Operator | Bracket)[]) =>{
-            for(const token of statementTokens) {
-                if(token instanceof ResolvableOperand) {
-                    this.addOperand(token);
-                } else {
-                    this.addOperator(token);
+        let arrayDepth = 0;
+        Statement.emitter.on(Statement.evaluationStart, (statement: Statement<any>, statementTokens: (ResolvableOperand | Operator | Bracket)[]) =>{
+            if(statement.getReturnType().baseIdentifier == "array") {
+                arrayDepth++;
+                this.addOperator("{");
+            } else {
+                for(const token of statementTokens) {
+                    if(token instanceof ResolvableOperand) {
+                        this.addOperand(token);
+                    } else {
+                        this.addOperator(token);
+                    }
                 }
             }
         });
         
-        Statement.emitter.on(Statement.evaluationEnd, (result: Value) =>{
-            this.addOperator("->");
-            this.addOperand(result.asString());
+        Statement.emitter.on(Statement.evaluationEnd, (statement: Statement<any>, result: Value) =>{
+            if(statement.getReturnType().baseIdentifier == "array") {
+                arrayDepth--;
+                this.addOperator("}");
+            } else {
+                this.addOperator("->");
+                this.addOperand(result.asString());
+                if(arrayDepth > 0) {
+                    this.addOperator(",");
+                }
+            }
         });
     }
 
@@ -455,7 +482,7 @@ abstract class ObjectRenderer {
     protected objectCanvas: HTMLCanvasElement;
     protected objectBaseIdentifier: string;
     protected allObjectsByMemoryKey: Record<string, Value>;
-    protected allObjectsByID: Record<string, UtilityObject>;
+    protected allObjectsByID: Record<string, Value>;
     protected idToMemoryKey: Record<string, string>;
     protected memory: Memory;
     protected selectors: string[];
@@ -489,48 +516,45 @@ abstract class ObjectRenderer {
         this.memory = memory;
         this.idToMemoryKey = {};
         this.allObjectsByMemoryKey = memory.getAllValuesWithBaseIdentifier(objectBaseIdentifier).reduce((acc, cur) => {
-            const obj = cur.value as UtilityObject;
-            acc[cur.key] = obj;
-            this.idToMemoryKey[obj.id] = cur.key;
+            acc[cur.key] = cur.value;
+            this.idToMemoryKey[cur.value.id] = cur.key;
             return acc;
-        }, {} as Record<string, UtilityObject>);
+        }, {} as Record<string, Value>);
         this.allObjectsByID = Object.values(this.allObjectsByMemoryKey).reduce((acc, cur) => {
-            if(cur instanceof UtilityObject) {
-                acc[cur.id] = cur;
-            }
+            acc[cur.id] = cur;
             return acc;
-        }, {} as Record<string, UtilityObject>);
+        }, {} as Record<string, Value>);
         this.onObjectsChanged();
-        this.memory.emitter.on(Memory.variableAddedEvent, (entry: MemoryEntry) => {
-            if(entry.type.baseIdentifier == objectBaseIdentifier) {
-                this.allObjectsByMemoryKey[entry.key] = entry.value;
-                if(entry.value instanceof UtilityObject) {
-                    this.allObjectsByID[entry.value.id] = entry.value;
-                    this.idToMemoryKey[entry.value.id] = entry.key;
-                }
-                this.onObjectsChanged();
-            }
-        });
-        this.memory.emitter.on(Memory.variableChangedEvent, (key: string, value: Value) => {
-            if(key in this.allObjectsByMemoryKey && value instanceof UtilityObject) {
-                const prevValue = this.allObjectsByMemoryKey[key];
+        this.memory.emitter.on(Memory.variableChangedEvent, (key: string, _prevValue: Value, value: Value) => {
+            if(value.getType().baseIdentifier == objectBaseIdentifier) {
+                const prevValue = this.allObjectsByMemoryKey[key]!;
                 this.allObjectsByMemoryKey[key] = value;
-                if(value instanceof UtilityObject) {
+                if(value.getType().isDefined()) {
                     this.allObjectsByID[value.id] = value;
                     this.idToMemoryKey[value.id] = key;
-                } else if(prevValue instanceof UtilityObject){
+                } else if(prevValue.getType().isDefined()){
                     delete this.allObjectsByID[prevValue.id];
                     delete this.idToMemoryKey[key];
                 }
                 this.onObjectsChanged();
             }
         });
-        UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, key: string, value: Value) => {
-            if(object.getType().baseIdentifier == objectBaseIdentifier && value instanceof UtilityObject) {
+        UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, _key: string, value: Value) => {
+            if(value.getType().baseIdentifier == objectBaseIdentifier) {
                 this.allObjectsByID[value.id] = value;
+            }
+            if(object.getType().baseIdentifier == objectBaseIdentifier) {
                 this.onObjectsChanged();
             }
-        })
+        });
+        UtilityArray.emitter.addListener(UtilityArray.elementChanged, (object: UtilityObject, _idx: number, value: Value) => {
+            if(value.getType().baseIdentifier == objectBaseIdentifier) {
+                this.allObjectsByID[value.id] = value;
+            }
+            if(object.getType().baseIdentifier == objectBaseIdentifier) {
+                this.onObjectsChanged();
+            }
+        });
     }
 
     public updateSelectors(selectors: string[]) {
@@ -702,7 +726,7 @@ class S1LRenderer extends ObjectRenderer {
                 child = child.get("next");
             }
         }
-        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!);
+        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
         let yOffset = this.y;
         const newRegistry: Record<string, S1LRenderData> = {};
         for(const ir of independentRoots) {
@@ -816,7 +840,7 @@ class S2LRenderer extends ObjectRenderer {
                 child = child.get("next");
             }
         }
-        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!);
+        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
         let yOffset = this.y;
         const newRegistry: Record<string, S2LRenderData> = {};
         const allNodes: UtilityObject[] = [];
@@ -944,7 +968,7 @@ class BTNRenderer extends ObjectRenderer {
                 }
             }
         }
-        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!);
+        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
         let yOffset = this.y;
         const newRegistry: Record<string, BTNRenderData> = {};
         const allNodes: UtilityObject[] = [];
@@ -1046,6 +1070,78 @@ class BTNRenderer extends ObjectRenderer {
     }
 }
 
+class ArrayElementRenderData extends NodeRenderData {
+
+    constructor(content: string, objectCanvas: HTMLCanvasElement, x: number, y:number, w: number, h: number) {
+        super(content, undefined, objectCanvas, x, y, w, h);
+    }
+
+    public render(progress: number) {
+        const ctx = this.objectCanvas.getContext("2d")!;
+        ctx.fillStyle = "white";
+        const x = this.getX(progress);
+        const y = this.getY(progress);
+        ctx.fillRect(x, y, this.w, this.h);
+        ctx.strokeStyle = "black";
+        ctx.strokeRect(x, y, this.w, this.h);
+        this.drawOnlyContent(ctx, x, y);
+    }
+
+    public getY(t: number): number {
+        if(this.targetX != this.originX) return super.getY(t)+30*(-2*Math.abs(t-0.5)+1);
+        return super.getY(t);
+    }
+}
+
+class ArrayRenderer extends ObjectRenderer {
+    private nodeRegistry: Record<string, ArrayElementRenderData> = {};
+    private readonly nodeWidth = 20;
+    private readonly nodeHeight = 20;
+
+    private get nodes() {
+        return Object.values(this.nodeRegistry);
+    }
+
+    constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
+        super(objectCanvas, "array", selectors, memory);
+        this.onObjectsChanged();
+    }
+
+    public override render(progress: number): void {
+        this.nodes.forEach(r => r.render(progress));
+    }
+
+    public override onObjectsChanged() {
+        const arrays: UtilityArray[] = Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityArray).map(e => e[1]!) as UtilityArray[];
+        let yOffset = this.y;
+        const newRegistry: Record<string, ArrayElementRenderData> = {};
+        for(const array of arrays) {
+            let xOffset = 0;
+            for(let i = 0; i < array.length; i++) {
+                const element = array.indexGet(i);
+                const elementID = element.id;
+                if(elementID in this.nodeRegistry) {
+                    const data = this.nodeRegistry[elementID]!;
+                    data.targetX = xOffset;
+                    data.targetY = yOffset;
+                    data.content = element.asString();
+                    newRegistry[elementID] = data;
+                } else {
+                    newRegistry[elementID] = new ArrayElementRenderData(element.asString(), this.objectCanvas, xOffset, yOffset, this.nodeWidth, this.nodeHeight);
+                }
+                xOffset += this.nodeWidth;
+            }
+        }
+
+        if(yOffset > this.y) {
+            this.height = (yOffset-this.y)+this.nodeHeight;
+        } else {
+            this.height = 0;
+        }
+        this.nodeRegistry = newRegistry;
+    }
+}
+
 class ObjectView extends ProgramView implements AnimatedView {
     private objectCanvas: HTMLCanvasElement;
     private selectorsField: HTMLInputElement;
@@ -1069,7 +1165,8 @@ class ObjectView extends ProgramView implements AnimatedView {
         this.renderers = [
             new S1LRenderer(this.objectCanvas, this.selectors, runner.structogram.memory),
             new S2LRenderer(this.objectCanvas, this.selectors, runner.structogram.memory),
-            new BTNRenderer(this.objectCanvas, this.selectors, runner.structogram.memory)
+            new BTNRenderer(this.objectCanvas, this.selectors, runner.structogram.memory),
+            new ArrayRenderer(this.objectCanvas, this.selectors, runner.structogram.memory)
         ];
         ObjectRenderer.emitter.on(ObjectRenderer.heightChanged, () => {
             let yOffset = 0;
