@@ -184,3 +184,71 @@ export class ListWindow {
 export function lerp(v1: number, v2: number, t: number) {
     return v1 + (v2-v1)*t;
 }
+
+export class CameraHandler {
+    private _x = 0;
+    private _y = 0;
+    private _scale = 1;
+    private rightClickDown = false;
+
+    public get x() {
+        return this._x;
+    }
+    
+    private set x(x: number) {
+        this._x = x;
+    }
+
+    public get y() {
+        return this._y;
+    }
+    
+    private set y(y: number) {
+        this._y = y;
+    }
+
+    public get scale() {
+        return this._scale;
+    }
+    
+    private set scale(scale: number) {
+        this._scale = scale;
+    }
+    
+    constructor(associatedElement: HTMLElement, onChange: () => void = () => {}) {
+        let lastX = 0;
+        let lastY = 0;
+        associatedElement.addEventListener("mousedown", event => {
+            if(event.button == 2) {
+                lastX = event.clientX;
+                lastY = event.clientY;
+                this.rightClickDown = true;
+                event.preventDefault();
+            }
+        });
+        associatedElement.addEventListener("mousemove", event => {
+            if(this.rightClickDown) {
+                const deltaX = event.clientX - lastX;
+                const deltaY = event.clientY - lastY;
+                lastX = event.clientX;
+                lastY = event.clientY;
+                this.x += deltaX;
+                this.y += deltaY;
+                onChange();
+            }
+        });
+        document.addEventListener("mouseup", event => {
+            if(event.button == 2) {
+                this.rightClickDown = false;
+            }
+        });
+        associatedElement.addEventListener("contextmenu", event => {
+            event.preventDefault();
+        });
+        associatedElement.addEventListener("wheel", event => {
+            this.scale *= (1+Math.sign(event.deltaY)/20);
+            onChange();
+            event.preventDefault();
+        });
+    }
+}

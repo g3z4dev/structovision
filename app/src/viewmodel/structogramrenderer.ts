@@ -1,5 +1,5 @@
 import { BlockOption, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
-import { applyTransformation, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
+import { applyTransformation, CameraHandler, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
 import printBlockTemplate from "../../resources/blocks/printblock.html";
@@ -43,7 +43,8 @@ export class StructogramRenderer {
     protected structogramWidth = 1024;
     protected scale = 1;
     protected rightClickDown = false;
-    protected idPrefix;
+    public readonly idPrefix;
+    private readonly cameraHandler: CameraHandler;
 
     /**
      * This is potentially a temporary solution for removing specified listeners from an emitter.
@@ -67,7 +68,7 @@ export class StructogramRenderer {
         this.blockResourceManager.register("backtestingloopblock", backTestingLoopBlockTemplate);
         this.blockResourceManager.register("undefined", undefinedBlockTemplate);
         this.structogram = structogram;
-        this.setUpMovement();
+        this.cameraHandler = new CameraHandler(this.viewElement, () => this.updateStructogramViewTransformation());
         this.idPrefix = idPrefix;
         this.structogram.emitter.addListener(Structogram.issuesChangedEvent, (oldIssues: StructogramIssue[], newIssues: StructogramIssue[]) => {
             for(const issue of oldIssues) {
@@ -88,49 +89,12 @@ export class StructogramRenderer {
     }
 
     /**
-     * Sets up the controls for moving around the virtual "camera" of what we see from the structogram.
-     */
-    private setUpMovement() {
-        let lastX = 0;
-        let lastY = 0;
-        this.viewElement.addEventListener("mousedown", event => {
-            if(event.button == 2) {
-                lastX = event.clientX;
-                lastY = event.clientY;
-                this.rightClickDown = true;
-                event.preventDefault();
-            }
-        });
-        this.viewElement.addEventListener("mousemove", event => {
-            if(this.rightClickDown) {
-                const deltaX = event.clientX - lastX;
-                const deltaY = event.clientY - lastY;
-                lastX = event.clientX;
-                lastY = event.clientY;
-                this.originX += deltaX;
-                this.originY += deltaY;
-                this.updateStructogramViewTransformation();
-            }
-        });
-        document.addEventListener("mouseup", event => {
-            if(event.button == 2) {
-                this.rightClickDown = false;
-            }
-        });
-        this.viewElement.addEventListener("contextmenu", event => {
-            event.preventDefault();
-        });
-        this.viewElement.addEventListener("wheel", event => {
-            this.scale *= (1+Math.sign(event.deltaY)/20);
-            this.updateStructogramViewTransformation();
-            event.preventDefault();
-        })
-    }
-
-    /**
      * Updates the transformation used on the strutogramview to give the illusion of a camera moving.
      */
     protected updateStructogramViewTransformation() {
+        this.originX = this.cameraHandler.x;
+        this.originY = this.cameraHandler.y;
+        this.scale = this.cameraHandler.scale;
         applyTransformation(this.renderTarget, this.originX - this.originOffsetX, this.originY - this.originOffsetY, this.scale);
     }
 

@@ -1,7 +1,7 @@
 import { Structogram, StructogramBlock, StructogramIssue } from "../model/structogram";
 import { baseRunSpeed, notRunningClass, runningClass } from "./constants";
 import { StructogramRenderer } from "./structogramrenderer";
-import { lerp, ListWindow, parseIntoHTML, setHeight, setID, setPosition, setPosition1, setPosition2, setSize, setTemplateText, setWidth, setX } from "./util";
+import { CameraHandler, lerp, ListWindow, parseIntoHTML, setHeight, setID, setPosition, setPosition1, setPosition2, setSize, setTemplateText, setWidth, setX } from "./util";
 import EventEmitter2 from "eventemitter2";
 import { Memory, type MemoryEntry } from "../model/memory";
 import { Operand, Operator, ResolvableOperand, Statement, type Bracket } from "../model/statement";
@@ -175,7 +175,6 @@ export class StructogramRunner extends StructogramRenderer {
         super.runFrame(delta);
         this.programViewManager.render(this.animationProgress);
         if(this.runMode != "paused") {
-            this.timeElapsed += delta;
             if(this.timeElapsed > this.stepLength) { 
                 if(this.runMode == "onestep") {
                     this.runMode = "paused";
@@ -185,6 +184,7 @@ export class StructogramRunner extends StructogramRenderer {
                     }
                 }
             }
+            this.timeElapsed += delta;
         }
     }
 
@@ -454,35 +454,88 @@ class LogicView extends ProgramView implements AnimatedView {
 abstract class ObjectRenderer {
     protected objectCanvas: HTMLCanvasElement;
     protected objectBaseIdentifier: string;
-    protected allObjects: Record<string, UtilityObject>;
+    protected allObjectsByMemoryKey: Record<string, Value>;
+    protected allObjectsByID: Record<string, UtilityObject>;
+    protected idToMemoryKey: Record<string, string>;
     protected memory: Memory;
+    protected selectors: string[];
+    private _height = 0;
+    private _y = 0;
+    public get y() {
+        return this._y;
+    };
+    public set y(y: number) {
+        if(this._y != y) {
+            this._y = y;
+            this.onObjectsChanged();
+        }
+    };
+    public static readonly emitter = new EventEmitter2();
+    public static readonly heightChanged = "objectrenderer.heightchange";
 
-    constructor(objectCanvas: HTMLCanvasElement, objectBaseIdentifier: string, memory: Memory) {
+    public get height() {
+        return this._height;
+    }
+    
+    protected set height(height: number) {
+        this._height = height;
+        ObjectRenderer.emitter.emit(ObjectRenderer.heightChanged);
+    }
+
+    constructor(objectCanvas: HTMLCanvasElement, objectBaseIdentifier: string, selectors: string[], memory: Memory) {
         this.objectCanvas = objectCanvas;
         this.objectBaseIdentifier = objectBaseIdentifier;
+        this.selectors = selectors;
         this.memory = memory;
-        this.allObjects = memory.getAllValuesWithBaseIdentifier(objectBaseIdentifier).reduce((acc, cur) => {
-            acc[cur.key] = acc.value as UtilityObject;
+        this.idToMemoryKey = {};
+        this.allObjectsByMemoryKey = memory.getAllValuesWithBaseIdentifier(objectBaseIdentifier).reduce((acc, cur) => {
+            const obj = cur.value as UtilityObject;
+            acc[cur.key] = obj;
+            this.idToMemoryKey[obj.id] = cur.key;
+            return acc;
+        }, {} as Record<string, UtilityObject>);
+        this.allObjectsByID = Object.values(this.allObjectsByMemoryKey).reduce((acc, cur) => {
+            if(cur instanceof UtilityObject) {
+                acc[cur.id] = cur;
+            }
             return acc;
         }, {} as Record<string, UtilityObject>);
         this.onObjectsChanged();
         this.memory.emitter.on(Memory.variableAddedEvent, (entry: MemoryEntry) => {
             if(entry.type.baseIdentifier == objectBaseIdentifier) {
-                this.allObjects[entry.key] = entry.value as UtilityObject;
+                this.allObjectsByMemoryKey[entry.key] = entry.value;
+                if(entry.value instanceof UtilityObject) {
+                    this.allObjectsByID[entry.value.id] = entry.value;
+                    this.idToMemoryKey[entry.value.id] = entry.key;
+                }
                 this.onObjectsChanged();
             }
         });
         this.memory.emitter.on(Memory.variableChangedEvent, (key: string, value: Value) => {
-            if(key in this.allObjects) {
-                this.allObjects[key] = value as UtilityObject;
+            if(key in this.allObjectsByMemoryKey && value instanceof UtilityObject) {
+                const prevValue = this.allObjectsByMemoryKey[key];
+                this.allObjectsByMemoryKey[key] = value;
+                if(value instanceof UtilityObject) {
+                    this.allObjectsByID[value.id] = value;
+                    this.idToMemoryKey[value.id] = key;
+                } else if(prevValue instanceof UtilityObject){
+                    delete this.allObjectsByID[prevValue.id];
+                    delete this.idToMemoryKey[key];
+                }
                 this.onObjectsChanged();
             }
         });
         UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, key: string, value: Value) => {
-            if(object.getType().baseIdentifier == objectBaseIdentifier) {
+            if(object.getType().baseIdentifier == objectBaseIdentifier && value instanceof UtilityObject) {
+                this.allObjectsByID[value.id] = value;
                 this.onObjectsChanged();
             }
         })
+    }
+
+    public updateSelectors(selectors: string[]) {
+        this.selectors = [...selectors];
+        this.onObjectsChanged();
     }
 
     protected abstract onObjectsChanged(): void;
@@ -490,37 +543,140 @@ abstract class ObjectRenderer {
     public abstract render(progress: number): void;
 }
 
-interface NodeRenderData {
-    render(progress: number): void;
-    getX(t: number): number;
-    getY(t: number): number;
-    get originX(): number;
-    get originY(): number;
-    set originX(originX: number);
-    set originY(originY: number);
-    get targetX(): number;
-    get targetY(): number;
-    set targetX(targetX: number);
-    set targetY(targetY: number);
-    get h(): number;
-    get w(): number;
+
+function drawArrowFromTo(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2:number) {
+    ctx.beginPath();
+    const xlen = x2-x1;
+    const ylen = y2-y1;
+    const deg = Math.atan2(ylen, xlen) + Math.PI;
+    ctx.moveTo(x1, y1);
+    ctx.bezierCurveTo(x1 + xlen/3, y1 + Math.sign(ylen)*Math.sqrt(Math.abs(ylen)/3), x1 + 2*xlen/3, y2 - Math.sign(ylen)*Math.sqrt(Math.abs(ylen)/3), x2, y2);
+    ctx.lineTo(x2 + 5 * Math.cos(deg - Math.PI/4), y2 + 5 * Math.sin(deg - Math.PI/4));
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 + 5 * Math.cos(deg + Math.PI/4), y2 + 5 * Math.sin(deg + Math.PI/4));
+    ctx.stroke();
 }
 
-interface S1LRenderData extends NodeRenderData {
-    get next(): S1LRenderData | undefined;
-    set next(next: S1LRenderData | undefined);
+abstract class NodeRenderData {
+    abstract render(progress: number): void;
+    protected objectCanvas: HTMLCanvasElement;
+    public originX;
+    public originY;
+    private _targetX;
+    private _targetY;
+    public w;
+    public h;
+    public content: string;
+    public representation: string | undefined;
+
+    constructor(content: string, representation: string | undefined, objectCanvas: HTMLCanvasElement, x: number, y:number, w: number, h: number) {
+        this.content = content;
+        this.representation = representation;
+        this.objectCanvas = objectCanvas;
+        this.originX = x;
+        this.originY = y;
+        this._targetX = x;
+        this._targetY = y;
+        this.w = h;
+        this.h = w;
+    }
+
+
+    public set targetX(targetX: number) {
+        this.originX = this._targetX;
+        this._targetX = targetX;
+    }
+    
+    public set targetY(targetY: number) {
+        this.originY = this._targetY;
+        this._targetY = targetY;
+    }
+
+    public get targetX() {
+        return this._targetX;
+    }
+
+    public get targetY() {
+        return this._targetY;
+    }
+    public getX(t: number): number {
+        if(t == 1) {
+            this.originX = this.targetX;
+        }
+        return lerp(this.originX, this.targetX, t);
+    }
+    public getY(t: number): number {
+        if(t == 1) {
+            this.originY = this.targetY;
+        }
+        return lerp(this.originY, this.targetY, t);
+    }
+
+    protected drawOnlyContent(ctx: CanvasRenderingContext2D, x: number, y: number) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "black";
+        ctx.fillText(this.content, x + this.w / 2, y + this.h / 2);
+    }
+    
+    protected drawContentWithRepresentation(ctx: CanvasRenderingContext2D, x: number, y: number) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillStyle = "black";
+        ctx.fillText(this.content, x + this.w / 2, y + this.h);
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "gray";
+        ctx.fillText("("+this.representation+")", x + this.w / 2, y);
+    }
+
+    protected drawContent(ctx: CanvasRenderingContext2D, x: number, y: number) {
+        if(this.representation) {
+            this.drawContentWithRepresentation(ctx, x, y);
+        } else {
+            this.drawOnlyContent(ctx, x, y);
+        }
+    }
+}
+
+class S1LRenderData extends NodeRenderData {
+    public next: S1LRenderData | undefined;
+
+    constructor(content: string, representation: string | undefined, next: S1LRenderData | undefined, objectCanvas: HTMLCanvasElement, x: number, y:number, w: number, h: number) {
+        super(content, representation, objectCanvas, x, y, w, h);
+        this.content = content;
+        this.representation = representation;
+        this.next = next;
+    }
+
+    public render(progress: number) {
+        const ctx = this.objectCanvas.getContext("2d")!;
+        ctx.fillStyle = "white";
+        const x = this.getX(progress);
+        const y = this.getY(progress);
+        ctx.fillRect(x, y, this.w, this.h);
+        this.drawContent(ctx, x, y);
+        if(this.next) {
+            ctx.strokeStyle = "white";
+            const nextX = this.next.getX(progress);
+            const nextY = this.next.getY(progress);
+            drawArrowFromTo(ctx, x + this.w, y + this.h/2, nextX, nextY + this.next.h/2);
+        }
+    }
 }
 
 class S1LRenderer extends ObjectRenderer {
-    private independentRoots: UtilityObject[] = [];
     private nodeRegistry: Record<string, S1LRenderData> = {};
+    private readonly nodeWidth  = 20;
+    private readonly nodeHeight  = 20;
+    private readonly nodeXSpacing = 20;
+    private readonly nodeYSpacing = 20;
 
     private get nodes() {
         return Object.values(this.nodeRegistry);
     }
 
-    constructor(objectCanvas: HTMLCanvasElement, memory: Memory) {
-        super(objectCanvas, "s1l", memory);
+    constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
+        super(objectCanvas, "s1l", selectors, memory);
         this.onObjectsChanged();
     }
 
@@ -529,26 +685,27 @@ class S1LRenderer extends ObjectRenderer {
     }
 
     public override onObjectsChanged() {
-        const rootNodeSet = new Set<UtilityObject>();
-        const childNodeSet = new Set<UtilityObject>();
-        for(const node of Object.entries(this.allObjects).filter(e => e[0]! == "a").map(e => e[1]!)) {
-            if(node.getType().baseIdentifier == "undefined") continue;
-            if(childNodeSet.has(node)) continue;
-            rootNodeSet.add(node);
+        const rootNodeSet = new Set<string>();
+        const childNodeSet = new Set<string>();
+        for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
+            if(node.getType().isUndefined()) continue;
+            if(childNodeSet.has(node.id)) continue;
+            rootNodeSet.add(node.id);
             let child = node.get("next");
-            while(child.getType().baseIdentifier != "undefined" && child instanceof UtilityObject) {
-                if(rootNodeSet.has(child)) {
-                    rootNodeSet.delete(child);
-                    childNodeSet.add(child);
+            while(child.getType().isDefined() && child instanceof UtilityObject) {
+                if(rootNodeSet.has(child.id)) {
+                    rootNodeSet.delete(child.id);
+                    childNodeSet.add(child.id);
                     continue;
                 }
-                childNodeSet.add(child);
+                childNodeSet.add(child.id);
                 child = child.get("next");
             }
         }
-        this.independentRoots = [...rootNodeSet];
-        let yOffset = 0;
-        for(const ir of this.independentRoots) {
+        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!);
+        let yOffset = this.y;
+        const newRegistry: Record<string, S1LRenderData> = {};
+        for(const ir of independentRoots) {
             const nodes: UtilityObject[] = [];
             let n: Value = ir;
             while(n.getType().isDefined() && n instanceof UtilityObject) {
@@ -556,120 +713,351 @@ class S1LRenderer extends ObjectRenderer {
                 n = n.get("next");
             }
 
-            let xOffset = nodes.length*40 - 40;
+            const hasHeader: boolean = nodes[0]!.id in this.idToMemoryKey;
+            let xOffset = (nodes.length-1)*(this.nodeWidth + this.nodeXSpacing);
             nodes.reverse();
+
             for(let i = 0; i < nodes.length; i++) {
                 let next = undefined;
-                if(i > 0) {
-                    next = this.nodeRegistry[nodes[i-1]!.id];
-                }
                 const node = nodes[i]!;
+                if(i > 0) {
+                    next = newRegistry[nodes[i-1]!.id];
+                }
                 if(node.id in this.nodeRegistry) {
                     const data = this.nodeRegistry[node.id]!;
                     data.targetX = xOffset;
                     data.targetY = yOffset;
-                    if(Math.abs(data.targetX - data.originX) > 1 && Math.abs(data.targetY - data.originY) > 1) data.originY += 20;
                     data.next = next;
+                    data.content = node.get("key").asString();
+                    data.representation = this.idToMemoryKey[node.id];
+                    newRegistry[node.id] = data;
                 } else {
-                    this.nodeRegistry[node.id] = new S1LRenderer.S1LRenderData(node, next, this.objectCanvas, xOffset, yOffset);
+                    newRegistry[node.id] = new S1LRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], next, this.objectCanvas, xOffset, yOffset, this.nodeWidth, this.nodeHeight);
                 }
-                xOffset -= 40;
+                xOffset -= (this.nodeWidth + this.nodeXSpacing);
             }
             
-            yOffset += 30;
+            yOffset += this.nodeHeight + this.nodeYSpacing;
+        }
+        if(yOffset > this.y) {
+            this.height = (yOffset-this.y)+this.nodeHeight;
+        } else {
+            this.height = 0;
+        }
+        this.nodeRegistry = newRegistry;
+    }
+}
+
+class S2LRenderData extends NodeRenderData {
+    public next: S2LRenderData | undefined;
+    public prev: S2LRenderData | undefined;
+
+    constructor(content: string, representation: string | undefined, objectCanvas: HTMLCanvasElement, x: number, y:number, w: number, h: number) {
+        super(content, representation, objectCanvas, x, y, w, h)
+    }
+
+    public render(progress: number) {
+        const ctx = this.objectCanvas.getContext("2d")!;
+        ctx.fillStyle = "white";
+        const x = this.getX(progress);
+        const y = this.getY(progress);
+        ctx.fillRect(x, y, this.w, this.h);
+        this.drawContent(ctx, x, y);
+        if(this.next) {
+            ctx.strokeStyle = "white";
+            const nextX = this.next.getX(progress);
+            const nextY = this.next.getY(progress);
+            drawArrowFromTo(ctx, x + this.w, y + this.h/3, nextX, nextY + this.next.h/3);
+        }
+        if(this.prev) {
+            ctx.strokeStyle = "white";
+            const prevX = this.prev.getX(progress);
+            const prevY = this.prev.getY(progress);
+            drawArrowFromTo(ctx, x, y + 2*this.h/3, prevX + this.prev.w, prevY + 2*this.prev.h/3);
         }
     }
-    
-    protected static S1LRenderData = class implements S1LRenderData {
-        private s1l;
-        public next: S1LRenderData | undefined;
-        private objectCanvas: HTMLCanvasElement;
-        public originX;
-        public originY;
-        private x;
-        private y;
-        private _targetX;
-        private _targetY;
-        public w;
-        public h;
+}
 
-        public set targetX(targetX: number) {
-            this.originX = this._targetX;
-            this._targetX = targetX;
-        }
-        
-        public set targetY(targetY: number) {
-            this.originY = this._targetY;
-            this._targetY = targetY;
-        }
+class S2LRenderer extends ObjectRenderer {
+    private nodeRegistry: Record<string, S2LRenderData> = {};
+    private readonly nodeWidth  = 20;
+    private readonly nodeHeight  = 20;
+    private readonly nodeXSpacing = 20;
+    private readonly nodeYSpacing = 20;
 
-        public get targetX() {
-            return this._targetX;
-        }
+    private get nodes() {
+        return Object.values(this.nodeRegistry);
+    }
 
-        public get targetY() {
-            return this._targetY;
-        }
+    constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
+        super(objectCanvas, "s2l", selectors, memory);
+        this.onObjectsChanged();
+    }
 
-        public getX(t: number) {
-            return lerp(this.originX, this.targetX, t);
-        }
+    public override render(progress: number): void {
+        this.nodes.forEach(r => r.render(progress));
+    }
 
-        public getY(t: number) {
-            return lerp(this.originY, this.targetY, t);
-        }
-
-        constructor(s1l: UtilityObject, next: S1LRenderData | undefined, objectCanvas: HTMLCanvasElement, x: number, y:number) {
-            this.s1l = s1l;
-            this.objectCanvas = objectCanvas;
-            this.next = next;
-            this.originX = x;
-            this.originY = y+20;
-            this.x = this.originX;
-            this.y = this.originY;
-            this._targetX = x;
-            this._targetY = y;
-            this.w = 20;
-            this.h = 20;
-        }
-
-        public render(progress: number) {
-            const ctx = this.objectCanvas.getContext("2d")!;
-            let node: UtilityObject = this.s1l;
-            ctx.fillStyle = "white";
-            const x = this.getX(progress);
-            const y = this.getY(progress);
-            ctx.fillRect(x, y, this.w, this.h);
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillStyle = "black";
-            ctx.fillText(node.get("key").asString(), x + this.w / 2, y + this.h / 2);
-            if(this.next) {
-                ctx.strokeStyle = "white";
-                ctx.beginPath();
-                ctx.moveTo(x + this.w, y + this.h/2);
-                const nextX = this.next.getX(progress);
-                const nextY = this.next.getY(progress);
-                ctx.lineTo(nextX, nextY + this.next.h/2);
-                ctx.lineTo(nextX - 5, nextY + this.next.h/2 - 5);
-                ctx.lineTo(nextX, nextY + this.next.h/2);
-                ctx.lineTo(nextX - 5, nextY + this.next.h/2 + 5);
-                ctx.stroke();
+    public override onObjectsChanged() {
+        const rootNodeSet = new Set<string>();
+        const childNodeSet = new Set<string>();
+        for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
+            if(node.getType().isUndefined()) continue;
+            if(node.get("prev").getType().isDefined() || childNodeSet.has(node.id)) continue;
+            rootNodeSet.add(node.id);
+            let child = node.get("next");
+            while(child.getType().isDefined() && child instanceof UtilityObject) {
+                if(rootNodeSet.has(child.id)) {
+                    rootNodeSet.delete(child.id);
+                    childNodeSet.add(child.id);
+                    continue;
+                }
+                childNodeSet.add(child.id);
+                child = child.get("next");
             }
         }
+        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!);
+        let yOffset = this.y;
+        const newRegistry: Record<string, S2LRenderData> = {};
+        const allNodes: UtilityObject[] = [];
+        for(const ir of independentRoots) {
+            let n: Value = ir;
+            const nodes: UtilityObject[] = [];
+            while(n.getType().isDefined() && n instanceof UtilityObject) {
+                nodes.push(n);
+                n = n.get("next");
+            }
+
+            const hasHeader: boolean = nodes[0]!.id in this.idToMemoryKey;
+            let xOffset = 0;
+            if(hasHeader) xOffset += (this.nodeWidth + this.nodeXSpacing);
+
+            for(const node of nodes) {
+                if(node.id in this.nodeRegistry) {
+                    const data = this.nodeRegistry[node.id]!;
+                    data.targetX = xOffset;
+                    data.targetY = yOffset;
+                    data.content = node.get("key").asString();
+                    data.representation = this.idToMemoryKey[node.id];
+                    newRegistry[node.id] = data;
+                } else {
+                    newRegistry[node.id] = new S2LRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeWidth, this.nodeHeight);
+                }
+                xOffset += (this.nodeWidth + this.nodeXSpacing);
+            }
+            
+            yOffset += this.nodeHeight + this.nodeYSpacing;
+            allNodes.push(...nodes);
+        }
+
+        for(const node of allNodes) {
+            const data = newRegistry[node.id]!;
+            const prev = node.get("prev")!;
+            if(prev instanceof UtilityObject) {
+                data.prev = newRegistry[prev.id];
+            }
+            const next = node.get("next")!;
+            if(next instanceof UtilityObject) {
+                data.next = newRegistry[next.id];
+            }
+        }
+
+        if(yOffset > this.y) {
+            this.height = (yOffset-this.y)+this.nodeHeight;
+        } else {
+            this.height = 0;
+        }
+        this.nodeRegistry = newRegistry;
+    }
+}
+
+class BTNRenderData extends NodeRenderData {
+    public left: BTNRenderData | undefined;
+    public right: BTNRenderData | undefined;
+
+    constructor(content: string, representation: string | undefined, objectCanvas: HTMLCanvasElement, x: number, y:number, w: number, h: number) {
+        super(content, representation, objectCanvas, x, y, w, h)
+    }
+
+    public render(progress: number) {
+        const ctx = this.objectCanvas.getContext("2d")!;
+        ctx.fillStyle = "white";
+        const x = this.getX(progress);
+        const y = this.getY(progress);
+        ctx.fillRect(x, y, this.w, this.h);
+        this.drawContent(ctx, x, y);
+        if(this.left) {
+            ctx.strokeStyle = "white";
+            const leftX = this.left.getX(progress);
+            const leftY = this.left.getY(progress);
+            drawArrowFromTo(ctx, x + this.w/3, y + this.h, leftX + this.left.h/2, leftY);
+        }
+        if(this.right) {
+            ctx.strokeStyle = "white";
+            const rightX = this.right.getX(progress);
+            const rightY = this.right.getY(progress);
+            drawArrowFromTo(ctx, x + 2*this.w/3, y + this.h, rightX + this.right.h/2, rightY);
+        }
+    }
+}
+
+type TreeIndicator = "#" | "0";
+
+class BTNRenderer extends ObjectRenderer {
+    private nodeRegistry: Record<string, BTNRenderData> = {};
+    private readonly nodeWidth  = 20;
+    private readonly nodeHeight  = 20;
+    private readonly nodeXSpacing = 20;
+    private readonly nodeYSpacing = 20;
+
+    private get nodes() {
+        return Object.values(this.nodeRegistry);
+    }
+
+    constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
+        super(objectCanvas, "btn", selectors, memory);
+        this.onObjectsChanged();
+    }
+
+    public override render(progress: number): void {
+        this.nodes.forEach(r => r.render(progress));
+    }
+
+    public override onObjectsChanged() {
+        const rootNodeSet = new Set<string>();
+        const childNodeSet = new Set<string>();
+        for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
+            if(node.getType().isUndefined()) continue;
+            if(node.get("parent").getType().isDefined() || childNodeSet.has(node.id)) continue;
+            rootNodeSet.add(node.id);
+            let children = [node.get("left"), node.get("right")];
+            while(children.length > 0) {
+                const child = children.shift();
+                if(child instanceof UtilityObject) {
+                    if(rootNodeSet.has(child.id)) {
+                        rootNodeSet.delete(child.id);
+                        childNodeSet.add(child.id);
+                        continue;
+                    }
+                    childNodeSet.add(child.id);
+                    children.push(child.get("left"), child.get("right"));
+                }
+            }
+        }
+        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!);
+        let yOffset = this.y;
+        const newRegistry: Record<string, BTNRenderData> = {};
+        const allNodes: UtilityObject[] = [];
+        for(const ir of independentRoots) {
+            const levels: (UtilityObject | TreeIndicator)[][] = [];
+            let level: (UtilityObject | TreeIndicator)[] = [];
+            let children: (UtilityObject | TreeIndicator)[] = [ir, "#"];
+            let emptyTally = 0;
+            let levelDepth = 0;
+            while(emptyTally < 2**levelDepth) {
+                const child = children.shift()!;
+                if(child == "#") {
+                    levels.push(level);
+                    levelDepth++;
+                    emptyTally = 0;
+                    level = [];
+                    children.push("#");
+                    continue;
+                } else if (child != "0") {
+                    const left = child.get("left");
+                    const right = child.get("right");
+                    if(left.getType().isUndefined()) {
+                        children.push("0");
+                    } else if(left instanceof UtilityObject) {
+                        children.push(left);
+                    }
+                    if(right.getType().isUndefined()) {
+                        children.push("0");
+                    } else if(right instanceof UtilityObject) {
+                        children.push(right);
+                    }
+                } else {
+                    emptyTally++;
+                    children.push("0", "0");
+                }
+                level.push(child);
+            }
+
+            function calcTreeWidth(treeHeight: number, nodeWidth: number, nodeSpacing: number) {
+                if(treeHeight <= 0) return 0;
+                const length = 2**(treeHeight-1);
+                return (length * nodeWidth + (length-1)*nodeSpacing);
+            }
+
+            let xOffset = 0;
+            const treeHeight = levels.length;
+            const treeWidth = calcTreeWidth(treeHeight, this.nodeWidth, this.nodeXSpacing);
+            for(let i = 0; i < treeHeight; i++) {
+                const level = levels[i]!;
+                xOffset = 0;
+                let step = 0;
+                if(i < treeHeight-1) {
+                    step = (treeWidth - (2**i * this.nodeWidth)) / (2**i+1);
+                    xOffset += step;
+                } else {
+                    step = (treeWidth - (2**i * this.nodeWidth)) / (2**i-1);
+                }
+                for(let i = 0; i < level.length; i++) {
+                    const node = level[i]!;
+                    if(node instanceof UtilityObject) {
+                        if(node.id in this.nodeRegistry) {
+                            const data = this.nodeRegistry[node.id]!;
+                            data.targetX = xOffset;
+                            data.targetY = yOffset;
+                            data.content = node.get("key").asString();
+                            data.representation = this.idToMemoryKey[node.id];
+                            newRegistry[node.id] = data;
+                        } else {
+                            newRegistry[node.id] = new BTNRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeWidth, this.nodeHeight);
+                        }
+                    }
+                    xOffset += step + this.nodeWidth;
+                }
+                yOffset += (this.nodeHeight + this.nodeYSpacing);
+            }
+            
+            yOffset += this.nodeHeight + this.nodeYSpacing;
+            allNodes.push(...levels.flat().filter(v => v instanceof UtilityObject));
+        }
+
+        for(const node of allNodes) {
+            const data = newRegistry[node.id]!;
+            const left = node.get("left")!;
+            if(left instanceof UtilityObject) {
+                data.left = newRegistry[left.id];
+            }
+            const right = node.get("right")!;
+            if(right instanceof UtilityObject) {
+                data.right = newRegistry[right.id];
+            }
+        }
+
+        if(yOffset > this.y) {
+            this.height = (yOffset-this.y)+this.nodeHeight;
+        } else {
+            this.height = 0;
+        }
+        this.nodeRegistry = newRegistry;
     }
 }
 
 class ObjectView extends ProgramView implements AnimatedView {
     private objectCanvas: HTMLCanvasElement;
+    private selectorsField: HTMLInputElement;
     private renderers: ObjectRenderer[];
-
-    private addObject(key: string) {
-    }
+    private selectors: string[] = [];
+    private readonly cameraHandler: CameraHandler;
 
     constructor(runner: StructogramRunner) {
         super(document.querySelector("#object-view")!, runner);
         this.objectCanvas = this.viewElem.querySelector("canvas") as HTMLCanvasElement;
+        this.selectorsField = this.viewElem.querySelector(".t-object-specifiers") as HTMLInputElement;
+        this.selectorsField.value = "";
         window.addEventListener("load", () => {
             this.objectCanvas.width = this.objectCanvas.clientWidth;
             this.objectCanvas.height = this.objectCanvas.clientHeight;
@@ -679,8 +1067,24 @@ class ObjectView extends ProgramView implements AnimatedView {
             this.objectCanvas.height = this.objectCanvas.clientHeight;
         });
         this.renderers = [
-            new S1LRenderer(this.objectCanvas, runner.structogram.memory)
+            new S1LRenderer(this.objectCanvas, this.selectors, runner.structogram.memory),
+            new S2LRenderer(this.objectCanvas, this.selectors, runner.structogram.memory),
+            new BTNRenderer(this.objectCanvas, this.selectors, runner.structogram.memory)
         ];
+        ObjectRenderer.emitter.on(ObjectRenderer.heightChanged, () => {
+            let yOffset = 0;
+            for(const renderer of this.renderers) {
+                renderer.y = yOffset;
+                yOffset += renderer.height;
+            }
+        });
+        this.selectorsField.addEventListener("change", () => {
+            this.selectors = this.selectorsField.value.split(",");
+            for(const renderer of this.renderers) {
+                renderer.updateSelectors(this.selectors);
+            }
+        });
+        this.cameraHandler = new CameraHandler(this.objectCanvas);
         this.reset();
     }
 
@@ -691,8 +1095,10 @@ class ObjectView extends ProgramView implements AnimatedView {
     public render(progress: number): void {
         const ctx = this.objectCanvas.getContext("2d")!;
         ctx.clearRect(0, 0, this.objectCanvas.width, this.objectCanvas.height);
-        ctx.setTransform(3,0,0,3,0,0);
+        ctx.translate(this.cameraHandler.x, this.cameraHandler.y);
+        ctx.scale(this.cameraHandler.scale, this.cameraHandler.scale);
         this.renderers.forEach(r => r.render(progress));
+        ctx.resetTransform();
     }
 
     public override reset(): void {

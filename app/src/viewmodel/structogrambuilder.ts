@@ -1,6 +1,6 @@
 import EventEmitter2 from "eventemitter2";
 import type { VariableType } from "../model/memory";
-import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, StructogramIssue, TrueFalseBranchingBlock, type BlockOption, type StructogramBlock } from "../model/structogram";
+import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, TrueFalseBranchingBlock, type BlockOption, type StructogramBlock } from "../model/structogram";
 import { baseBlockHeight, selectedClass, unselectedClass } from "./constants";
 import { StructogramRenderer, UndefinedBlockContext } from "./structogramrenderer";
 import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
@@ -1028,8 +1028,10 @@ class StructogramSettings {
     private optionResourceManager: ResourceManager = new ResourceManager();
     private optionHandlers: Record<string, OptionHandler> = {};
     private specificationSettingsHandler: SpecificationSettingHandler;
+    private builder: StructogramBuilder;
 
     constructor(structogramBuilder: StructogramBuilder) {
+        this.builder = structogramBuilder;
         this.specificationSettingsHandler = new SpecificationSettingHandler(structogramBuilder);
         this.optionResourceManager.register("anystatementoption", statementOptionTemplate);
         this.optionHandlers["anystatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
@@ -1076,7 +1078,7 @@ class StructogramSettings {
 
     public set currentBlock(block: StructogramBlock | undefined) {
         if(this._currentBlock) {
-            const node = document.querySelector(`#${this._currentBlock.id}`);
+            const node = document.querySelector(`#${this.builder.idPrefix}-${this._currentBlock.id}`);
             node?.classList.remove(...selectedClass);
             node?.classList.add(...unselectedClass);
         } else {
@@ -1086,7 +1088,7 @@ class StructogramSettings {
         }
         this._currentBlock = block;
         if(this._currentBlock) {
-            const node = document.querySelector(`#${this._currentBlock.id}`);
+            const node = document.querySelector(`#${this.builder.idPrefix}-${this._currentBlock.id}`);
             node?.classList.remove(...unselectedClass);
             node?.classList.add(...selectedClass);
         } else {

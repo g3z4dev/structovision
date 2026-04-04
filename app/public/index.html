@@ -130,7 +130,7 @@
                 </div>
             </div>
             <div class="col-span-6 bg-gray-900 flex flex-col h-full h-max-full overflow-hidden" id="program-views">
-                <div id="output-view" class="basis-1/4 bg-gray-800 m-1 overflow-hidden text-white h-full">
+                <div id="output-view" class="basis-1/8 bg-gray-800 m-1 overflow-hidden text-white h-full">
                     <p class="m-2">Logs</p>
                     <div class="bg-gray-700 t-logs overflow-y-scroll h-full flex flex-col">
                         <p class="t-log-template text-wrap mr-1 ml-1"></p>
@@ -154,14 +154,19 @@
                         </tbody>
                     </table>
                 </div>
-                <div id="logic-view" class="basis-1/4 bg-gray-800 m-1 h-full">
+                <div id="logic-view" class="basis-1/8 bg-gray-800 m-1 h-full">
                     <p class="text-white">Logic</p>
-                    <div class="t-logic bg-gray-700 flex flex-row flex-wrap w-full h-1/2 overflow-x-scroll">
+                    <div class="t-logic bg-gray-700 flex flex-row flex-wrap w-full h-full overflow-x-scroll">
 
                     </div>
                 </div>
-                <div id="object-view" class="basis-1/4 bg-gray-800 m-1 h-full overflow-hidden">
-                    <p class="text-white">Objects</p>
+                <div id="object-view" class="basis-1/2 bg-gray-800 m-1 h-full overflow-hidden">
+                    <div class="flex flex-row mb-1">
+                        <p class="text-white mr-1">Objects</p>
+                        <form>
+                            <input type="text" class="t-object-specifiers bg-gray-600 text-white"></input>
+                        </form>
+                    </div>
                     <canvas class="t-object bg-gray-700 w-full h-full">
 
                     </canvas>
