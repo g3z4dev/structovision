@@ -22,6 +22,18 @@ export class StatementEvaluationError extends Error {
     }
 }
 
+export class IndexResolver {
+    public readonly startIndex: number;
+
+    constructor(startIndex: number) {
+        this.startIndex = startIndex;
+    }
+
+    public resolve(index: number) {
+        return index - this.startIndex;
+    }
+}
+
 function getAllSortedPairs<T>(array: T[]): T[][] {
     const pairs: T[][] = [];
     const sortedArray = array.sort();
@@ -75,7 +87,7 @@ export abstract class Operator {
         return operands.some(op => op.getType().getIdentifier() == "undefined");
     }
 
-    abstract apply(operands: Value[]): Value;
+    abstract apply(operands: Value[], indexResolver: IndexResolver): Value;
     abstract getOperandCount(): number;
     public isApplicableTo(types: ValueType[]): boolean {
         if(types.some(t => t.getIdentifier() == "undefined")) return true;
@@ -107,7 +119,7 @@ class BinaryOperator extends Operator {
         }
     }
     
-    public override apply(operands: Value[]): Value {
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
         }
@@ -136,7 +148,7 @@ class UnaryOperator extends Operator {
         return (types: ValueType[]) => operandTypes.some(type => type.matches(types[0]!));
     }
 
-    public override apply(operands: Value[]): Value {
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != 1) {
             throw new StatementEvaluationError(`Unary expected 1 operands but received [${operands.length}!]`);
         }
@@ -161,7 +173,7 @@ class ObjectConstructor extends Operator {
         this.operandCount = operandTypes.length;
     }
 
-    public override apply(operands: Value[]): Value {
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != this.operandCount) {
             throw new StatementEvaluationError(`Unary expected 1 operands but received [${operands.length}!]`);
         }
@@ -185,7 +197,7 @@ class ObjectGetOperator extends Operator {
         super(99, ".", types => types[0]!.hasFields() && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
     }
 
-    public override apply(operands: Value[]): Value {
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`ObjectGetOperator expected 2 operands but received ${operands.length}!`);
         }
@@ -221,7 +233,7 @@ class ObjectIndexOperator extends Operator {
         super(99, "@", types => types[0]!.getIdentifier().startsWith("array") && types[1]!.getIdentifier() == "number", anyType, false);
     }
 
-    public override apply(operands: Value[]): Value {
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
         }
@@ -233,7 +245,7 @@ class ObjectIndexOperator extends Operator {
         const a = operands[0]! as UtilityArray;
         const b = operands[1]! as SimpleValue;
         
-        return a.indexGet(b.value as number);
+        return a.indexGet(indexResolver.resolve(b.value as number));
     }
 
     public override getOperandCount(): number {
@@ -329,12 +341,12 @@ export class GroupedOperand extends Operand {
     }
 }
 
-function parseOperand(text: string, memory: Memory): ResolvableOperand {
+function parseOperand(text: string, memory: Memory, indexResolver: IndexResolver): ResolvableOperand {
     if(memory.hasVariable(text)) {
         return new VariableOperand(text, memory);
     }
     if(text.startsWith("{") && text.endsWith("}")) {
-        return ArrayLiteral.parse(text, memory);
+        return ArrayLiteral.parse(text, memory, indexResolver);
     }
     if(text.startsWith("\"") && text.endsWith("\"")) {
         return StringLiteral.parse(text);
@@ -411,12 +423,12 @@ class ArrayLiteral extends ResolvableOperand {
         return tokens;
     }
 
-    public static parse(text: string, memory: Memory): ArrayLiteral {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): ArrayLiteral {
         if(!text.startsWith("{") || !text.endsWith("}")) {
             throw new Error("Not an array literal!");
         }
         text = text.substring(1,text.length-1);
-        const values = ArrayLiteral.splitElements(text).map(token => AnyStatement.parse(token, memory));
+        const values = ArrayLiteral.splitElements(text).map(token => AnyStatement.parse(token, memory, indexResolver));
         for(let i = 0; i < values.length; i++) {
             for(let j = i+1; j < values.length; j++) {
                 if(!values[i]!.getReturnType().matches(values[j]!.getReturnType())) throw new StatementParseError("Arrays cannot be heterogeneous!")
@@ -539,6 +551,7 @@ export abstract class Statement<T> {
     protected evaluatableTokens: (ResolvableOperand | Operator)[] = [];
     protected readableTokens: (ResolvableOperand | Operator | Bracket)[] = [];
     protected returnType: ValueType = numberType;
+    protected indexResolver: IndexResolver = new IndexResolver(0);
 
     abstract evaluate(): T;
     protected evaluateInternally(): Value {
@@ -554,7 +567,7 @@ export abstract class Statement<T> {
                 for(let i = 0; i < opCount; i++) {
                     usedOperands.push(operands.pop()!);
                 }
-                operands.push(token.apply(usedOperands));
+                operands.push(token.apply(usedOperands, this.indexResolver));
             }
         }
         const value = operands.pop()!;
@@ -653,7 +666,7 @@ export abstract class Statement<T> {
         return tokens;
     }
 
-    protected static parseInto<T>(statement: Statement<T>, text: string, memory: Memory): void {
+    protected static parseInto<T>(statement: Statement<T>, text: string, memory: Memory, indexResolver: IndexResolver): void {
         if(text.length == 0) throw new StatementParseError("Cannot parse empty statement!");
         const tokens: string[] = this.splitTokens(text);
         const operators: (Operator | OpeningBracket)[] = [];
@@ -669,7 +682,7 @@ export abstract class Statement<T> {
             } else if (token == "]") {
                 return [")"];
             } else { 
-                return [parseOperand(token, memory)];
+                return [parseOperand(token, memory, indexResolver)];
             }
         }).flat();
 
@@ -768,6 +781,7 @@ export abstract class Statement<T> {
             return operands[0]!.flatten();
         }
 
+        statement.indexResolver = indexResolver;
         statement.evaluatableTokens.push(...arrangeIntoPostfix());
         statement.readableTokens.push(...parsedTokens.map(v => v instanceof Operand ? v.flatten() : v).flat());
     }
@@ -795,9 +809,9 @@ export class NumericStatement extends Statement<number> {
         super();
     }
 
-    public static parse(text: string, memory: Memory): NumericStatement {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): NumericStatement {
         const statement = new NumericStatement();
-        Statement.parseInto<number>(statement, text, memory);
+        Statement.parseInto<number>(statement, text, memory, indexResolver);
 
         return statement;
     }
@@ -821,9 +835,9 @@ export class CharStatement extends Statement<string> {
         super();
     }
 
-    public static parse(text: string, memory: Memory): CharStatement {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): CharStatement {
         const statement = new CharStatement();
-        Statement.parseInto<string>(statement, text, memory);
+        Statement.parseInto<string>(statement, text, memory, indexResolver);
 
         return statement;
     }
@@ -847,9 +861,9 @@ export class StringStatement extends Statement<string> {
         super();
     }
 
-    public static parse(text: string, memory: Memory): StringStatement {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): StringStatement {
         const statement = new StringStatement();
-        Statement.parseInto<string>(statement, text, memory);
+        Statement.parseInto<string>(statement, text, memory, indexResolver);
 
         return statement;
     }
@@ -873,9 +887,9 @@ export class BooleanStatement extends Statement<boolean> {
         super();
     }
 
-    public static parse(text: string, memory: Memory): BooleanStatement {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): BooleanStatement {
         const statement = new BooleanStatement();
-        Statement.parseInto<boolean>(statement, text, memory);
+        Statement.parseInto<boolean>(statement, text, memory, indexResolver);
 
         return statement;
     }
@@ -890,9 +904,9 @@ export class AnyStatement extends Statement<any> {
         super();
     }
 
-    public static parse(text: string, memory: Memory): AnyStatement {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): AnyStatement {
         const statement = new AnyStatement();
-        Statement.parseInto<any>(statement, text, memory);
+        Statement.parseInto<any>(statement, text, memory, indexResolver);
 
         return statement;
     }

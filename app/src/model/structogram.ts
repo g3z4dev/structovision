@@ -1,6 +1,6 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, type VariableType} from "./memory";
-import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement} from "./statement";
+import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement, IndexResolver} from "./statement";
 import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
 
 
@@ -25,6 +25,7 @@ export class StructogramIssue {
         return this._message;
     }
 }
+
 export class Structogram {
     /**
      * Emitted when something prints on the structogram. 
@@ -78,6 +79,7 @@ export class Structogram {
     private _auxData: Record<string, ValueType> = {};
     private _outData: Record<string, ValueType> = {};
     private currentIssues: StructogramIssue[] = [];
+    private _indexResolver = new IndexResolver(0);
 
     public get inputData() {
         return Object.entries(this._inData);
@@ -93,6 +95,18 @@ export class Structogram {
 
     public get issues() {
         return [...this.currentIssues];
+    }
+
+    public set startingIndex(index: number) {
+        this._indexResolver = new IndexResolver(index);
+    }
+
+    public get startingIndex(): number {
+        return this._indexResolver.startIndex;
+    }
+
+    public get indexResolver() {
+        return this._indexResolver;
     }
 
     private set issues(issues: StructogramIssue[]) {
@@ -150,7 +164,7 @@ export class Structogram {
             }
             usedKeys.add(key);
             try {
-                const statement = AnyStatement.parse(input[i]!, this.memory);
+                const statement = AnyStatement.parse(input[i]!, this.memory, this.indexResolver);
                 if(!type.matches(statement.getReturnType())) {
                     issues.push(new StructogramIssue("specification", "Wrong type returned by statement given to input data!"));
                 } else {
@@ -338,19 +352,19 @@ export class Structogram {
     }
 
     public createNumericStatement(statement: string) {
-        return NumericStatement.parse(statement, this.memory);
+        return NumericStatement.parse(statement, this.memory, this.indexResolver);
     }
 
     public createStringStatement(statement: string) {
-        return StringStatement.parse(statement, this.memory);
+        return StringStatement.parse(statement, this.memory, this.indexResolver);
     }
 
     public createBooleanStatement(statement: string) {
-        return BooleanStatement.parse(statement, this.memory);
+        return BooleanStatement.parse(statement, this.memory, this.indexResolver);
     }
 
     public createAnyStatement(statement: string) {
-        return AnyStatement.parse(statement, this.memory);
+        return AnyStatement.parse(statement, this.memory, this.indexResolver);
     }
 }
 

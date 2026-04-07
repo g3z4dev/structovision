@@ -281,19 +281,21 @@ class ActionTimeLine {
 }
 
 export class StructogramBuilder extends StructogramRenderer {
-    private newButton = document.querySelector("#new-button") as HTMLElement;
-    private saveButton = document.querySelector("#save-button") as HTMLElement;
-    private loadButton = document.querySelector("#load-button") as HTMLElement;
-    private undoButton = document.querySelector("#undo-button") as HTMLElement;
-    private redoButton = document.querySelector("#redo-button") as HTMLElement;
+    private newButton = document.querySelector("#new-button") as HTMLButtonElement;
+    private settingsButton = document.querySelector("#settings-button") as HTMLButtonElement;
+    private saveButton = document.querySelector("#save-button") as HTMLButtonElement;
+    private loadButton = document.querySelector("#load-button") as HTMLButtonElement;
+    private undoButton = document.querySelector("#undo-button") as HTMLButtonElement;
+    private redoButton = document.querySelector("#redo-button") as HTMLButtonElement;
     private newWindow = document.querySelector("#new-confirm") as HTMLElement;
-    private newYesWindow = this.newWindow.querySelector("#new-confirm-yes") as HTMLElement;
-    private newNoWindow = this.newWindow.querySelector("#new-confirm-no") as HTMLElement;
+    private newYesButton = this.newWindow.querySelector("#new-confirm-yes") as HTMLButtonElement;
+    private newNoButton = this.newWindow.querySelector("#new-confirm-no") as HTMLButtonElement;
     public readonly structogramSpecificator = new StructogramSpecificator(this);
     private movingBlock: MovingBlock | undefined;
     public readonly timeLine = new ActionTimeLine();
     public readonly toolbar = new BlockToolbar(this.structogram);
     public readonly structogramSettings = new StructogramSettings(this);
+    public readonly structogramGeneralSettings = new StructogramGeneralSettings(this.structogram);
 
     /**
      * Creates an HTML element that can accomodate a block tree.
@@ -417,13 +419,13 @@ export class StructogramBuilder extends StructogramRenderer {
         this.newButton.addEventListener("click", () => {
             this.newWindow.classList.remove("hidden");
         });
-        this.newYesWindow.addEventListener("click", () => {
+        this.newYesButton.addEventListener("click", () => {
             this.structogram.reset();
             this.timeLine.reset();
             this.saveCache();
             this.newWindow.classList.add("hidden");
         });
-        this.newNoWindow.addEventListener("click", () => {
+        this.newNoButton.addEventListener("click", () => {
             this.newWindow.classList.add("hidden");
         })
     }
@@ -497,6 +499,9 @@ export class StructogramBuilder extends StructogramRenderer {
         this.setupPersistenceButtons(structogram);
         this.setupTimeLineControlButtons();
         this.setupNewStructogramButtons();
+        this.settingsButton.addEventListener("click", () => {
+            this.structogramGeneralSettings.show();
+        });
         this.structogramSettings.emitter.addListener(StructogramSettings.blockOptionChanged, (option: BlockOption, newValues: string[], oldValues: string[]) => {
             this.timeLine.start();
             this.timeLine.didAction(new OptionSetAction(option, newValues, oldValues));
@@ -1145,5 +1150,37 @@ class StructogramSpecificator {
         setTemplateText(this.specificationElem, "spec-in", inEntries.join(", "));
         setTemplateText(this.specificationElem, "spec-aux", auxEntries.join(", "));
         setTemplateText(this.specificationElem, "spec-out", outEntries.join(", "));
+    }
+}
+
+class StructogramGeneralSettings {
+    private settingsWindow = document.querySelector("#structogram-general-settings")!;
+    private doneButton = this.settingsWindow.querySelector("#structogram-general-settings-done") as HTMLButtonElement;
+    private indexSetting = this.settingsWindow.querySelector("#structogram-general-settings-index") as HTMLInputElement;
+    private structogram: Structogram;
+
+    constructor(structogram: Structogram) {
+        this.structogram = structogram;
+        this.doneButton.addEventListener("click", () => {
+            this.hide();
+        });
+    }
+
+    private loadSettings() {
+        this.indexSetting.value = this.structogram.startingIndex.toString();
+    }
+    
+    private saveSettings() {
+        this.structogram.startingIndex = Number(this.indexSetting.value);
+    }
+
+    public show() {
+        this.loadSettings();
+        this.settingsWindow.classList.remove("hidden");
+    }
+
+    public hide() {
+        this.saveSettings();
+        this.settingsWindow.classList.add("hidden");
     }
 }

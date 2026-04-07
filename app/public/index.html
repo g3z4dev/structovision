@@ -64,6 +64,7 @@
                     </div>
                     <div class="basis-1/4 flex flex-row justify-around border-l border-gray-800 p-1" id="options">
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="new-button"><img class="aspect-square h-full" src="icons/new.png" alt="new-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="settings-button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="undo-button"><img class="aspect-square h-full" src="icons/timelinearrow.png" alt="undo-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="redo-button"><img class="aspect-square h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/timelinearrow.png" alt="redo-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
@@ -94,11 +95,21 @@
         </div>
         <div id="new-confirm" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
             <div class="m-auto mt-5 w-1/2 h-1/4 flex flex-col bg-gray-800 rounded-md">
-                <p class="text-white basis-2/3 text-lg m-2 text-center t-translatable" data-trkey="new_confirm_message"></p>
+                <p class="text-gray-100 basis-2/3 text-lg m-2 text-center t-translatable" data-trkey="new_confirm_message"></p>
                 <div class="w-full flex flex-row items-center justify-center">
-                    <button id="new-confirm-yes" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="answer_yes"></button>
-                    <button id="new-confirm-no" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="answer_no"></button>
+                    <button id="new-confirm-yes" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="button_yes"></button>
+                    <button id="new-confirm-no" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="button_no"></button>
                 </div>
+            </div>
+        </div>
+        <div id="structogram-general-settings" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
+            <div class="m-auto mt-5 w-1/2 h-1/4 flex flex-col bg-gray-800 rounded-md text-gray-100 p-2">
+                <p class="basis-2/3 text-lg m-2 text-center t-translatable" data-trkey="title_structogram_general_settings"></p>
+                <form>
+                    <label for="structogram-general-settings-index"><span class="t-translatable" data-trkey="structogram_general_settings_index"></span></label>
+                    <input id="structogram-general-settings-index" class="w-full bg-gray-600" type="number">
+                </form>
+                <button id="structogram-general-settings-done" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="button_done"></button>
             </div>
         </div>
     </div>

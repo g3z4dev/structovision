@@ -45,8 +45,9 @@ export class EnglishDictionary extends Dictionary {
         "specification_aux_full": "Auxiliary Data",
         "specification_out_full": "Output",
         "new_confirm_message": "Are you sure you want a new structogram? This cannot be reverted!",
-        "answer_yes": "Yes",
-        "answer_no": "No",
+        "button_yes": "Yes",
+        "button_no": "No",
+        "button_done": "Done",
         "variable_key": "Key",
         "variable_value": "Value",
         "variable_constant": "Constant",
@@ -55,13 +56,15 @@ export class EnglishDictionary extends Dictionary {
         "title_objects": "Objects",
         "title_issues": "Issues",
         "title_results": "Results",
+        "title_structogram_general_settings": "Structogram General Settings",
         "option_name_key": "Key",
         "option_name_value": "Value",
         "option_name_condition": "Condition",
         "option_name_conditions": "Conditions",
         "option_name_from": "From",
         "option_name_to": "To",
-        "option_name_step": "Step"
+        "option_name_step": "Step",
+        "structogram_general_settings_index": "Starting Index"
     }
 }
 
@@ -85,8 +88,9 @@ export class HungarianDictionary extends Dictionary {
         "specification_aux_full": "Segéd Adat",
         "specification_out_full": "Kimenet",
         "new_confirm_message": "Biztos vagy benne, hogy új struktogramot akarsz? Ezt nem lehet visszavonni!",
-        "answer_yes": "Igen",
-        "answer_no": "Nem",
+        "button_yes": "Igen",
+        "button_no": "Nem",
+        "button_done": "Kész",
         "variable_key": "Kulcs",
         "variable_value": "Érték",
         "variable_constant": "Konstans",
@@ -95,13 +99,15 @@ export class HungarianDictionary extends Dictionary {
         "title_objects": "Objektumok",
         "title_issues": "Problémák",
         "title_results": "Eredmények",
+        "title_structogram_general_settings": "Struktogram Általános Beállítások",
         "option_name_key": "Kulcs",
         "option_name_value": "Érték",
         "option_name_condition": "Feltétel",
         "option_name_conditions": "Feltételek",
         "option_name_from": "Kezdő érték",
         "option_name_to": "Felső határ",
-        "option_name_step": "Lépésszám"
+        "option_name_step": "Lépésszám",
+        "structogram_general_settings_index": "Kezdő Index"
     }
 }
 
