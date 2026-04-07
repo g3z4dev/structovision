@@ -10,7 +10,7 @@ import booleanStatementListOptionTemplate from "../../resources/settings/structo
 import keyOptionTemplate from "../../resources/settings/structogram-options/keyoption.html";
 import dataSettingsTemplate from "../../resources/settings/datasettings.html";
 import { booleanType, numberType, SimpleValue, stringType, parseType, typeRegistry, ValueType, type Value, TypeParseError } from "../model/types";
-import { Translator } from "./lang";
+import { Translator } from "./dictionary";
 
 
 const strToType: Record<string, ValueType> = {
@@ -783,10 +783,7 @@ abstract class OptionHandler {
 
 class StatementOptionHandler<J extends Value> extends OptionHandler {
     protected override applyLogic(option: StatementOption<J>, block: StructogramBlock, node: Element): void {
-        node.innerHTML = 
-            node.innerHTML
-                .replaceAll("%id%", block.id + "-" + option.name)
-                .replaceAll("%name%", option.name);     
+        (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;
         const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
         textField.value = option.getStatement();
         textField.addEventListener("change", () => {
@@ -831,12 +828,9 @@ class BooleanStatementListOptionHandler extends OptionHandler {
     }
 
     protected override applyLogic(option: BooleanStatementListOption, block: StructogramBlock, node: Element): void {
-        node.innerHTML = 
-            node.innerHTML
-                .replaceAll("%id%", block.id + "-" + option.name)
-                .replaceAll("%name%", option.name);
+        (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;
         const form = node.querySelector("form") as HTMLElement;
-        const conditionEntry = node.querySelector(".js-condition-entry") as HTMLElement;
+        const conditionEntry = node.querySelector(".t-condition-entry") as HTMLElement;
         const textField = conditionEntry.querySelector("input[type=\"text\"]") as HTMLFormElement;
         const removeButton = conditionEntry.querySelector("input[type=\"button\"]") as HTMLFormElement;
         removeButton.addEventListener("click", event => {
@@ -854,7 +848,7 @@ class BooleanStatementListOptionHandler extends OptionHandler {
         for(; i < statementCount; i++) {
             this.cloneAndAddTextField(form, conditionEntry, i, option);
         }
-        const addButton = node.querySelector(`#${block.id}-${option.name}-add-button`) as HTMLElement;
+        const addButton = node.querySelector(`.t-add-button`) as HTMLElement;
         addButton.addEventListener("click", event => {
             if(event.button == 0) {
                 const oldValues = option.getRawValues();
@@ -869,10 +863,7 @@ class BooleanStatementListOptionHandler extends OptionHandler {
 
 class KeyOptionHandler extends OptionHandler {
     protected override applyLogic(option: KeyOption, block: StructogramBlock, node: Element): void {
-        node.innerHTML = 
-            node.innerHTML
-                .replaceAll("%id%", block.id + "-" + option.name)
-                .replaceAll("%name%", option.name);     
+        (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;  
         const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
         textField.value = option.getKey();
         textField.addEventListener("change", () => {
@@ -893,10 +884,10 @@ class SpecificationSettingHandler {
     private auxDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
     private outDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
 
-    private parseEntryElem(elem: HTMLElement): [string, VariableType] {
+    private parseEntryElem(elem: HTMLElement): [string, string] {
         const textfield = elem.querySelector(`.t-key-textfield`) as HTMLFormElement;
         const select = elem.querySelector(`.t-type-selector`) as HTMLSelectElement;
-        return [textfield.value, select.value as VariableType];
+        return [textfield.value, Translator.getDictionary().untranslateType(select.value)];
     }
 
     private parseEntryElems(elems: NodeListOf<HTMLElement>) {
@@ -956,9 +947,9 @@ class SpecificationSettingHandler {
     }
 
     private setupElements() {
-        this.setupDataSettings(this.structogramBuilder.structogram.inputData, this.inDataElem, "Input");
-        this.setupDataSettings(this.structogramBuilder.structogram.auxData, this.auxDataElem, "Auxilary");
-        this.setupDataSettings(this.structogramBuilder.structogram.outputData, this.outDataElem, "Output");
+        this.setupDataSettings(this.structogramBuilder.structogram.inputData, this.inDataElem, "specification_in_full");
+        this.setupDataSettings(this.structogramBuilder.structogram.auxData, this.auxDataElem, "specification_aux_full");
+        this.setupDataSettings(this.structogramBuilder.structogram.outputData, this.outDataElem, "specification_out_full");
     }
 
     private loadEntriesFor(entries: [string, ValueType][], target: HTMLElement) {
@@ -978,7 +969,7 @@ class SpecificationSettingHandler {
 
     private setupDataSettings(entries: [string, ValueType][], target: HTMLElement, name: string) {
         this.loadEntriesFor(entries, target);
-        setTemplateText(target, "name", name);
+        (target.querySelector(".t-name") as HTMLElement).dataset["trkey"] = name;
         const entriesElem = target.querySelector(".t-entries") as HTMLElement;
         const addButton = target.querySelector(".t-add-button") as HTMLButtonElement;
         addButton.addEventListener("click", () =>  {
@@ -988,11 +979,10 @@ class SpecificationSettingHandler {
 
     private addEntry(key: string, type: ValueType, entriesElem: HTMLElement) {
         const entryElem = this.entryTemplateElem?.cloneNode(true) as HTMLElement;
-        Translator.translateContent(entryElem);
         const textfield = entryElem.querySelector(`.t-key-textfield`) as HTMLFormElement;
         textfield.value = key;
         const typeSelectorField = entryElem.querySelector(`.t-type-selector`) as HTMLSelectElement;
-        typeSelectorField.value = type.getIdentifier();
+        typeSelectorField.value = Translator.getDictionary().translateType(type.getIdentifier());
         const removeButton = entryElem.querySelector(`.t-del-button`) as HTMLButtonElement;
         entriesElem.appendChild(entryElem);
         removeButton.addEventListener("click", () => {
@@ -1121,13 +1111,13 @@ class StructogramSpecificator {
         this.builder = builder;
         this.reset();
         builder.structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-in", `${key}: ${type}`);
+            this.addEntryTo("spec-in", `${key}: ${Translator.getDictionary().translateType(type)}`);
         });
         builder.structogram.emitter.addListener(Structogram.auxSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-aux", `${key}: ${type}`);
+            this.addEntryTo("spec-aux", `${key}: ${Translator.getDictionary().translateType(type)}`);
         });
         builder.structogram.emitter.addListener(Structogram.outputSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-out", `${key}: ${type}`);
+            this.addEntryTo("spec-out", `${key}: ${Translator.getDictionary().translateType(type)}`);
         });
         builder.structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             setTemplateText(this.specificationElem, "spec-in", "");
@@ -1142,15 +1132,15 @@ class StructogramSpecificator {
     private reset() {
         let inEntries = [];
         for(const [key, type]of this.builder.structogram.inputData) {
-            inEntries.push(`${key}: ${type}`);
+            inEntries.push(`${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         }
         let auxEntries = [];
         for(const [key, type]of this.builder.structogram.auxData) {
-            auxEntries.push(`${key}: ${type}`);
+            auxEntries.push(`${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         }
         let outEntries = [];
         for(const [key, type]of this.builder.structogram.outputData) {
-            outEntries.push(`${key}: ${type}`);
+            outEntries.push(`${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         }
         setTemplateText(this.specificationElem, "spec-in", inEntries.join(", "));
         setTemplateText(this.specificationElem, "spec-aux", auxEntries.join(", "));

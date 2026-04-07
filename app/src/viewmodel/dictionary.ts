@@ -1,0 +1,120 @@
+export abstract class Dictionary {
+    protected abstract get typeFromTo(): Record<string, string>;
+    protected abstract get textDictionary(): Record<string, string>;
+
+    protected get typeToFrom() {
+        return Object.entries(this.typeFromTo).reduce((acc, cur) => {
+            acc[cur[1]!] = cur[0]!
+            return acc;
+        }, {} as Record<string, string>);
+    }
+
+    public translateType(type: string): string {
+        Object.entries(this.typeFromTo).forEach(entry => type = type.replace(entry[0]!, entry[1]!));
+        return type;
+    }
+
+    public untranslateType(type: string): string {
+        Object.entries(this.typeFromTo).forEach(entry => type = type.replace(entry[1]!, entry[0]!));
+        return type;
+    }
+
+    public translateElement(element: HTMLElement) {
+        const key = element.dataset["trkey"]!;
+        element.textContent = this.textDictionary[key] ?? key;
+    }
+}
+
+export class EnglishDictionary extends Dictionary {
+    protected override typeFromTo = {
+        "number": "number",
+        "char": "char",
+        "boolean": "boolean",
+        "array": "array",
+        "string": "string",
+        "s1l": "s1l",
+        "s2l": "s2l",
+        "btn": "btn",
+    }
+
+    protected override textDictionary = {
+        "specification_in": "In",
+        "specification_aux": "Aux",
+        "specification_out": "Out",
+        "specification_in_full": "Input",
+        "specification_aux_full": "Auxiliary Data",
+        "specification_out_full": "Output",
+        "new_confirm_message": "Are you sure you want a new structogram? This cannot be reverted!",
+        "answer_yes": "Yes",
+        "answer_no": "No",
+        "variable_key": "Key",
+        "variable_value": "Value",
+        "variable_constant": "Constant",
+        "title_logs": "Logs",
+        "title_logic": "Logic",
+        "title_objects": "Objects",
+        "title_issues": "Issues",
+        "title_results": "Results",
+        "option_name_key": "Key",
+        "option_name_value": "Value",
+        "option_name_condition": "Condition",
+        "option_name_conditions": "Conditions",
+        "option_name_from": "From",
+        "option_name_to": "To",
+        "option_name_step": "Step"
+    }
+}
+
+export class HungarianDictionary extends Dictionary {
+    protected override typeFromTo = {
+        "number": "szám",
+        "char": "karakter",
+        "boolean": "logikai",
+        "array": "tömb",
+        "string": "szöveg",
+        "s1l": "s1l",
+        "s2l": "s2l",
+        "btn": "btn",
+    }
+
+    protected override textDictionary = {
+        "specification_in": "Be",
+        "specification_aux": "SA",
+        "specification_out": "Ki",
+        "specification_in_full": "Bemenet",
+        "specification_aux_full": "Segéd Adat",
+        "specification_out_full": "Kimenet",
+        "new_confirm_message": "Biztos vagy benne, hogy új struktogramot akarsz? Ezt nem lehet visszavonni!",
+        "answer_yes": "Igen",
+        "answer_no": "Nem",
+        "variable_key": "Kulcs",
+        "variable_value": "Érték",
+        "variable_constant": "Konstans",
+        "title_logs": "Kiírások",
+        "title_logic": "Logika",
+        "title_objects": "Objektumok",
+        "title_issues": "Problémák",
+        "title_results": "Eredmények",
+        "option_name_key": "Kulcs",
+        "option_name_value": "Érték",
+        "option_name_condition": "Feltétel",
+        "option_name_conditions": "Feltételek",
+        "option_name_from": "Kezdő érték",
+        "option_name_to": "Felső határ",
+        "option_name_step": "Lépésszám"
+    }
+}
+
+export type Language = "hu" | "en";
+const langToTranslation: Record<string, Dictionary> = {
+    "en": new EnglishDictionary(),
+    "hu": new HungarianDictionary()
+}
+
+export class Translator {
+    public static language: Language = "hu";
+    
+    public static getDictionary(): Dictionary {
+        return langToTranslation[this.language]!
+    }
+}

@@ -1,16 +1,16 @@
-import { Structogram, StructogramBlock, StructogramIssue } from "../model/structogram";
+import { Structogram, StructogramBlock } from "../model/structogram";
 import { baseRunSpeed, notRunningClass, runningClass } from "./constants";
 import { StructogramRenderer } from "./structogramrenderer";
-import { CameraHandler, lerp, ListWindow, parseIntoHTML, setHeight, setID, setPosition, setPosition1, setPosition2, setSize, setTemplateText, setWidth, setX } from "./util";
+import { CameraHandler, lerp, ListWindow, parseIntoHTML, setID, setTemplateText } from "./util";
 import EventEmitter2 from "eventemitter2";
 import { Memory, type MemoryEntry } from "../model/memory";
-import { Operand, Operator, ResolvableOperand, Statement, type Bracket } from "../model/statement";
+import { Operator, ResolvableOperand, Statement, type Bracket } from "../model/statement";
 
 import operatorTemplate from "../../resources/program-views/logic-view-templates/operator.html";
 import operandTemplate from "../../resources/program-views/logic-view-templates/operand.html";
 
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
-import { SimpleValue, UtilityArray, UtilityObject, type Value } from "../model/types";
+import { UtilityArray, UtilityObject, type Value } from "../model/types";
 
 type RunMode = "onestep" | "run" | "paused";
 
@@ -21,9 +21,11 @@ export class StructogramRunner extends StructogramRenderer {
     private readonly inputDataElem = document.querySelector("#input-data") as HTMLElement;
     private readonly runIssueWindow = new ListWindow("issues", "issues-ok");
     private readonly runResultsWindow = new ListWindow("results", "results-ok");
+    public readonly emitter = new EventEmitter2();
     public readonly timeControl = new TimeControl(this);
     public readonly programViewManager = new ProgramViewManager(this);
     private runMode: RunMode = "paused";
+    public static readonly runFinished = "structogramrunner.finished";
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
@@ -121,6 +123,7 @@ export class StructogramRunner extends StructogramRenderer {
             this.runResultsWindow.addEntry(key + " = " + value);
         }
         this.runResultsWindow.show();
+        this.emitter.emit(StructogramRunner.runFinished);
     }
 
     public restart() {
@@ -128,6 +131,7 @@ export class StructogramRunner extends StructogramRenderer {
         this.runMode = "paused";
         this.currentBlock = undefined;
         this.prepared = false;
+        this.emitter.emit(StructogramRunner.runFinished);
     }
 
     public start() {
@@ -218,7 +222,7 @@ class TimeControl {
         if(currentSpeed > 9) currentSpeed = 9;
         this._currentSpeedIndex = currentSpeed;
         const speed = this.speeds[this._currentSpeedIndex]!;
-        this.speedLabel.innerText = `${speed}x`;
+        this.speedLabel.innerText = `${speed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}x`;
     }
 
     private get currentSpeedIndex() {
@@ -237,9 +241,17 @@ class TimeControl {
     private setupButtons() {
         this.startButton.addEventListener("click", () => {
             this.runner.start();
+            this.startButton.classList.add("hidden");
+            this.pauseButton.classList.remove("hidden");
         });
         this.pauseButton.addEventListener("click", () => {
             this.runner.pause();
+            this.startButton.classList.remove("hidden");
+            this.pauseButton.classList.add("hidden");
+        });
+        this.runner.emitter.on(StructogramRunner.runFinished, () => {
+            this.startButton.classList.remove("hidden");
+            this.pauseButton.classList.add("hidden");
         });
         this.stepButton.addEventListener("click", () => {
             this.runner.step();

@@ -2,6 +2,7 @@ import EventEmitter2 from "eventemitter2";
 import { Structogram, StructogramIssue } from "../model/structogram";
 import { StructogramBuilder } from "./structogrambuilder";
 import { StructogramRunner } from "./structogramrunner";
+import { Translator } from "./dictionary";
 
 type ViewMode = "builder" | "runner";
 
@@ -36,6 +37,10 @@ export class ViewModel {
         return this._mode;
     }
 
+    private translateElementsIn(element: ParentNode) {
+        [...element.querySelectorAll(".t-translatable")].filter(elem => elem instanceof HTMLElement).forEach(e => Translator.getDictionary().translateElement(e));
+    }
+
     constructor(structogram: Structogram) {
         this.structogram = structogram;
         this.structogramBuilder = new StructogramBuilder(this.structogram);
@@ -53,6 +58,21 @@ export class ViewModel {
             if(event.button == 0) {
                 this.mode = "runner";
             }
+        });
+        const observer = new MutationObserver((mutationList, _observer) => {
+            for(const mutation of mutationList) {
+                if(mutation.type == "childList") {
+                    for(const node of mutation.addedNodes) {
+                        if(node instanceof HTMLElement) {
+                            this.translateElementsIn(node);
+                        }
+                    }
+                }
+            }
+        });
+        observer.observe(document, {"childList": true, "subtree": true});
+        window.addEventListener("load", () => {
+            this.translateElementsIn(document);
         });
     }
 

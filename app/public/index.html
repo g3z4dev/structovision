@@ -12,8 +12,8 @@
     <div class="h-full" id="structogram-builder">
         <div class="grid grid-cols-12 h-full">
             <div class="col-span-7 flex flex-col ">
-                <div class="flex bg-gray-200 border-b border-b-gray-400 h-10">
-                    <div class="flex flex-row" id="toolbar">
+                <div class="flex bg-gray-200 border-b border-b-gray-400 h-12">
+                    <div class="basis-3/4 flex flex-row" id="toolbar">
                         <svg 
                         class="overflow-visible hover:fill-blue-100 fill-white w-full h-full" 
                         id="toolbar-assignment-block">
@@ -62,18 +62,18 @@
                             <rect width="80%" height="60%" x="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                         </svg>
                     </div>
-                    <div class="flex flex-row border-l border-gray-800" id="options">
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="new-button">new</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="undo-button">undo</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="redo-button">redo</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="save-button">save</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto m-2" id="load-button">load</button>
+                    <div class="basis-1/4 flex flex-row justify-around border-l border-gray-800 p-1" id="options">
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="new-button"><img class="aspect-square h-full" src="icons/new.png" alt="new-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="undo-button"><img class="aspect-square h-full" src="icons/timelinearrow.png" alt="undo-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="redo-button"><img class="aspect-square h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/timelinearrow.png" alt="redo-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
                     </div>
                 </div>
                 <div class="align-middle m-0 bg-white border-b border-b-gray-800 hover:bg-cyan-50" id="specification">
-                    <p>In: <span class="t-spec-in"></span></p>
-                    <p>Aux: <span class="t-spec-aux"></span></p>
-                    <p>Out: <span class="t-spec-out"></span></p>
+                    <p><span class="t-translatable" data-trkey="specification_in"></span>: <span class="t-spec-in"></span></p>
+                    <p><span class="t-translatable" data-trkey="specification_aux"></span>: <span class="t-spec-aux"></span></p>
+                    <p><span class="t-translatable" data-trkey="specification_out"></span>: <span class="t-spec-out"></span></p>
                 </div>
                 <div class="structogram-view basis-full w-full h-full overflow-clip bg-blue-50">
                     <svg width="100%" height="100%">
@@ -83,9 +83,9 @@
                         </svg>
                     </svg>
                 </div>
-                <div class="flex bg-gray-200 border-t border-t-gray-400">
+                <div class="flex bg-gray-200 border-t border-t-gray-400 h-12 p-1">
                     <div class="flex-12">
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="switch-to-runner-button">player</button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto h-full" id="switch-to-runner-button"><img class="w-full h-full" src="icons/play.png" alt="play-icon"/></button>
                     </div>
                 </div>
             </div>
@@ -94,17 +94,17 @@
         </div>
         <div id="new-confirm" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
             <div class="m-auto mt-5 w-1/2 h-1/4 flex flex-col bg-gray-800 rounded-md">
-                <p class="text-white basis-2/3 text-lg m-2 text-center">Are you sure you want a new structogram? This cannot be reverted!</p>
+                <p class="text-white basis-2/3 text-lg m-2 text-center t-translatable" data-trkey="new_confirm_message"></p>
                 <div class="w-full flex flex-row items-center justify-center">
-                    <button id="new-confirm-yes" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5">Yes</button>
-                    <button id="new-confirm-no" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5">No</button>
+                    <button id="new-confirm-yes" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="answer_yes"></button>
+                    <button id="new-confirm-no" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="answer_no"></button>
                 </div>
             </div>
         </div>
     </div>
     <div class="hidden h-screen overflow-hidden" id="structogram-runner">
         <div class="grid grid-cols-12 h-full">
-            <div class="col-span-6 flex flex-col ">
+            <div class="col-span-6 flex flex-col">
                 <div class="bg-white border border-gray-800" id="input-data">
                     
                 </div>
@@ -116,58 +116,62 @@
                         </svg>
                     </svg>
                 </div>
-                <div class="flex bg-gray-200 border-t border-t-gray-400">
-                    <div class="flex-12">
-                        <div id="speed-label" class="inline">1x</div>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="slower-button">slower</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="faster-button">faster</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="start-button">start</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="pause-button">pause</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="step-button">step</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="reset-button">reset</button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto" id="switch-to-builder-button">editor</button>
-                    </div>
+                <div class="flex gap-2 p-1 bg-gray-200 border-t border-t-gray-400 h-12">
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="slower-button"><img class="w-full h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/faster.png" alt="slower-icon"/></button>
+                    <div class="bg-blue-500 text-white h-full flex items-center"><div id="speed-label" class="table-cell align-middle text-center">1.00x</div></div>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="faster-button"><img class="w-full h-full" src="icons/faster.png" alt="faster-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="start-button"><img class="w-full h-full" src="icons/play.png" alt="start-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square hidden" id="pause-button"><img class="w-full h-full" src="icons/pause.png" alt="pause-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="step-button"><img class="w-full h-full" src="icons/step.png" alt="step-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="reset-button"><img class="w-full h-full" src="icons/reset.png" alt="reset-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="switch-to-builder-button"><img class="w-full h-full" src="icons/editor.png" alt="editor-icon"/></button>
                 </div>
             </div>
             <div class="col-span-6 bg-gray-900 flex flex-col h-full h-max-full overflow-hidden" id="program-views">
-                <div id="output-view" class="basis-1/8 bg-gray-800 m-1 overflow-hidden text-white h-full">
-                    <p class="m-2">Logs</p>
-                    <div class="bg-gray-700 t-logs overflow-y-scroll h-full flex flex-col">
-                        <p class="t-log-template text-wrap mr-1 ml-1"></p>
+                <div id="output-view" class="basis-1/8 p-1 overflow-hidden text-white">
+                    <div class="bg-gray-800 flex flex-col justify-evenly h-full">
+                        <p class="m-2 t-translatable" data-trkey="title_logs"></p>
+                        <div class="bg-gray-700 t-logs overflow-y-scroll h-full flex flex-col">
+                            <p class="t-log-template text-wrap mr-1 ml-1"></p>
+                        </div>
                     </div>
                 </div>
-                <div id="memory-view" class="basis-1/4 overflow-y-scroll bg-gray-700 m-1 h-full">
-                    <table class="w-full border-collapse">
-                        <thead>
-                            <tr class="border-2 border-blue-600 bg-blue-600 text-white">
-                                <th class="w-2/5 border-2 border-blue-600">Key</th>
-                                <th class="w-2/5 border-2 border-blue-600">Value</th>
-                                <th class="w-1/5 border-2 border-blue-600">Constant</th>
-                            </tr>
-                        </thead>
-                        <tbody class="t-memory-entries">
-                            <tr class="t-memory-template border border-blue-600 text-white">
-                                <td class="t-memory-key w-2/5 border border-blue-600"></td>
-                                <td class="t-memory-value w-2/5 border border-blue-600"></td>
-                                <td class="t-memory-constant w-1/5 border border-blue-600"></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="memory-view" class="basis-1/4 p-1">
+                    <div class="bg-gray-700 h-full w-full overflow-y-scroll">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="border-2 border-blue-600 bg-blue-600 text-white">
+                                    <th class="w-2/5 border-2 border-blue-600 t-translatable" data-trkey="variable_key"></th>
+                                    <th class="w-2/5 border-2 border-blue-600 t-translatable" data-trkey="variable_value"></th>
+                                    <th class="w-1/5 border-2 border-blue-600 t-translatable" data-trkey="variable_constant"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="t-memory-entries">
+                                <tr class="t-memory-template border border-blue-600 text-white">
+                                    <td class="t-memory-key w-2/5 border border-blue-600"></td>
+                                    <td class="t-memory-value w-2/5 border border-blue-600"></td>
+                                    <td class="t-memory-constant w-1/5 border border-blue-600"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div id="logic-view" class="basis-1/8 bg-gray-800 m-1 h-full">
-                    <p class="text-white">Logic</p>
-                    <div class="t-logic bg-gray-700 flex flex-row w-full h-full overflow-x-scroll">
+                <div id="logic-view" class="basis-1/8 p-1">
+                    <div class="bg-gray-800 flex flex-col justify-evenly h-full">
+                        <p class="text-white t-translatable" data-trkey="title_logic"></p>
+                        <div class="t-logic bg-gray-700 flex flex-row w-full h-full overflow-x-scroll">
 
+                        </div>
                     </div>
                 </div>
-                <div id="object-view" class="basis-1/2 bg-gray-800 m-1 h-full overflow-hidden">
-                    <div class="flex flex-row mb-1">
-                        <p class="text-white mr-1">Objects</p>
+                <div id="object-view" class="basis-1/2 flex flex-col justify-evenly p-1 overflow-hidden">
+                    <div class="flex flex-row pb-1 bg-gray-800">
+                        <p class="text-white mr-1 t-translatable" data-trkey="title_objects"></p>
                         <form>
                             <input type="text" class="t-object-specifiers bg-gray-600 text-white"></input>
                         </form>
                     </div>
-                    <canvas class="t-object bg-gray-700 w-full h-full">
+                    <canvas class="t-object h-full bg-gray-700">
 
                     </canvas>
                 </div>
@@ -175,7 +179,7 @@
         </div>
         <div id="issues" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
             <div class="m-auto mt-5 w-1/2 h-2/3 flex flex-col bg-gray-800 border-2 rounded-md border-red-600">
-                <p class="text-white text-lg m-2">Issues</p>
+                <p class="text-white text-lg m-2 t-translatable" data-trkey="title_issues"></p>
                 <div class="basis-4/5 overflow-y-scroll bg-gray-700 p-2">
                     <ul class="text-red-400">
 
@@ -188,7 +192,7 @@
         </div>
         <div id="results" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
             <div class="m-auto mt-5 w-1/2 h-2/3 flex flex-col bg-gray-800 rounded-md">
-                <p class="text-white text-lg m-2">Results</p>
+                <p class="text-white text-lg m-2 t-translatable" data-trkey="title_results"></p>
                 <div class="basis-4/5 overflow-y-scroll bg-gray-700 p-2">
                     <ul class="text-white">
 
