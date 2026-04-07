@@ -1,6 +1,6 @@
 import EventEmitter2 from "eventemitter2";
 import type { VariableType } from "../model/memory";
-import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, TrueFalseBranchingBlock, type BlockOption, type StructogramBlock } from "../model/structogram";
+import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, StructogramBlock, TrueFalseBranchingBlock, type BlockOption } from "../model/structogram";
 import { baseBlockHeight, selectedClass, unselectedClass } from "./constants";
 import { StructogramRenderer, UndefinedBlockContext } from "./structogramrenderer";
 import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
@@ -281,6 +281,9 @@ class ActionTimeLine {
 }
 
 export class StructogramBuilder extends StructogramRenderer {
+    public readonly emitter = new EventEmitter2();
+    public static readonly currentBlockChanged = "structogrambuilder.currentblock.changed";
+
     private newButton = document.querySelector("#new-button") as HTMLButtonElement;
     private settingsButton = document.querySelector("#settings-button") as HTMLButtonElement;
     private saveButton = document.querySelector("#save-button") as HTMLButtonElement;
@@ -292,10 +295,39 @@ export class StructogramBuilder extends StructogramRenderer {
     private newNoButton = this.newWindow.querySelector("#new-confirm-no") as HTMLButtonElement;
     public readonly structogramSpecificator = new StructogramSpecificator(this);
     private movingBlock: MovingBlock | undefined;
+    private _currentBlock: StructogramBlock | undefined;
+    private blockClipboard: string = "";
     public readonly timeLine = new ActionTimeLine();
     public readonly toolbar = new BlockToolbar(this.structogram);
     public readonly structogramSettings = new StructogramSettings(this);
     public readonly structogramGeneralSettings = new StructogramGeneralSettings(this.structogram);
+
+    public set currentBlock(block: StructogramBlock | undefined) {
+        if(this._currentBlock) {
+            const node = document.querySelector(`#${this.idPrefix}-${this._currentBlock.id}`);
+            node?.classList.remove(...selectedClass);
+            node?.classList.add(...unselectedClass);
+        } else {
+            const speci = document.querySelector("#specification");
+            speci?.classList.remove("bg-cyan-100");
+            speci?.classList.add("bg-white", "hover:bg-cyan-50");
+        }
+        this._currentBlock = block;
+        if(this._currentBlock) {
+            const node = document.querySelector(`#${this.idPrefix}-${this._currentBlock.id}`);
+            node?.classList.remove(...unselectedClass);
+            node?.classList.add(...selectedClass);
+        } else {
+            const speci = document.querySelector("#specification");
+            speci?.classList.remove("bg-white", "hover:bg-cyan-50");
+            speci?.classList.add("bg-cyan-100");
+        }
+        this.emitter.emit(StructogramBuilder.currentBlockChanged);
+    }
+
+    public get currentBlock() {
+        return this._currentBlock;
+    }
 
     /**
      * Creates an HTML element that can accomodate a block tree.
@@ -466,8 +498,8 @@ export class StructogramBuilder extends StructogramRenderer {
                     this.renderTarget.removeChild(this.movingBlock.associatedElement);
                     this.timeLine.didAction(new RemoveSegmentAction(this.renderTarget, this.movingBlock.associatedElement));
                 }
-                if(this.structogramSettings.currentBlock == this.movingBlock.block) {
-                    this.structogramSettings.currentBlock = undefined;
+                if(this.currentBlock == this.movingBlock.block) {
+                    this.currentBlock = undefined;
                 }
                 this.movingBlock = undefined;
             }
@@ -491,6 +523,37 @@ export class StructogramBuilder extends StructogramRenderer {
         });
     }
 
+    private setupCopyPaste() {
+        let mouseX = 0;
+        let mouseY = 0;
+        this.viewElement.addEventListener("mousemove", event => {
+            mouseX = event.offsetX;
+            mouseY = event.offsetY;
+        });
+        document.addEventListener("keydown", event => {
+            if(this.currentBlock && event.ctrlKey && event.key == "c") {
+                this.blockClipboard = this.currentBlock.getData();
+            } else if(this.currentBlock && event.ctrlKey && event.key == "x") {
+                this.blockClipboard = this.currentBlock.getData()
+                this.timeLine.start();
+                this.disconnectBlock(this.currentBlock);
+                this.structogram.removeBlock(this.currentBlock);
+                this.timeLine.didAction(new DeleteBlockAction(this.currentBlock));
+                const associatedElem = this.renderTarget.querySelector(`#${this.currentBlock.id}-segment`);
+                if(associatedElem) {
+                    this.renderTarget.removeChild(associatedElem);
+                    this.timeLine.didAction(new RemoveSegmentAction(this.renderTarget, associatedElem));
+                }
+                this.currentBlock = undefined;
+            } else if(this.blockClipboard != "" && event.ctrlKey && event.key == "v") {
+                this.timeLine.start();
+                const block = StructogramBlock.BlockDataFactory.constructFromData(this.blockClipboard, this.structogram);
+                this.timeLine.didAction(new AddBlockAction(block));
+                this.addSegmentFor(block, this.xDivToSvg(mouseX), this.yDivToSvg(mouseY));
+            }
+        });
+    }
+
     constructor(structogram: Structogram) {
         super(structogram, document.querySelector("#structogram-builder")!, "builder")
         this.toolbar.generateHTML();
@@ -499,6 +562,7 @@ export class StructogramBuilder extends StructogramRenderer {
         this.setupPersistenceButtons(structogram);
         this.setupTimeLineControlButtons();
         this.setupNewStructogramButtons();
+        this.setupCopyPaste();
         this.settingsButton.addEventListener("click", () => {
             this.structogramGeneralSettings.show();
         });
@@ -548,7 +612,7 @@ export class StructogramBuilder extends StructogramRenderer {
         super.onBlockAdded(block, parent, elem);
         elem.addEventListener("mousedown", event => {
             if(event.button == 0) {
-                this.structogramSettings.currentBlock = block;
+                this.currentBlock = block;
                 this.movingBlock = new MovingBlock(block, event.clientX, event.clientY);
                 const associatedElem = this.renderTarget.querySelector(`#${block.id}-segment`);
                 if(associatedElem) {
@@ -557,7 +621,7 @@ export class StructogramBuilder extends StructogramRenderer {
                 event.stopPropagation();
             }
         })
-        if(this.structogramSettings.currentBlock == block) {
+        if(this.currentBlock == block) {
             elem.classList.remove(...unselectedClass);
             elem.classList.add(...selectedClass);
         }
@@ -904,9 +968,9 @@ class SpecificationSettingHandler {
         const auxDataEntries = this.auxDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
         const outputDataEntries = this.outDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
         
-        const oldInput = this.structogramBuilder.structogram.inputData;
-        const oldAux = this.structogramBuilder.structogram.auxData;
-        const oldOutput = this.structogramBuilder.structogram.outputData;
+        const oldInput = this.structogramBuilder.structogram.inputData.map(entry => [entry[0]!, entry[1]!.getIdentifier()]);
+        const oldAux = this.structogramBuilder.structogram.auxData.map(entry => [entry[0]!, entry[1]!.getIdentifier()]);
+        const oldOutput = this.structogramBuilder.structogram.outputData.map(entry => [entry[0]!, entry[1]!.getIdentifier()]);
 
         this.structogramBuilder.structogram.clearData();
 
@@ -1018,7 +1082,6 @@ class StructogramSettings {
     public static readonly blockOptionChanged = "settings.blockoption.change"
     public static readonly specificationChanged = "settings.specification.change"
     public readonly emitter: EventEmitter2 = new EventEmitter2();
-    private _currentBlock: StructogramBlock | undefined;
     private structogramSettingsElem = document.querySelector("#structogram-settings")!;
     private optionResourceManager: ResourceManager = new ResourceManager();
     private optionHandlers: Record<string, OptionHandler> = {};
@@ -1041,6 +1104,7 @@ class StructogramSettings {
         this.optionResourceManager.register("keyoption", keyOptionTemplate);
         this.optionHandlers["keyoption"] = new KeyOptionHandler(this.optionResourceManager);
         this.addListenersForHandlers();
+        this.addCurrentBlockHandler();
     }
 
     private addListenersForHandlers() {
@@ -1054,12 +1118,18 @@ class StructogramSettings {
         });
     }
 
+    private addCurrentBlockHandler() {
+        this.builder.emitter.addListener(StructogramBuilder.currentBlockChanged, () => {
+            this.generateHTML();
+        });
+    }
+
     public generateHTML() {
         this.structogramSettingsElem.textContent = "";
-        if(this._currentBlock) {
-            for(const option of this._currentBlock.getOptions()) {
+        if(this.builder.currentBlock) {
+            for(const option of this.builder.currentBlock.getOptions()) {
                 if(option.getClassIdentifier() in this.optionHandlers) {
-                    const node = this.optionHandlers[option.getClassIdentifier()]!.getHTMLNodeFor(option, this._currentBlock);
+                    const node = this.optionHandlers[option.getClassIdentifier()]!.getHTMLNodeFor(option, this.builder.currentBlock);
                     if(node) this.structogramSettingsElem.appendChild(node);
                 }
             }
@@ -1071,32 +1141,7 @@ class StructogramSettings {
         }
     }
 
-    public set currentBlock(block: StructogramBlock | undefined) {
-        if(this._currentBlock) {
-            const node = document.querySelector(`#${this.builder.idPrefix}-${this._currentBlock.id}`);
-            node?.classList.remove(...selectedClass);
-            node?.classList.add(...unselectedClass);
-        } else {
-            const speci = document.querySelector("#specification");
-            speci?.classList.remove("bg-cyan-100");
-            speci?.classList.add("bg-white", "hover:bg-cyan-50");
-        }
-        this._currentBlock = block;
-        if(this._currentBlock) {
-            const node = document.querySelector(`#${this.builder.idPrefix}-${this._currentBlock.id}`);
-            node?.classList.remove(...unselectedClass);
-            node?.classList.add(...selectedClass);
-        } else {
-            const speci = document.querySelector("#specification");
-            speci?.classList.remove("bg-white", "hover:bg-cyan-50");
-            speci?.classList.add("bg-cyan-100");
-        }
-        this.generateHTML();
-    }
-
-    public get currentBlock() {
-        return this._currentBlock;
-    }
+    
 }
 
 class StructogramSpecificator {
@@ -1130,7 +1175,7 @@ class StructogramSpecificator {
             setTemplateText(this.specificationElem, "spec-out", "");
         });
         this.specificationElem.addEventListener("click", () => {
-            builder.structogramSettings.currentBlock = undefined;
+            builder.currentBlock = undefined;
         });
     }
 
