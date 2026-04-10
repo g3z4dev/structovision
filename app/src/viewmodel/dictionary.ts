@@ -69,7 +69,8 @@ export class EnglishDictionary extends Dictionary {
         "option_name_to": "To",
         "option_name_step": "Step",
         "structogram_general_settings_index": "Starting Index",
-        "object_view_keys": "Keys"
+        "object_view_keys": "Keys",
+        "structogram-width": "Width"
     }
 
     public override getFlag(): string {
@@ -117,7 +118,8 @@ export class HungarianDictionary extends Dictionary {
         "option_name_to": "Felső határ",
         "option_name_step": "Lépésszám",
         "structogram_general_settings_index": "Kezdő Index",
-        "object_view_keys": "Kulcsok"
+        "object_view_keys": "Kulcsok",
+        "structogram-width": "Szélesség"
     }
 
     public override getFlag(): string {

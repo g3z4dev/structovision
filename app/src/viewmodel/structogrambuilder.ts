@@ -565,7 +565,7 @@ export class StructogramBuilder extends StructogramRenderer {
             const associatedElem = this.renderTarget.querySelector(`#${block.id}-segment`);
             if(associatedElem instanceof SVGSVGElement) {
                 associatedElem.textContent = "";
-                const height = this.resolveHTMLFor(associatedElem, block, this.structogramWidth, 0, 0);
+                const height = this.resolveHTMLFor(associatedElem, block, this.viewModel.structogramWidth, 0, 0);
                 setHeight(associatedElem, height);
             }
         }

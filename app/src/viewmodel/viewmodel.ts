@@ -8,6 +8,20 @@ type ViewMode = "builder" | "runner";
 
 export class ViewModel {
     public readonly structogram: Structogram;
+
+    private _structogramWidth: number = 1024;
+
+    public get structogramWidth() {
+        return this._structogramWidth;
+    }
+
+    private set structogramWidth(width: number) {
+        this._structogramWidth = Math.max(Math.min(width, 8096), 1024);
+        this.structogramBuilder.updateHTML();
+        this.structogramRunner.updateHTML();
+        this.saveCache();
+    }
+
     public readonly structogramBuilder;
     public readonly structogramRunner;
     private readonly switchToBuilderButton = document.querySelector("#switch-to-builder-button") as HTMLButtonElement;
@@ -75,8 +89,9 @@ export class ViewModel {
         } else {
             Translator.language = localStorage["language"]!;
         }
-        this.setupPersistenceButtons();
         this.loadCache();
+        this.setupPersistenceButtons();
+        this.setupStructogramWidthHandling();
         this.structogramBuilder.updateHTML();
     }
 
@@ -88,6 +103,7 @@ export class ViewModel {
 
     private loadData(data: any) {
         this.structogram.loadData(data["structogram"]);
+        this.structogramWidth = data["structogram_width"];
         this.structogramRunner.setInputs(data["inputs"]);
         this.structogramRunner.setObjectKeys(data["object_keys"]);
     }
@@ -95,6 +111,7 @@ export class ViewModel {
     private getData() {
         const data = {
             "structogram": this.structogram.getData(),
+            "structogram_width": this.structogramWidth,
             "inputs": this.structogramRunner.getInputs(),
             "object_keys": this.structogramRunner.getObjectKeys()
         }
@@ -102,6 +119,15 @@ export class ViewModel {
         return dataJson;
     }
     
+    private setupStructogramWidthHandling() {
+        const widthInput = document.querySelector("#structogram-width") as HTMLInputElement;
+        widthInput.value = this.structogramWidth.toString();
+        widthInput.addEventListener("change", () => {
+            this.structogramWidth = Number(widthInput.value);
+            widthInput.value = this.structogramWidth.toString();
+        });
+    }
+
     private setupPersistenceButtons() {
         // https://www.javaspring.net/blog/create-and-save-a-file-with-javascript/
         const a = document.createElement("a");

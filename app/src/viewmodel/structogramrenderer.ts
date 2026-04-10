@@ -42,7 +42,6 @@ export class StructogramRenderer {
     protected readonly originOffsetY;
     protected originX = 0;
     protected originY = 0;
-    protected structogramWidth = 1024;
     protected scale = 1;
     protected rightClickDown = false;
     public readonly idPrefix;
@@ -113,7 +112,7 @@ export class StructogramRenderer {
         this.structogramSVG.textContent = "";
         let block = this.structogram.startingBlock;
         const height = this.resolveHTMLFor(this.structogramSVG, block);
-        setSize(this.structogramSVG, this.structogramWidth, height);
+        setSize(this.structogramSVG, this.viewModel.structogramWidth, height);
         this.updateStructogramViewTransformation();
     }
 
@@ -188,7 +187,7 @@ export class StructogramRenderer {
      * @param _yOffset the y offset of the tree
      * @returns the height of the tree generated
      */
-    protected resolveHTMLFor(parent: Element, block: StructogramBlock | undefined, width: number = this.structogramWidth, xOffset: number = 0, _yOffset: number = 0): number {
+    protected resolveHTMLFor(parent: Element, block: StructogramBlock | undefined, width: number = this.viewModel.structogramWidth, xOffset: number = 0, _yOffset: number = 0): number {
         let prevBlock: StructogramBlock | undefined = undefined;
         let currentBlock: StructogramBlock | undefined = block;
         let yOffset = _yOffset;
