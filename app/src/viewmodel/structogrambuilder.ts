@@ -491,32 +491,48 @@ export class StructogramBuilder extends StructogramRenderer {
     private setupCopyPaste() {
         let mouseX = 0;
         let mouseY = 0;
+        let mouseInView = false;
+        let pressed = false;
         this.viewElement.addEventListener("mousemove", event => {
             mouseX = event.offsetX;
             mouseY = event.offsetY;
         });
+        this.viewElement.addEventListener("mouseenter", () => {
+            mouseInView = true;
+        });
+        this.viewElement.addEventListener("mouseleave", () => {
+            mouseInView = false;
+        });
         document.addEventListener("keydown", event => {
-            if(this.currentBlock && event.ctrlKey && event.key == "c") {
-                this.blockClipboard = this.currentBlock.getData();
-            } else if(this.currentBlock && event.ctrlKey && event.key == "x") {
-                this.blockClipboard = this.currentBlock.getData()
-                this.timeLine.start();
-                this.disconnectBlock(this.currentBlock);
-                this.structogram.removeBlock(this.currentBlock);
-                this.timeLine.didAction(new DeleteBlockAction(this.currentBlock));
-                const associatedElem = this.renderTarget.querySelector(`#${this.currentBlock.id}-segment`);
-                if(associatedElem) {
-                    this.renderTarget.removeChild(associatedElem);
-                    this.timeLine.didAction(new RemoveSegmentAction(this.renderTarget, associatedElem));
+            if(!mouseInView) return;
+            if(pressed) return;
+            if(event.ctrlKey && event.key != "Control") {
+                pressed = true;
+                if(this.currentBlock && event.key == "c") {
+                    this.blockClipboard = this.currentBlock.getData();
+                } else if(this.currentBlock && event.key == "x") {
+                    this.blockClipboard = this.currentBlock.getData()
+                    this.timeLine.start();
+                    this.disconnectBlock(this.currentBlock);
+                    this.structogram.removeBlock(this.currentBlock);
+                    this.timeLine.didAction(new DeleteBlockAction(this.currentBlock));
+                    const associatedElem = this.renderTarget.querySelector(`#${this.currentBlock.id}-segment`);
+                    if(associatedElem) {
+                        this.renderTarget.removeChild(associatedElem);
+                        this.timeLine.didAction(new RemoveSegmentAction(this.renderTarget, associatedElem));
+                    }
+                    this.currentBlock = undefined;
+                } else if(this.blockClipboard != "" && event.key == "v") {
+                    this.timeLine.start();
+                    const block = StructogramBlock.BlockDataFactory.constructFromData(this.blockClipboard, this.structogram);
+                    this.timeLine.didAction(new AddBlockAction(block));
+                    this.addSegmentFor(block, this.xDivToSvg(mouseX), this.yDivToSvg(mouseY));
                 }
-                this.currentBlock = undefined;
-            } else if(this.blockClipboard != "" && event.ctrlKey && event.key == "v") {
-                this.timeLine.start();
-                const block = StructogramBlock.BlockDataFactory.constructFromData(this.blockClipboard, this.structogram);
-                this.timeLine.didAction(new AddBlockAction(block));
-                this.addSegmentFor(block, this.xDivToSvg(mouseX), this.yDivToSvg(mouseY));
             }
         });
+        document.addEventListener("keyup", () => {
+            pressed = false;
+        })
     }
 
     constructor(structogram: Structogram, viewModel: ViewModel) {
