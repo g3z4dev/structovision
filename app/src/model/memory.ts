@@ -5,9 +5,11 @@ export type VariableType = "number" | "string" | "boolean";
 
 
 export class VariableCreationError extends Error {
+    public readonly translationKey: string;
 
-    constructor(m: string) {
+    constructor(m: string, translationKey: string) {
         super(m);
+        this.translationKey = translationKey;
         Object.setPrototypeOf(this, VariableCreationError.prototype);
     }
 }
@@ -62,10 +64,10 @@ export class Memory {
 
     public createVariable(key: string, value: ValueType, constant: boolean = false) {
         if(Memory.forbiddenKeys.includes(key) || !this.validateKeyName(key)) {
-            throw new VariableCreationError(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`);
+            throw new VariableCreationError(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`, "error_forbidden_key");
         }
         if(key in this.variables) {
-            throw new VariableCreationError(`Variable with key [${key}] is already defined!`);
+            throw new VariableCreationError(`Variable with key [${key}] is already defined!`, "error_duplicate_key");
         }
         const entry = new MemoryEntry(key, value, constant);
         this.variables[key] = entry;

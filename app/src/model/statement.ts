@@ -8,9 +8,11 @@ export type Bracket = OpeningBracket | ClosingBracket;
 type Comma = ",";
 
 export class StatementParseError extends Error {
+    public readonly translationKey: string;
 
-    constructor(m: string) {
+    constructor(m: string, translationKey: string) {
         super(m);
+        this.translationKey = translationKey;
         Object.setPrototypeOf(this, StatementParseError.prototype);
     }
 }
@@ -18,7 +20,6 @@ export class StatementParseError extends Error {
 export class StatementEvaluationError extends Error {
     constructor(m: string) {
         super(m);
-
         Object.setPrototypeOf(this, StatementEvaluationError.prototype);
     }
 }
@@ -252,7 +253,7 @@ class ObjectGetOperator extends Operator {
         if(!(parameterTypes[1] instanceof TokenType)) throw new Error("Second parameter is not a token!");
         const objectType = parameterTypes[0]!;
         const field = parameterTypes[1].token;
-        if(!objectType.hasField(field)) throw new StatementParseError(`Calling non-existing field [${field}] on object [${objectType.getIdentifier()}]!`);
+        if(!objectType.hasField(field)) throw new StatementParseError(`Accessing non-existing field [${field}] on object [${objectType.getIdentifier()}]!`, "error_no_field");
         return objectType.getFieldType(field);
     }
 }
@@ -508,7 +509,7 @@ class ArrayLiteral extends ResolvableOperand {
         const values = ArrayLiteral.splitElements(text).map(token => AnyStatement.parse(token, memory, indexResolver));
         for(let i = 0; i < values.length; i++) {
             for(let j = i+1; j < values.length; j++) {
-                if(!values[i]!.getReturnType().matches(values[j]!.getReturnType())) throw new StatementParseError("Arrays cannot be heterogeneous!")
+                if(!values[i]!.getReturnType().matches(values[j]!.getReturnType())) throw new StatementParseError("Arrays cannot be heterogeneous!", "error_array_heterogeneous")
             }
         }
         return new ArrayLiteral(values, values.length > 0 ? values[0]!.getReturnType() : anyType);
@@ -576,7 +577,7 @@ class VariableOperand extends ResolvableOperand {
         this._key = key;
         this.memory = memory;
         if(!this.memory.hasVariable(key)) {
-            throw new StatementParseError(`Invalid variable key [${key}]!`);
+            throw new StatementParseError(`Invalid variable key [${key}]!`, "error_undefined_variable");
         }
     }
 
@@ -653,7 +654,7 @@ export abstract class Statement<T> {
     }
 
     protected assertReturnType(type: ValueType): void {
-        if(type instanceof TokenType) throw new StatementParseError("Tokens cannot be returned by a statement!");
+        if(type instanceof TokenType) throw new StatementParseError("Tokens cannot be returned by a statement!", "error_token_return");
     }
 
     protected static splitTokens(text: string): string[] {
@@ -749,7 +750,7 @@ export abstract class Statement<T> {
     }
 
     protected static parseInto<T>(statement: Statement<T>, text: string, memory: Memory, indexResolver: IndexResolver): void {
-        if(text.length == 0) throw new StatementParseError("Cannot parse empty statement!");
+        if(text.length == 0) throw new StatementParseError("Cannot parse empty statement!", "error_empty_statement");
         const tokens: string[] = this.splitTokens(text);
         const operators: (Operator | OpeningBracket)[] = [];
         const operands: Operand[] = [];
@@ -779,7 +780,8 @@ export abstract class Statement<T> {
                 }
                 if(token == ",") continue;
                 if(i == partialParsedTokens.length - 1) {
-                    throw new StatementParseError(`Statement ends with an operator! There are no postfix operators!`);
+                    // TODO investigate if this can even be triggered, wouldn't token literals already cover this edge case?
+                    throw new StatementParseError(`Statement ends with an operator! There are no postfix operators!`, "error_postfix");
                 }
 
                 function decideOperandType(): OperatorType {
@@ -793,7 +795,7 @@ export abstract class Statement<T> {
                     } else if (afterOperand()) {
                         return "infix";
                     } else {
-                        throw new StatementParseError(`Cannot decide the operand type for given operator [${token}]`);
+                        throw new StatementParseError(`Cannot decide the operator type for given operator [${token}]`, "error_undecidable_operator_type");
                     }
                 }
 
@@ -814,7 +816,7 @@ export abstract class Statement<T> {
                     _operands.push(operands.pop()!);
                 }
                 if(!operator.isApplicableTo(_operands.map(operand => operand.getType()).reverse())) {
-                    throw new StatementParseError(`Operator type mismatch! [${operator.getRepresentingChar()}] is not applicable to [${_operands.map(operand => operand.getType().getIdentifier()).reverse()}]!`);
+                    throw new StatementParseError(`Operator type mismatch! [${operator.getRepresentingChar()}] is not applicable to [${_operands.map(operand => operand.getType().getIdentifier()).reverse()}]!`, "error_operator_type_mismatch");
                 }
                 postFix.push(..._operands);
                 postFix.push(operator);
@@ -850,15 +852,15 @@ export abstract class Statement<T> {
             // TODO add tests for this
             if(bracketDepth != 0) {
                 if(bracketDepth < 0) {
-                    throw new StatementParseError("At least one closing bracket is missing its opening bracket!");
+                    throw new StatementParseError("At least one closing bracket is missing its opening bracket!", "error_missing_opening_bracket");
                 } else {
-                    throw new StatementParseError("At least one bracket is missing its closing bracket!");
+                    throw new StatementParseError("At least one opening bracket is missing its closing bracket!", "error_missing_closing_bracket");
                 }
             }
 
             flushOperatorsWhile(() => operators.length > 0);
 
-            if(operands.length > 1) throw new StatementParseError("Statement result is ambigous!");
+            if(operands.length > 1) throw new StatementParseError("Statement result is ambigous!", "error_ambigous_result");
             statement.assertReturnType(operands[0]!.getType());
             statement.returnType = operands[0]!.getType();
 
@@ -885,7 +887,7 @@ export class NumericStatement extends Statement<number> {
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!numberType.matches(type)) {
-            throw new StatementParseError(`Numeric statement expects to get a number as its result but instead received [${type.getIdentifier()}]!`);
+            throw new StatementParseError(`Numeric statement expects to receive a number as its result but instead received [${type.getIdentifier()}]!`, "error_numeric_result_mismatch");
         }
     }
 
@@ -911,7 +913,7 @@ export class CharStatement extends Statement<string> {
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!charType.matches(type)) {
-            throw new StatementParseError(`Char statement expects to get a char as its result but instead received [${type.getIdentifier()}]!`);
+            throw new StatementParseError(`Char statement expects to get a char as its result but instead received [${type.getIdentifier()}]!`, "error_char_result_mismatch");
         }
     }
 
@@ -937,7 +939,7 @@ export class StringStatement extends Statement<string> {
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!stringType.matches(type)) {
-            throw new StatementParseError(`String statement expects to get a string as its result but instead received [${type.getIdentifier()}]!`);
+            throw new StatementParseError(`String statement expects to get a string as its result but instead received [${type.getIdentifier()}]!`, "error_string_result_mismatch");
         }
     }
 
@@ -963,7 +965,7 @@ export class BooleanStatement extends Statement<boolean> {
     protected override assertReturnType(type: ValueType): void {
         super.assertReturnType(type);
         if(!booleanType.matches(type)) {
-            throw new StatementParseError(`Boolean statement expects to get a boolean as its result but instead received [${type}]!`);
+            throw new StatementParseError(`Boolean statement expects to get a boolean as its result but instead received [${type}]!`, "error_boolean_result_mismatch");
         }
     }
 

@@ -2,6 +2,7 @@ import EventEmitter2 from "eventemitter2";
 import {Memory, VariableCreationError, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement, IndexResolver} from "./statement";
 import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
+import { Translator } from "../viewmodel/dictionary";
 
 
 export interface Identifiable {
@@ -9,20 +10,15 @@ export interface Identifiable {
 }
 
 export class StructogramIssue {
-    private _id: string;
-    private _message: string;
-
-    constructor(id: string, message: string) {
-        this._id = id;
-        this._message = message;
-    }
-
-    public get id() {
-        return this._id;
-    }
-
+    public readonly id: string;
+    public readonly translationKey: string;
     public get message() {
-        return this._message;
+        return Translator.getDictionary().translate(this.translationKey);
+    }
+
+    constructor(id: string, message: string, translationKey: string) {
+        this.id = id;
+        this.translationKey = translationKey;
     }
 }
 
@@ -154,54 +150,54 @@ export class Structogram {
     private createVariables(input: string[]): StructogramIssue[] {
         const issues = [];
         if(input.length != this.inputData.length) {
-            return [new StructogramIssue("specification", "Missing inputs!")]
+            return [new StructogramIssue("specification", "Missing inputs!", "error_specification_input_missing")]
         }
         const usedKeys = new Set<string>();
         for(let i = 0; i < input.length; i++) {
             const [key, type] = this.inputData[i]!;
             if(usedKeys.has(key)) {
-                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
+                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!", "error_specification_duplicate")]
             }
             usedKeys.add(key);
             try {
                 const statement = AnyStatement.parse(input[i]!, this.memory, this.indexResolver);
                 if(!type.matches(statement.getReturnType())) {
-                    issues.push(new StructogramIssue("specification", "Wrong type returned by statement given to input data!"));
+                    issues.push(new StructogramIssue("specification", "Wrong type returned by statement given to input data!", "error_specification_input_type"));
                 } else {
                     this.memory.createVariable(key, type, true);
                     this.memory.setVariable(key, statement.evaluate());
                 }
             } catch (error) {
                 if(error instanceof StatementParseError) {
-                    issues.push(new StructogramIssue("specification", error.message));
+                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
                 } else if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssue("specification", error.message));
+                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
                 }
             }
         }
         for(const [key, type] of Object.entries(this._auxData)) {
             if(usedKeys.has(key)) {
-                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
+                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!", "error_specification_duplicate")]
             }
             usedKeys.add(key);
             try {
                 this.memory.createVariable(key, type);
             } catch (error) {
                 if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssue("specification", error.message));
+                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
                 }
             }
         }
         for(const [key, type] of Object.entries(this._outData)) {
             if(usedKeys.has(key)) {
-                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
+                return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!", "error_specification_duplicate")]
             }
             usedKeys.add(key);
             try {
                 this.memory.createVariable(key, type);
             } catch (error) {
                 if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssue("specification", error.message));
+                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
                 }
             }
         }
@@ -803,22 +799,22 @@ export class AssignmentBlock extends SequenceBlock {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
             } else {
                 console.log(error);
                 alert("Fatal parse error!");
             }
         }
         if(!memory.hasVariable(memoryKey)) {
-            issues.push(new StructogramIssue(this.id, `Variable with key [${memoryKey}] is not defined!`));
+            issues.push(new StructogramIssue(this.id, `Variable with key [${memoryKey}] is not defined!`, "error_undefined_variable"));
         } else if(!verifyFieldsExist()) {
-            issues.push(new StructogramIssue(this.id, `[${this.key}] does not exist!`));
+            issues.push(new StructogramIssue(this.id, `[${this.key}] does not exist!`, "erro_no_field"));
         } else if(!getObjectOrFieldType().matches(this.statement?.getReturnType() ?? undefinedType)) {
-            issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`));
+            issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`, "error_type"));
         } else if(!isFieldSetable()) {
-            issues.push(new StructogramIssue(this.id, `[${this.key}] cannot be set!`));
+            issues.push(new StructogramIssue(this.id, `[${this.key}] cannot be set!`, "error_query_field"));
         } else if(keyTokens.length == 1 && this._associatedStructogram.memory.isConstant(this.key)) {
-            issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
+            issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`, "error_constant"));
         }
         return issues;
     }
@@ -851,7 +847,7 @@ export class ControlBlock extends SequenceBlock {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message, error.translationKey)];
             } else {
                 console.log(error);
                 alert("Fatal parse error!");
@@ -889,7 +885,7 @@ export class PrintBlock extends SequenceBlock {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message, error.translationKey)];
             } else {
                 console.log(error);
                 alert("Fatal parse error!");
@@ -966,7 +962,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message, error.translationKey)];
             }
         }
 
@@ -1057,7 +1053,7 @@ export class MultiBranchingBlock extends BracketBlock {
             this.branches = this.conditionListOption.tryResolveStatements();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message, error.translationKey)];
             }
         }
 
@@ -1163,31 +1159,31 @@ export class CountingLoopBlock extends LoopBlock {
             this.from = this.fromOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
             }
         }
         try {
             this.to = this.toOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
             }
         }
         try {
             this.step = this.stepOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message));
+                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
             }
         }
         
         this.variableKey = this.variableKeyOption.getKey();
         if(!this._associatedStructogram.memory.hasVariable(this.variableKey)) {
-            issues.push(new StructogramIssue(this.id,`Variable with key [${this.variableKey}] is not defined!`))
+            issues.push(new StructogramIssue(this.id,`Variable with key [${this.variableKey}] is not defined!`, "error_undefined_variable"))
         } else if(!this._associatedStructogram.memory.getType(this.variableKey).matches(numberType)) {
-            issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.variableKey}]!`));
+            issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.variableKey}]!`, "error_type"));
         } else if (this._associatedStructogram.memory.isConstant(this.variableKey)) {
-            issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.variableKey}] which is a constant variable!`));
+            issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.variableKey}] which is a constant variable!`, "error_constant"));
         }
 
         return issues;
@@ -1211,7 +1207,7 @@ export abstract class ConditionalLoopBlock extends LoopBlock {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message)];
+                return [new StructogramIssue(this.id, error.message, error.translationKey)];
             }
         }
 

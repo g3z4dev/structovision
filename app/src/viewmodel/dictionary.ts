@@ -23,7 +23,11 @@ export abstract class Dictionary {
 
     public translateElement(element: HTMLElement | SVGElement) {
         const key = element.dataset["trkey"]!;
-        element.textContent = this.textDictionary[key] ?? key;
+        element.textContent = this.translate(key);
+    }
+
+    public translate(key: string): string {
+        return this.textDictionary[key] ?? key;
     }
 
     public abstract getFlag(): string;
@@ -74,7 +78,30 @@ export class EnglishDictionary extends Dictionary {
         "structogram-width": "Width",
         "structogram-print": "print",
         "structogram-step": "by",
-        "view-settings": "View Settings"
+        "view-settings": "View Settings",
+        "error_specification_input_missing": "Missing inputs!",
+        "error_specification_duplicate": "Duplicate key in data specification is not allowed!",
+        "error_specification_input_type": "Wrong type returned by statement given to input data!",
+        "error_undefined_variable": "Variable is not defined in memory!",
+        "error_no_field": "Specified field(s) of the given object does not exist!",
+        "error_type": "Type violation!",
+        "error_query_field": "Specified field of the given object cannot be set!",
+        "error_constant": "Constant variable cannot be set!",
+        "error_array_heterogeneous": "Arrays cannot be heterogeneous!",
+        "error_token_return": "Tokens cannot be a result of a statement!",
+        "error_empty_statement": "Cannot parse empty statement!",
+        "error_postfix": "Statement cannot end with an operator! Postfix operators do not exist!",
+        "error_undecidable_operator_type": "Cannot decide the type of an operator! Invalid order of tokens!",
+        "error_operator_type_mismatch": "Operator type mismatch!",
+        "error_missing_opening_bracket": "At least one closing bracket is missing its opening bracket!",
+        "error_missing_closing_bracket": "At least one opening bracket is missing its closing bracket!",
+        "error_ambigous_result": "Statement result is ambigous! Multiple results!",
+        "error_numeric_result_mismatch": "Numeric statement expects to receive a number as its result!",
+        "error_char_result_mismatch": "Char statement expects to receive a char as its result!",
+        "error_string_result_mismatch": "String statement expects to receive a string as its result!",
+        "error_boolean_result_mismatch": "Boolean statement expects to receive a boolean as its result!",
+        "error_forbidden_key": "Forbidden key was used for variable definition!",
+        "error_duplicate_key": "Duplicate key was used for variable definition!"
     }
 
     public override getFlag(): string {
@@ -127,7 +154,30 @@ export class HungarianDictionary extends Dictionary {
         "structogram-width": "Szélesség",
         "structogram-print": "kiír",
         "structogram-step": "növel",
-        "view-settings": "Nézet Beállítások"
+        "view-settings": "Nézet Beállítások",
+        "error_specification_input_missing": "Hiányzó bemenetek!",
+        "error_specification_duplicate": "Kulcs újrahasználás adatok specifikációjánál nem megengedett!",
+        "error_specification_input_type": "Bemeneti adatnak adott állítás visszatérési értéke nem megfelelő!",
+        "error_undefined_variable": "A változó nincs definiálva a memóriában!",
+        "error_no_field": "Az adott objektum keresett mezője nem létezik!",
+        "error_type": "Típushiba!",
+        "error_query_field": "Az adott objektum keresett mezőjét nem lehet módosítani!",
+        "error_constant": "Konstans változót nem lehet módosítani!",
+        "error_array_heterogeneous": "A tömbök nem lehetnek heterogének!",
+        "error_token_return": "Token típusú érték nem lehet egy állítás eredménye!",
+        "error_empty_statement": "Üres állítást nem lehet értelmezni!",
+        "error_postfix": "Állítás nem végződhet operátorra! Hibás operátor sorrend!",
+        "error_undecidable_operator_type": "Operátor típusa nem meghatározható! Tokenek sorrendje hibás!",
+        "error_operator_type_mismatch": "Operátor típushiba!",
+        "error_missing_opening_bracket": "Legalább egy csukó zárójelnek hiányzik a nyitó zárójele!",
+        "error_missing_closing_bracket": "Legalább egy nyitó zárójelnek hiányzik a csukó zárójele!",
+        "error_ambigous_result": "Az állítás eredménye nem egyértelmű! Több eredmény!",
+        "error_numeric_result_mismatch": "Számszerű állítás számszerű eredményt vár!",
+        "error_char_result_mismatch": "Karakterszerű állítás karekterszerű eredményt vár!",
+        "error_string_result_mismatch": "Szöveges állítás szöveges eredményt vár!",
+        "error_boolean_result_mismatch": "Logikai állítás logikai eredményt vár!",
+        "error_forbidden_key": "Tiltott kulcs használat a változó definíciójában!",
+        "error_duplicate_key": "Foglalt kulcs használat a változó definíciójában!"
     }
 
     public override getFlag(): string {
