@@ -10,6 +10,7 @@ import frontTestingLoopBlockTemplate from "../../resources/blocks/fronttestinglo
 import backTestingLoopBlockTemplate from "../../resources/blocks/backtestingloopblock.html";
 import undefinedBlockTemplate from "../../resources/blocks/undefinedblock.html";
 import { baseBlockHeight, textPadding } from "./constants";
+import type { ViewModel } from "./viewmodel";
 
 
 /**
@@ -30,6 +31,7 @@ export class UndefinedBlockContext {
 }
 
 export class StructogramRenderer {
+    public readonly viewModel: ViewModel;
     protected readonly blockResourceManager: ResourceManager = new ResourceManager();
     protected readonly mainElement;
     protected readonly viewElement;
@@ -52,7 +54,8 @@ export class StructogramRenderer {
      */
     private optionListenerRemovers: (() => void)[] = [];
 
-    constructor(structogram: Structogram, mainElement: HTMLElement, idPrefix: string) {
+    constructor(viewModel: ViewModel, structogram: Structogram, mainElement: HTMLElement, idPrefix: string) {
+        this.viewModel = viewModel;
         this.mainElement = mainElement;
         this.viewElement = mainElement.querySelector(".structogram-view") as HTMLElement;
         this.renderTarget = this.viewElement.querySelector(".render-target") as SVGSVGElement;

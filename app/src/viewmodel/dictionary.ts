@@ -23,6 +23,8 @@ export abstract class Dictionary {
         const key = element.dataset["trkey"]!;
         element.textContent = this.textDictionary[key] ?? key;
     }
+
+    public abstract getFlag(): string;
 }
 
 export class EnglishDictionary extends Dictionary {
@@ -64,7 +66,12 @@ export class EnglishDictionary extends Dictionary {
         "option_name_from": "From",
         "option_name_to": "To",
         "option_name_step": "Step",
-        "structogram_general_settings_index": "Starting Index"
+        "structogram_general_settings_index": "Starting Index",
+        "object_view_keys": "Keys"
+    }
+
+    public override getFlag(): string {
+        return "en_flag.png"
     }
 }
 
@@ -107,7 +114,12 @@ export class HungarianDictionary extends Dictionary {
         "option_name_from": "Kezdő érték",
         "option_name_to": "Felső határ",
         "option_name_step": "Lépésszám",
-        "structogram_general_settings_index": "Kezdő Index"
+        "structogram_general_settings_index": "Kezdő Index",
+        "object_view_keys": "Kulcsok"
+    }
+
+    public override getFlag(): string {
+        return "hu_flag.png"
     }
 }
 
@@ -118,9 +130,41 @@ const langToTranslation: Record<string, Dictionary> = {
 }
 
 export class Translator {
-    public static language: Language = "hu";
+    private static _language: Language = "hu";
+    private static languageButtons = document.querySelectorAll(".t-language-button") as NodeListOf<HTMLButtonElement>;
+    public static listenerFN: () => void;
+
+    public static set language(language: Language) {
+        this._language = language;
+        const oldListener = this.listenerFN;
+        let nextLanguage: Language = "en";
+        if(this._language == "en") {
+            nextLanguage = "hu";
+        } else {
+            nextLanguage = "en";
+        }
+        this.listenerFN = () => {
+            Translator.language = nextLanguage;
+        }
+        for(const button of this.languageButtons) {
+            button.removeEventListener("click", oldListener);
+            button.addEventListener("click", this.listenerFN);
+            const img = button.querySelector("img") as HTMLImageElement;
+            img.src = `icons/flags/${this._language}.png`;
+        }
+        Translator.translateElementsIn(document);
+        localStorage["language"] = this._language;
+    }
+    
+    public static get language(): Language {
+        return this._language;
+    }
     
     public static getDictionary(): Dictionary {
         return langToTranslation[this.language]!
+    }
+    
+    public static translateElementsIn(element: ParentNode) {
+        [...element.querySelectorAll(".t-translatable")].filter(elem => elem instanceof HTMLElement).forEach(e => Translator.getDictionary().translateElement(e));
     }
 }

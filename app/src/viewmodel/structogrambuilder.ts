@@ -11,6 +11,7 @@ import keyOptionTemplate from "../../resources/settings/structogram-options/keyo
 import dataSettingsTemplate from "../../resources/settings/datasettings.html";
 import { booleanType, numberType, SimpleValue, stringType, parseType, typeRegistry, ValueType, type Value, TypeParseError } from "../model/types";
 import { Translator } from "./dictionary";
+import type { ViewModel } from "./viewmodel";
 
 
 const strToType: Record<string, ValueType> = {
@@ -286,8 +287,6 @@ export class StructogramBuilder extends StructogramRenderer {
 
     private newButton = document.querySelector("#new-button") as HTMLButtonElement;
     private settingsButton = document.querySelector("#settings-button") as HTMLButtonElement;
-    private saveButton = document.querySelector("#save-button") as HTMLButtonElement;
-    private loadButton = document.querySelector("#load-button") as HTMLButtonElement;
     private undoButton = document.querySelector("#undo-button") as HTMLButtonElement;
     private redoButton = document.querySelector("#redo-button") as HTMLButtonElement;
     private newWindow = document.querySelector("#new-confirm") as HTMLElement;
@@ -300,7 +299,7 @@ export class StructogramBuilder extends StructogramRenderer {
     public readonly timeLine = new ActionTimeLine();
     public readonly toolbar = new BlockToolbar(this.structogram);
     public readonly structogramSettings = new StructogramSettings(this);
-    public readonly structogramGeneralSettings = new StructogramGeneralSettings(this.structogram);
+    public readonly structogramGeneralSettings;
 
     public set currentBlock(block: StructogramBlock | undefined) {
         if(this._currentBlock) {
@@ -392,47 +391,6 @@ export class StructogramBuilder extends StructogramRenderer {
         return this.originOffsetY - this.originY + y / this.scale;
     }
 
-    private setupPersistenceButtons(structogram: Structogram) {
-        // https://www.javaspring.net/blog/create-and-save-a-file-with-javascript/
-        const a = document.createElement("a");
-        a.download="";
-
-        this.saveButton.addEventListener("click", () => {
-            const data = JSON.stringify(structogram.getData());
-            const blob = new Blob([data], {type: "application/json"});
-            const url = URL.createObjectURL(blob);
-            a.href = url;
-            a.click();
-            URL.revokeObjectURL(url);
-        });
-
-        // https://stackoverflow.com/questions/16215771/how-to-open-select-file-dialog-via-js
-        const input = document.createElement("input");
-        input.type = "file";
-
-        input.onchange = _ => {
-            if(input.files && input.files[0]) {
-                const file = input.files[0];
-                const reader = new FileReader();
-                reader.readAsText(file);
-
-                reader.onload = readerEvent => {
-                    if(readerEvent.target && readerEvent.target.result) {
-                        try {
-                            structogram.loadData(JSON.parse(readerEvent.target.result as string));
-                        } catch (error) {
-                            alert("Structogram failed to load! Invalid format!");
-                            this.structogram.reset();
-                        }
-                    }
-                }
-            }
-        };
-        this.loadButton.addEventListener("click", () => {
-            input.click();
-        });
-    }
-
     private setupTimeLineControlButtons() {
         this.undoButton.addEventListener("click", () => {
             this.timeLine.undo();
@@ -445,6 +403,13 @@ export class StructogramBuilder extends StructogramRenderer {
             this.updateHTML();
             this.structogramSettings.generateHTML();
         });
+        document.addEventListener("keydown", event => {
+            if(event.ctrlKey && event.shiftKey && event.key.toLowerCase() == "z") {
+                this.redoButton.click();
+            } else if(event.ctrlKey && event.key == "z") {
+                this.undoButton.click();
+            }
+        });
     }
 
     private setupNewStructogramButtons() {
@@ -454,7 +419,7 @@ export class StructogramBuilder extends StructogramRenderer {
         this.newYesButton.addEventListener("click", () => {
             this.structogram.reset();
             this.timeLine.reset();
-            this.saveCache();
+            this.viewModel.saveCache();
             this.newWindow.classList.add("hidden");
         });
         this.newNoButton.addEventListener("click", () => {
@@ -554,12 +519,12 @@ export class StructogramBuilder extends StructogramRenderer {
         });
     }
 
-    constructor(structogram: Structogram) {
-        super(structogram, document.querySelector("#structogram-builder")!, "builder")
+    constructor(structogram: Structogram, viewModel: ViewModel) {
+        super(viewModel, structogram, document.querySelector("#structogram-builder")!, "builder")
+        this.structogramGeneralSettings = new StructogramGeneralSettings(this.structogram, this.viewModel);
         this.toolbar.generateHTML();
         this.setupBlockDropping();
         this.setupBlockMoving();
-        this.setupPersistenceButtons(structogram);
         this.setupTimeLineControlButtons();
         this.setupNewStructogramButtons();
         this.setupCopyPaste();
@@ -569,30 +534,13 @@ export class StructogramBuilder extends StructogramRenderer {
         this.structogramSettings.emitter.addListener(StructogramSettings.blockOptionChanged, (option: BlockOption, newValues: string[], oldValues: string[]) => {
             this.timeLine.start();
             this.timeLine.didAction(new OptionSetAction(option, newValues, oldValues));
-            this.saveCache();
+            viewModel.saveCache();
         });
         this.structogramSettings.emitter.addListener(StructogramSettings.specificationChanged, (newInput: [string, string][], newAux: [string, string][], newOutput: [string, string][], oldInput: [string, string][], oldAux: [string, string][], oldOutput: [string, string][]) => {
             this.timeLine.start();
             this.timeLine.didAction(new SpecificationChangeAction(structogram, newInput, newAux, newOutput, oldInput, oldAux, oldOutput));
-            this.saveCache();
+            viewModel.saveCache();
         });
-        this.loadCache();
-    }
-
-    public loadCache() {
-        const data = localStorage.getItem("lastStructogram");
-        if(data) {
-            try {
-                this.structogram.loadData(JSON.parse(data));
-            } catch (error) {
-                alert("Cache failed to load!");
-                this.structogram.reset();
-            }
-        }
-    }
-
-    public saveCache() {
-        localStorage.setItem("lastStructogram", JSON.stringify(this.structogram.getData()));
     }
 
     public override updateHTML(): void {
@@ -605,7 +553,7 @@ export class StructogramBuilder extends StructogramRenderer {
                 setHeight(associatedElem, height);
             }
         }
-        this.saveCache();
+        this.viewModel.saveCache();
     }
 
     protected override onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement): void {
@@ -1012,7 +960,7 @@ class SpecificationSettingHandler {
 
         this.emitter.emit(SpecificationSettingHandler.specificationChanged, inputEntries, auxEntries, outputEntries, oldInput, oldAux, oldOutput);
 
-        this.structogramBuilder.saveCache();
+        this.structogramBuilder.viewModel.saveCache();
     }
 
     private setupElements() {
@@ -1204,10 +1152,11 @@ class StructogramGeneralSettings {
     private indexSetting = this.settingsWindow.querySelector("#structogram-general-settings-index") as HTMLInputElement;
     private structogram: Structogram;
 
-    constructor(structogram: Structogram) {
+    constructor(structogram: Structogram, viewModel: ViewModel) {
         this.structogram = structogram;
         this.doneButton.addEventListener("click", () => {
             this.hide();
+            viewModel.saveCache();
         });
     }
 

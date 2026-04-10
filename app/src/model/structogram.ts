@@ -1,5 +1,5 @@
 import EventEmitter2 from "eventemitter2";
-import {Memory, type VariableType} from "./memory";
+import {Memory, VariableCreationError, type VariableType} from "./memory";
 import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement, IndexResolver} from "./statement";
 import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
 
@@ -174,6 +174,8 @@ export class Structogram {
             } catch (error) {
                 if(error instanceof StatementParseError) {
                     issues.push(new StructogramIssue("specification", error.message));
+                } else if(error instanceof VariableCreationError) {
+                    issues.push(new StructogramIssue("specification", error.message));
                 }
             }
         }
@@ -182,14 +184,26 @@ export class Structogram {
                 return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
             }
             usedKeys.add(key);
-            this.memory.createVariable(key, type);
+            try {
+                this.memory.createVariable(key, type);
+            } catch (error) {
+                if(error instanceof VariableCreationError) {
+                    issues.push(new StructogramIssue("specification", error.message));
+                }
+            }
         }
         for(const [key, type] of Object.entries(this._outData)) {
             if(usedKeys.has(key)) {
                 return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!")]
             }
             usedKeys.add(key);
-            this.memory.createVariable(key, type);
+            try {
+                this.memory.createVariable(key, type);
+            } catch (error) {
+                if(error instanceof VariableCreationError) {
+                    issues.push(new StructogramIssue("specification", error.message));
+                }
+            }
         }
         return issues;
     }
@@ -311,7 +325,8 @@ export class Structogram {
             "output": this.outputData.map(data => {
                 return {"key": data[0], "type": data[1].getIdentifier()}
             }),
-            "startingBlock": this.startingBlock?.getData()
+            "startingBlock": this.startingBlock?.getData(),
+            "startingIndex": this.startingIndex
         }   
     }
 
@@ -331,6 +346,7 @@ export class Structogram {
         loadWith(aux, (key, type) => this.defineAuxData(key, type));
         loadWith(output, (key, type) => this.defineOutputData(key, type));
         if("startingBlock" in data) this.startingBlock = StructogramBlock.BlockDataFactory.constructFromData(data["startingBlock"], this);
+        if("startingIndex" in data) this.startingIndex = data["startingIndex"];
     }
 
     public restart() {

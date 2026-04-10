@@ -11,6 +11,7 @@ import operandTemplate from "../../resources/program-views/logic-view-templates/
 
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
 import { UtilityArray, UtilityObject, type Value } from "../model/types";
+import type { ViewModel } from "./viewmodel";
 
 type RunMode = "onestep" | "run" | "paused";
 
@@ -79,18 +80,37 @@ export class StructogramRunner extends StructogramRenderer {
         return Math.min(1, this.timeElapsed / this.stepLength);
     }
 
-    public addInputEntry(key: string) {
+    private addInputEntry(key: string) {
         const entry = parseIntoHTML(inputDataEntryTemplate);
         setTemplateText(entry, "key", key);
+        entry.querySelector("input[type=\"text\"]")!.addEventListener("change", () => {
+            this.viewModel.saveCache();
+        })
         this.inputDataElem.appendChild(entry);
+        this.inputDataElem.classList.remove("hidden");
     }
 
-    public getInputs() {
+    public getInputs(): string[] {
         return [...this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>].map(n => n.value);
     }
 
-    constructor(structogram: Structogram) {
-        super(structogram, document.querySelector("#structogram-runner")!, "runner")
+    public setInputs(inputs: string[]) {
+        const fields = this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>;
+        for(let i = 0; i < inputs.length; i++) {
+            fields[i]!.value = inputs[i]!;
+        }
+    }
+
+    public getObjectKeys() {
+        return this.programViewManager.objectView.selectors;
+    }
+
+    public setObjectKeys(keys: string[]) {
+        this.programViewManager.objectView.selectorsField.value = keys.join(",");
+    }
+
+    constructor(structogram: Structogram, viewModel: ViewModel) {
+        super(viewModel, structogram, document.querySelector("#structogram-runner")!, "runner")
         for(const [key, _] of structogram.inputData) {
             this.addInputEntry(key);
         }
@@ -100,6 +120,9 @@ export class StructogramRunner extends StructogramRenderer {
         structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             this.inputDataElem.textContent = "";
         });
+        this.programViewManager.objectView.selectorsField.addEventListener("change", () => {
+            this.viewModel.saveCache();
+        })
     }
 
     private prepareRunning(): boolean {
@@ -127,6 +150,7 @@ export class StructogramRunner extends StructogramRenderer {
     }
 
     public restart() {
+        this.programViewManager.reset();
         this.structogram.restart();
         this.runMode = "paused";
         this.currentBlock = undefined;
@@ -136,13 +160,17 @@ export class StructogramRunner extends StructogramRenderer {
 
     public start() {
         this.runMode = "run";
-        this._step();
+        if(!this._step() && !this.structogram.isRunning()) {
+            this.restart();
+        }
     }
 
     public step() {
         if(this.runMode != "run") {
             this.runMode = "onestep";
-            this._step();
+            if(!this._step() && !this.structogram.isRunning()) {
+                this.restart();
+            }
         }
     }
 
@@ -270,10 +298,10 @@ class TimeControl {
 
 class ProgramViewManager {
     public static readonly ready = "programviewmanager.ready";
-    private printView: OutputView;
-    private memoryView: MemoryView;
-    private logicView: LogicView;
-    private objectView: ObjectView;
+    public readonly printView: OutputView;
+    public readonly memoryView: MemoryView;
+    public readonly logicView: LogicView;
+    public readonly objectView: ObjectView;
 
     constructor(runner: StructogramRunner) {
         this.printView = new OutputView(runner);
@@ -1156,15 +1184,17 @@ class ArrayRenderer extends ObjectRenderer {
 
 class ObjectView extends ProgramView implements AnimatedView {
     private objectCanvas: HTMLCanvasElement;
-    private selectorsField: HTMLInputElement;
+    public readonly selectorsField: HTMLInputElement;
     private renderers: ObjectRenderer[];
-    private selectors: string[] = [];
+    public get selectors(): string[] {
+        return this.selectorsField.value.split(",");
+    }
     private readonly cameraHandler: CameraHandler;
 
     constructor(runner: StructogramRunner) {
         super(document.querySelector("#object-view")!, runner);
         this.objectCanvas = this.viewElem.querySelector("canvas") as HTMLCanvasElement;
-        this.selectorsField = this.viewElem.querySelector(".t-object-specifiers") as HTMLInputElement;
+        this.selectorsField = this.viewElem.querySelector(".t-object-keys") as HTMLInputElement;
         this.selectorsField.value = "";
         window.addEventListener("load", () => {
             this.objectCanvas.width = this.objectCanvas.clientWidth;
@@ -1188,7 +1218,6 @@ class ObjectView extends ProgramView implements AnimatedView {
             }
         });
         this.selectorsField.addEventListener("change", () => {
-            this.selectors = this.selectorsField.value.split(",");
             for(const renderer of this.renderers) {
                 renderer.updateSelectors(this.selectors);
             }
@@ -1213,6 +1242,9 @@ class ObjectView extends ProgramView implements AnimatedView {
     public override reset(): void {
         this.objectCanvas.width = this.objectCanvas.clientWidth;
         this.objectCanvas.height = this.objectCanvas.clientHeight;
+        for(const renderer of this.renderers) {
+            renderer.updateSelectors(this.selectors);
+        }
     }
 }
 

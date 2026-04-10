@@ -8,12 +8,12 @@
     <title>Document</title>
 </head>
 
-<body class="h-full">
-    <div class="h-full" id="structogram-builder">
+<body class="h-screen">
+    <div class="h-screen" id="structogram-builder">
         <div class="grid grid-cols-12 h-full">
             <div class="col-span-7 flex flex-col ">
                 <div class="flex bg-gray-200 border-b border-b-gray-400 h-12">
-                    <div class="basis-3/4 flex flex-row" id="toolbar">
+                    <div class="basis-11/16 flex flex-row" id="toolbar">
                         <svg 
                         class="overflow-visible hover:fill-blue-100 fill-white w-full h-full" 
                         id="toolbar-assignment-block">
@@ -62,13 +62,14 @@
                             <rect width="80%" height="60%" x="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                         </svg>
                     </div>
-                    <div class="basis-1/4 flex flex-row justify-around border-l border-gray-800 p-1" id="options">
+                    <div class="basis-5/16 flex flex-row justify-around border-l border-gray-800 p-1" id="options">
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="new-button"><img class="aspect-square h-full" src="icons/new.png" alt="new-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="settings-button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="undo-button"><img class="aspect-square h-full" src="icons/timelinearrow.png" alt="undo-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="redo-button"><img class="aspect-square h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/timelinearrow.png" alt="redo-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
                     </div>
                 </div>
                 <div class="align-middle m-0 bg-white border-b border-b-gray-800 hover:bg-cyan-50" id="specification">
@@ -84,13 +85,11 @@
                         </svg>
                     </svg>
                 </div>
-                <div class="flex bg-gray-200 border-t border-t-gray-400 h-12 p-1">
-                    <div class="flex-12">
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 flex-auto h-full" id="switch-to-runner-button"><img class="w-full h-full" src="icons/play.png" alt="play-icon"/></button>
-                    </div>
+                <div class="bg-gray-200 border-t border-t-gray-400 h-12 p-1 flex flex-row">
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="switch-to-runner-button"><img class="h-full aspect-square" src="icons/play.png" alt="play-icon"/></button>
                 </div>
             </div>
-            <div class="col-span-5 bg-gray-800" id="structogram-settings">
+            <div class="col-span-5 bg-gray-800 overflow-y-scroll h-screen" id="structogram-settings">
             </div>
         </div>
         <div id="new-confirm" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
@@ -116,7 +115,14 @@
     <div class="hidden h-screen overflow-hidden" id="structogram-runner">
         <div class="grid grid-cols-12 h-full">
             <div class="col-span-6 flex flex-col">
-                <div class="bg-white border border-gray-800" id="input-data">
+                <div class="w-full bg-gray-200">
+                    <div class="flex flex-row gap-1 border-b border-b-gray-400 p-1 h-12" id="options">
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
+                    </div>
+                </div>
+                <div class="bg-white border border-gray-800 hidden" id="input-data">
                     
                 </div>
                 <div class="structogram-view basis-full w-full h-full overflow-hidden bg-blue-50" id="run-view">
@@ -141,7 +147,7 @@
             <div class="col-span-6 bg-gray-900 flex flex-col h-full h-max-full overflow-hidden" id="program-views">
                 <div id="output-view" class="basis-1/8 p-1 overflow-hidden text-white">
                     <div class="bg-gray-800 flex flex-col justify-evenly h-full">
-                        <p class="m-2 t-translatable" data-trkey="title_logs"></p>
+                        <p class="t-translatable" data-trkey="title_logs"></p>
                         <div class="bg-gray-700 t-logs overflow-y-scroll h-full flex flex-col">
                             <p class="t-log-template text-wrap mr-1 ml-1"></p>
                         </div>
@@ -176,10 +182,11 @@
                     </div>
                 </div>
                 <div id="object-view" class="basis-1/2 flex flex-col justify-evenly p-1 overflow-hidden">
-                    <div class="flex flex-row pb-1 bg-gray-800">
+                    <div class="flex flex-col pb-1 bg-gray-800">
                         <p class="text-white mr-1 t-translatable" data-trkey="title_objects"></p>
-                        <form>
-                            <input type="text" class="t-object-specifiers bg-gray-600 text-white"></input>
+                        <form class="w-full flex flex-row gap-2 pr-2">
+                            <label for="object-keys"><span class="text-gray-300 t-translatable" data-trkey="object_view_keys"></span></label>
+                            <input id="object-keys" type="text" class="t-object-keys bg-gray-600 text-white w-full"/>
                         </form>
                     </div>
                     <canvas class="t-object h-full bg-gray-700">
