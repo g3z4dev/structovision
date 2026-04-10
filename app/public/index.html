@@ -130,6 +130,7 @@
             <div class="col-span-6 flex flex-col">
                 <div class="w-full bg-gray-200">
                     <div class="flex flex-row gap-1 border-b border-b-gray-400 p-1 h-12" id="options">
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="view-settings-button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
@@ -206,6 +207,22 @@
 
                     </canvas>
                 </div>
+            </div>
+        </div>
+        <div id="view-settings" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
+            <div class="m-auto mt-5 w-1/2 h-1/2 flex flex-col bg-gray-800 rounded-md text-gray-100 p-2">
+                <p class="text-lg m-2 text-center t-translatable" data-trkey="view_settings"></p>
+                <form class="overflow-y-auto">
+                    <label for="view-settings-logs-visible"><span class="t-translatable" data-trkey="title_logs"></span></label>
+                    <input id="view-settings-logs-visible" class="w-full bg-gray-600" type="checkbox">
+                    <label for="view-settings-memory-visible"><span class="t-translatable" data-trkey="title_memory"></span></label>
+                    <input id="view-settings-memory-visible" class="w-full bg-gray-600" type="checkbox">
+                    <label for="view-settings-logic-visible"><span class="t-translatable" data-trkey="title_logic"></span></label>
+                    <input id="view-settings-logic-visible" class="w-full bg-gray-600" type="checkbox">
+                    <label for="view-settings-objects-visible"><span class="t-translatable" data-trkey="title_objects"></span></label>
+                    <input id="view-settings-objects-visible" class="w-full bg-gray-600" type="checkbox">
+                </form>
+                <button id="view-settings-done" class="m-auto text-gray-50 bg-blue-500 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="button_done"></button>
             </div>
         </div>
         <div id="issues" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">

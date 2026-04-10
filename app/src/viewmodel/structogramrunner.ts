@@ -90,23 +90,27 @@ export class StructogramRunner extends StructogramRenderer {
         this.inputDataElem.classList.remove("hidden");
     }
 
-    public getInputs(): string[] {
+    private getInputs(): string[] {
         return [...this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>].map(n => n.value);
     }
 
-    public setInputs(inputs: string[]) {
+    private setInputs(inputs: string[]) {
         const fields = this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>;
         for(let i = 0; i < inputs.length; i++) {
             fields[i]!.value = inputs[i]!;
         }
     }
 
-    public getObjectKeys() {
-        return this.programViewManager.objectView.selectors;
+    public getData(): any {
+        return {
+            "inputs": this.getInputs(),
+            "program_view_data": this.programViewManager.getData()
+        }
     }
 
-    public setObjectKeys(keys: string[]) {
-        this.programViewManager.objectView.selectorsField.value = keys.join(",");
+    public loadData(data: any) {
+        this.setInputs(data["inputs"] ?? []);
+        this.programViewManager.loadData(data["program_view_data"] ?? {});
     }
 
     constructor(structogram: Structogram, viewModel: ViewModel) {
@@ -296,29 +300,104 @@ class TimeControl {
     }
 }
 
+class ProgramViewSettings {
+    public readonly viewManager: ProgramViewManager;
+    public readonly settingWindow = document.querySelector("#view-settings") as HTMLElement;
+    public readonly settingsButton = document.querySelector("#view-settings-button") as HTMLButtonElement;
+    public readonly settingsDoneButton = document.querySelector("#view-settings-done") as HTMLButtonElement;
+    public readonly outputVisibleInput = this.settingWindow.querySelector("#view-settings-logs-visible") as HTMLInputElement;
+    public readonly memoryVisibleInput = this.settingWindow.querySelector("#view-settings-memory-visible") as HTMLInputElement;
+    public readonly logicVisibleInput = this.settingWindow.querySelector("#view-settings-logic-visible") as HTMLInputElement;
+    public readonly objectsVisibleInput = this.settingWindow.querySelector("#view-settings-objects-visible") as HTMLInputElement;
+
+    constructor(viewModel: ViewModel, viewManager: ProgramViewManager) {
+        this.viewManager = viewManager;
+        this.settingsDoneButton.addEventListener("click", () => {
+            this.hide();
+            viewModel.saveCache();
+        });
+        this.settingsButton.addEventListener("click", () => {
+            this.show();
+        });
+        
+        function setupInput(input: HTMLInputElement, programView: ProgramView) {
+            input.addEventListener("change", () => {
+                programView.setVisibility(input.checked);
+            });
+        }
+
+        setupInput(this.outputVisibleInput, viewManager.outputView);
+        setupInput(this.memoryVisibleInput, viewManager.memoryView);
+        setupInput(this.logicVisibleInput, viewManager.logicView);
+        setupInput(this.objectsVisibleInput, viewManager.objectView);
+    }
+
+    public getData(): any {
+        return {
+            "output_visible": this.outputVisibleInput.checked,
+            "memory_visible": this.memoryVisibleInput.checked,
+            "logic_visible": this.logicVisibleInput.checked,
+            "objects_visible": this.objectsVisibleInput.checked
+        }
+    }
+
+    public loadData(data: any) {
+        function load(input: HTMLInputElement, view: ProgramView, key: string) {
+            input.checked = data[key] ?? true;
+            console.log(view, input.checked);
+            view.setVisibility(input.checked);
+        }
+        load(this.outputVisibleInput, this.viewManager.outputView, "output_visible");
+        load(this.memoryVisibleInput, this.viewManager.memoryView, "memory_visible");
+        load(this.logicVisibleInput, this.viewManager.logicView, "logic_visible");
+        load(this.objectsVisibleInput, this.viewManager.objectView, "objects_visible");
+    }
+
+    public show() {
+        this.settingWindow.classList.remove("hidden");
+    }
+
+    public hide() {
+        this.settingWindow.classList.add("hidden");
+    }
+}
+
 class ProgramViewManager {
-    public static readonly ready = "programviewmanager.ready";
-    public readonly printView: OutputView;
+    public readonly outputView: OutputView;
     public readonly memoryView: MemoryView;
     public readonly logicView: LogicView;
     public readonly objectView: ObjectView;
+    public readonly settings: ProgramViewSettings;
 
     constructor(runner: StructogramRunner) {
-        this.printView = new OutputView(runner);
+        this.outputView = new OutputView(runner);
         this.memoryView = new MemoryView(runner);
         this.logicView = new LogicView(runner);
         this.objectView = new ObjectView(runner);
+        this.settings = new ProgramViewSettings(runner.viewModel, this);
+    }
+
+    public getData() {
+        return {
+            "settings": this.settings.getData(),
+            "object_keys": this.objectView.selectors
+        }
+    }
+
+    public loadData(data: any) {
+        this.settings.loadData(data["settings"] ?? {});
+        this.objectView.selectorsField.value = (data["object_keys"] ?? []).join(",");
     }
 
     public clearEffects() {
-        this.printView.clearEffects();
+        this.outputView.clearEffects();
         this.memoryView.clearEffects();
         this.logicView.clearEffects();
     }
 
     public reset() {
         this.clearEffects();
-        this.printView.reset();
+        this.outputView.reset();
         this.memoryView.reset();
         this.logicView.reset();
         this.objectView.reset();
@@ -346,6 +425,14 @@ abstract class ProgramView {
 
     public clearEffects() {
 
+    }
+
+    public setVisibility(visibility: boolean) {
+        if(visibility) {
+            this.viewElem.classList.remove("hidden");
+        } else {
+            this.viewElem.classList.add("hidden");
+        }
     }
 }
 

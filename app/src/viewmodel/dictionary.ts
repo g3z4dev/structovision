@@ -56,6 +56,7 @@ export class EnglishDictionary extends Dictionary {
         "variable_value": "Value",
         "variable_constant": "Constant",
         "title_logs": "Logs",
+        "title_memory": "Memory",
         "title_logic": "Logic",
         "title_objects": "Objects",
         "title_issues": "Issues",
@@ -72,7 +73,8 @@ export class EnglishDictionary extends Dictionary {
         "object_view_keys": "Keys",
         "structogram-width": "Width",
         "structogram-print": "print",
-        "structogram-step": "by"
+        "structogram-step": "by",
+        "view-settings": "View Settings"
     }
 
     public override getFlag(): string {
@@ -107,6 +109,7 @@ export class HungarianDictionary extends Dictionary {
         "variable_value": "Érték",
         "variable_constant": "Konstans",
         "title_logs": "Kiírások",
+        "title_memory": "Memória",
         "title_logic": "Logika",
         "title_objects": "Objektumok",
         "title_issues": "Problémák",
@@ -123,7 +126,8 @@ export class HungarianDictionary extends Dictionary {
         "object_view_keys": "Kulcsok",
         "structogram-width": "Szélesség",
         "structogram-print": "kiír",
-        "structogram-step": "növel"
+        "structogram-step": "növel",
+        "view-settings": "Nézet Beállítások"
     }
 
     public override getFlag(): string {

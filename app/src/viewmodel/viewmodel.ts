@@ -84,16 +84,14 @@ export class ViewModel {
     private loadData(data: any) {
         this.structogram.loadData(data["structogram"]);
         this.structogramWidth = data["structogram_width"];
-        this.structogramRunner.setInputs(data["inputs"]);
-        this.structogramRunner.setObjectKeys(data["object_keys"]);
+        this.structogramRunner.loadData(data["rundata"]);
     }
 
     private getData() {
         const data = {
             "structogram": this.structogram.getData(),
             "structogram_width": this.structogramWidth,
-            "inputs": this.structogramRunner.getInputs(),
-            "object_keys": this.structogramRunner.getObjectKeys()
+            "rundata": this.structogramRunner.getData()
         }
         const dataJson = JSON.stringify(data);
         return dataJson;
