@@ -1141,6 +1141,9 @@ class StructogramSpecificator {
         this.specificationElem.addEventListener("click", () => {
             builder.currentBlock = undefined;
         });
+        Translator.emitter.addListener(Translator.languageChanged, () => {
+            this.reset()
+        });
     }
 
     private reset() {

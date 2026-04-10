@@ -1,3 +1,5 @@
+import EventEmitter2 from "eventemitter2";
+
 export abstract class Dictionary {
     protected abstract get typeFromTo(): Record<string, string>;
     protected abstract get textDictionary(): Record<string, string>;
@@ -132,6 +134,8 @@ const langToTranslation: Record<string, Dictionary> = {
 export class Translator {
     private static _language: Language = "hu";
     private static languageButtons = document.querySelectorAll(".t-language-button") as NodeListOf<HTMLButtonElement>;
+    public static readonly emitter = new EventEmitter2();
+    public static readonly languageChanged = "translator.language.changed";
     public static listenerFN: () => void;
 
     public static set language(language: Language) {
@@ -154,6 +158,7 @@ export class Translator {
         }
         Translator.translateElementsIn(document);
         localStorage["language"] = this._language;
+        Translator.emitter.emit(Translator.languageChanged);
     }
     
     public static get language(): Language {
