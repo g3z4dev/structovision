@@ -68,27 +68,7 @@ export class ViewModel {
                 this.mode = "runner";
             }
         });
-        const observer = new MutationObserver((mutationList, _observer) => {
-            for(const mutation of mutationList) {
-                if(mutation.type == "childList") {
-                    for(const node of mutation.addedNodes) {
-                        if(node instanceof HTMLElement) {
-                            Translator.translateElementsIn(node);
-                        }
-                    }
-                }
-            }
-        });
-        observer.observe(document, {"childList": true, "subtree": true});
-        window.addEventListener("load", () => {
-            Translator.translateElementsIn(document);
-        });
-        if(!localStorage["language"]) {
-            localStorage["language"] = navigator.language;
-            Translator.language = navigator.language as Language;
-        } else {
-            Translator.language = localStorage["language"]!;
-        }
+        Translator.setupTranslation();
         this.loadCache();
         this.setupPersistenceButtons();
         this.setupStructogramWidthHandling();

@@ -21,7 +21,7 @@ export abstract class Dictionary {
         return type;
     }
 
-    public translateElement(element: HTMLElement) {
+    public translateElement(element: HTMLElement | SVGElement) {
         const key = element.dataset["trkey"]!;
         element.textContent = this.textDictionary[key] ?? key;
     }
@@ -70,7 +70,9 @@ export class EnglishDictionary extends Dictionary {
         "option_name_step": "Step",
         "structogram_general_settings_index": "Starting Index",
         "object_view_keys": "Keys",
-        "structogram-width": "Width"
+        "structogram-width": "Width",
+        "structogram-print": "print",
+        "structogram-step": "by"
     }
 
     public override getFlag(): string {
@@ -116,10 +118,12 @@ export class HungarianDictionary extends Dictionary {
         "option_name_conditions": "Feltételek",
         "option_name_from": "Kezdő érték",
         "option_name_to": "Felső határ",
-        "option_name_step": "Lépésszám",
+        "option_name_step": "Lépés érték",
         "structogram_general_settings_index": "Kezdő Index",
         "object_view_keys": "Kulcsok",
-        "structogram-width": "Szélesség"
+        "structogram-width": "Szélesség",
+        "structogram-print": "kiír",
+        "structogram-step": "növel"
     }
 
     public override getFlag(): string {
@@ -172,6 +176,30 @@ export class Translator {
     }
     
     public static translateElementsIn(element: ParentNode) {
-        [...element.querySelectorAll(".t-translatable")].filter(elem => elem instanceof HTMLElement).forEach(e => Translator.getDictionary().translateElement(e));
+        [...element.querySelectorAll(".t-translatable")].filter(elem => elem instanceof HTMLElement || elem instanceof SVGElement).forEach(e => Translator.getDictionary().translateElement(e));
+    }
+
+    public static setupTranslation() {
+        const observer = new MutationObserver((mutationList, _observer) => {
+            for(const mutation of mutationList) {
+                if(mutation.type == "childList") {
+                    for(const node of mutation.addedNodes) {
+                        if(node instanceof Element) {
+                            Translator.translateElementsIn(node);
+                        }
+                    }
+                }
+            }
+        });
+        observer.observe(document, {"childList": true, "subtree": true});
+        window.addEventListener("load", () => {
+            Translator.translateElementsIn(document);
+        });
+        if(!localStorage["language"]) {
+            localStorage["language"] = navigator.language;
+            Translator.language = navigator.language as Language;
+        } else {
+            Translator.language = localStorage["language"]!;
+        }
     }
 }
