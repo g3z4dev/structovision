@@ -1,10 +1,11 @@
 import EventEmitter2 from "eventemitter2";
-import {booleanType, numberType, charType, UtilityArray, ValueType, UtilityObject, type _Value, type Primitive, anyType, TokenType, ObjectType, ArrayType, UtilityObjectTemplate, SinglyLinkedListNodeTemplate, DoublyLinkedListNodeTemplate, BinaryTreeNodeTemplate, type Value, SimpleValue, UtilityString, stringType, type Ordered} from "./types.ts";
+import {booleanType, numberType, charType, UtilityArray, ValueType, UtilityObject, type _Value, type Primitive, anyType, TokenType, ObjectType, ArrayType, UtilityObjectTemplate, SinglyLinkedListNodeTemplate, DoublyLinkedListNodeTemplate, BinaryTreeNodeTemplate, type Value, SimpleValue, UtilityString, stringType, type Ordered, undefinedType} from "./types.ts";
 import type { Memory } from "./memory.ts";
 
 type OpeningBracket = "(";
 type ClosingBracket = ")";
 export type Bracket = OpeningBracket | ClosingBracket;
+type Comma = ",";
 
 export class StatementParseError extends Error {
 
@@ -47,13 +48,15 @@ function getAllSortedPairs<T>(array: T[]): T[][] {
 
 export abstract class Operator {
     protected precedence: number;
+    public readonly type: OperatorType;
     protected representingChar: string;
     private condition: (ops: ValueType[]) => boolean;
     protected returnType: ValueType;
     protected rightToLeft: boolean;
 
-    protected constructor(priority: number, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, rightToLeft: boolean) {
-        this.precedence = priority;
+    protected constructor(precedence: number, type: OperatorType, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, rightToLeft: boolean) {
+        this.precedence = precedence;
+        this.type = type;
         this.representingChar = representingChar;
         this.condition = condition;
         this.returnType = returnType;
@@ -99,7 +102,7 @@ class BinaryOperator extends Operator {
     private operation: (a: Value, b: Value) => Value;
 
     public constructor(priority: number, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value, b: Value) => Value, rightToLeft: boolean = false) {
-        super(priority, representingChar, condition, returnType, rightToLeft);
+        super(priority, "infix", representingChar, condition, returnType, rightToLeft);
         this.operation = operation;
     }
 
@@ -140,7 +143,7 @@ class UnaryOperator extends Operator {
     private operation: (a: Value) => Value;
 
     public constructor(priority: number, representingChar: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value) => Value) {
-        super(priority, representingChar, condition, returnType, true);
+        super(priority, "prefix", representingChar, condition, returnType, true);
         this.operation = operation;
     }
     
@@ -163,12 +166,39 @@ class UnaryOperator extends Operator {
     }
 }
 
+class FunctionOperator extends Operator {
+    private operation: (a: Value[], idxr: IndexResolver) => void;
+    private operandCount: number;
+
+    public constructor(name: string, operandCount: number, operandCondition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value[], idxr: IndexResolver) => void) {
+        super(98, "prefix", name, operandCondition, returnType, true);
+        this.operation = operation;
+        this.operandCount = operandCount;
+    }
+    
+    public static matchesSomeFn(operandTypes: ValueType[]) {
+        return (types: ValueType[]) => operandTypes.some(type => type.matches(types[0]!));
+    }
+
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
+        if(operands.length != this.operandCount) {
+            throw new StatementEvaluationError(`[${this.representingChar}] function expected [${this.operandCount}] operands but received [${operands.length}!]`);
+        }
+        this.operation(operands, indexResolver);
+        return SimpleValue.undefined();
+    }
+
+    public override getOperandCount(): number {
+        return this.operandCount;
+    }
+}
+
 class ObjectConstructor extends Operator {
     private template: UtilityObjectTemplate;
     private operandCount: number;
 
     public constructor(name: string, operandTypes: ValueType[], template: UtilityObjectTemplate) {
-        super(100, name, UnaryOperator.matchesSomeFn(operandTypes), anyType, true);
+        super(100, "prefix", name, UnaryOperator.matchesSomeFn(operandTypes), anyType, true);
         this.template = template;
         this.operandCount = operandTypes.length;
     }
@@ -194,7 +224,7 @@ class ObjectConstructor extends Operator {
 class ObjectGetOperator extends Operator {
 
     public constructor() {
-        super(99, ".", types => types[0]!.hasFields() && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
+        super(99, "prefix", ".", types => types[0]!.hasFields() && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
     }
 
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
@@ -230,7 +260,7 @@ class ObjectGetOperator extends Operator {
 class ObjectIndexOperator extends Operator {
 
     public constructor() {
-        super(99, "@", types => types[0]!.getIdentifier().startsWith("array") && types[1]!.getIdentifier() == "number", anyType, false);
+        super(99, "infix", "@", types => types[0]!.getIdentifier().startsWith("array") && types[1]!.getIdentifier() == "number", anyType, false);
     }
 
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
@@ -259,15 +289,17 @@ class ObjectIndexOperator extends Operator {
     }
 }
 
+type OperatorType = "prefix" | "infix";
+
 const operatorTokens: Set<string> = new Set();
-const operatorsByOperandCount: Record<number, Record<string, Operator>> = {};
+const operatorsByType: Record<OperatorType, Record<string, Operator>> = {
+    "prefix": {},
+    "infix": {}
+};
 
 function registerOperator(op: Operator) {
     operatorTokens.add(op.getRepresentingChar());
-    if(!(op.getOperandCount() in operatorsByOperandCount)) {
-        operatorsByOperandCount[op.getOperandCount()] = {};
-    }
-    operatorsByOperandCount[op.getOperandCount()]![op.getRepresentingChar()] = op;
+    operatorsByType[op.type]![op.getRepresentingChar()] = op;
 }
 
 // Numeric Operators
@@ -307,10 +339,55 @@ registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([anyT
 registerOperator(new ObjectConstructor("s1l", [anyType], SinglyLinkedListNodeTemplate));
 registerOperator(new ObjectConstructor("s2l", [anyType], DoublyLinkedListNodeTemplate));
 registerOperator(new ObjectConstructor("btn", [anyType], BinaryTreeNodeTemplate));
+
 // Object Operators
 registerOperator(new ObjectGetOperator());
 const indexOperator = new ObjectIndexOperator();
 registerOperator(indexOperator);
+
+// Function Operators
+registerOperator(new FunctionOperator("swap", 3, 
+    ops => {
+        return ops[0]!.baseIdentifier == "array" && ops[1]!.matches(numberType) && ops[2]!.matches(numberType)
+    },
+    undefinedType,
+    (operands, indexResolver) => {
+        const array = operands[0] as UtilityArray;
+        const idx1 = indexResolver.resolve((operands[1] as SimpleValue).value as number);
+        const idx2 = indexResolver.resolve((operands[2] as SimpleValue).value as number);
+        array.indexSwap(idx1, idx2);
+    }
+));
+registerOperator(new FunctionOperator("is1l", 2, 
+    ops => {
+        return ops[0]!.baseIdentifier == "s1l" && ops[0]!.matches(ops[1]!);
+    },
+    undefinedType,
+    (operands) => {
+        const c = (operands[0] as UtilityObject);
+        const d = (operands[1] as UtilityObject);
+        const e = c.get("next");
+        c.set("next", d);
+        d.set("next", e);
+    }
+));
+registerOperator(new FunctionOperator("is2l", 2, 
+    ops => {
+        return ops[0]!.baseIdentifier == "s2l" && ops[0]!.matches(ops[1]!);
+    },
+    undefinedType,
+    (operands) => {
+        const c = (operands[0] as UtilityObject);
+        const d = (operands[1] as UtilityObject);
+        const e = c.get("next");
+        c.set("next", d);
+        d.set("prev", c);
+        d.set("next", e);
+        if(e instanceof UtilityObject) {
+            e.set("prev", d);
+        }
+    }
+));
 
 export abstract class Operand {
     public abstract getType(): ValueType;
@@ -651,6 +728,11 @@ export abstract class Statement<T> {
                 tokens.push(c);
             } else if(isNumeric(c) && (tokenParseState != "alphanumeric" as TokenParseState || !isAlphanumeric(c))) {
                 handleState(c, "number");
+            } else if(c == ",") {
+                tokenParseState = "none";
+                flushCurrentToken();
+                currentToken += c;
+                flushCurrentToken();
             } else if(isSpecialCharacter(c)) {
                 if(operatorTokens.has(currentToken) && !operatorTokens.has(currentToken+c)) {
                     flushCurrentToken();
@@ -672,10 +754,10 @@ export abstract class Statement<T> {
         const operators: (Operator | OpeningBracket)[] = [];
         const operands: Operand[] = [];
 
-        const partialParsedTokens: (string | Operand | Bracket)[] = tokens.map(token => {
+        const partialParsedTokens: (string | Operand | Bracket | Comma)[] = tokens.map(token => {
             if(operatorTokens.has(token)) {
                 return [token];
-            } else if (token == "(" || token == ")" ) {
+            } else if (token == "(" || token == ")" || token == ",") {
                 return [token];
             } else if (token == "[") {
                 return ["@", "("];
@@ -695,27 +777,29 @@ export abstract class Statement<T> {
                     parsedTokens.push(token);
                     continue;
                 }
+                if(token == ",") continue;
                 if(i == partialParsedTokens.length - 1) {
                     throw new StatementParseError(`Statement ends with an operator! There are no postfix operators!`);
                 }
 
-                function decideOperandCount(): number {
+                function decideOperandType(): OperatorType {
+                    const afterComma = () => partialParsedTokens[i-1] == ",";
                     const afterOperand = () => partialParsedTokens[i-1] instanceof Operand || partialParsedTokens[i-1] == ")" || partialParsedTokens[i-1] == "]";
                     const afterOperator = () => !(partialParsedTokens[i-1] instanceof Operand);
                     if((i == 0 || i == tokens.length-1) && partialParsedTokens[i+1] instanceof Operand) {
-                        return 1;
+                        return "prefix";
+                    } else if(afterOperator() || afterComma()) {
+                        return "prefix";
                     } else if (afterOperand()) {
-                        return 2;
-                    } else if (afterOperator()) {
-                        return 1;
+                        return "infix";
                     } else {
-                        throw new StatementParseError(`Cannot decide the operand count for given operator [${token}]`);
+                        throw new StatementParseError(`Cannot decide the operand type for given operator [${token}]`);
                     }
                 }
 
-                const operandCount = decideOperandCount();
+                const operatorType = decideOperandType();
 
-                parsedTokens.push(operatorsByOperandCount[operandCount]![token]!);
+                parsedTokens.push(operatorsByType[operatorType]![token]!);
             }
             return parsedTokens;
         }

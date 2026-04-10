@@ -655,6 +655,7 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     public static BlockDataFactory = class {
         public static readonly typeToFactory: Record<string, (s: Structogram) => StructogramBlock> = {
             "assignmentblock": (s) => new AssignmentBlock(s),
+            "controlblock": (s) => new ControlBlock(s),
             "printblock": (s) => new PrintBlock(s),
             "truefalsebranchingblock": (s) => new TrueFalseBranchingBlock(s),
             "multibranchingblock": (s) => new MultiBranchingBlock(s),
@@ -803,6 +804,9 @@ export class AssignmentBlock extends SequenceBlock {
         } catch (error) {
             if(error instanceof StatementParseError) {
                 issues.push(new StructogramIssue(this.id, error.message));
+            } else {
+                console.log(error);
+                alert("Fatal parse error!");
             }
         }
         if(!memory.hasVariable(memoryKey)) {
@@ -817,6 +821,44 @@ export class AssignmentBlock extends SequenceBlock {
             issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`));
         }
         return issues;
+    }
+}
+
+export class ControlBlock extends SequenceBlock {
+    private statement: AnyStatement | undefined;
+    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to print");
+
+    constructor(structogram: Structogram) {
+        super(structogram);
+    }
+
+    public override run(): StructogramBlock | undefined {
+        this.activeStep = "main";
+        this.statement?.evaluate();
+        return this.next;
+    }
+
+    public override getClassIdentifier(): string {
+        return "controlblock";
+    }
+
+    public override getOptions(): BlockOption[] {
+        return [this.statementOption];
+    }
+
+    public override parseAndCheckForIssues(): StructogramIssue[] {
+        try {
+            this.statement = this.statementOption.tryResolveStatement();
+        } catch (error) {
+            if(error instanceof StatementParseError) {
+                return [new StructogramIssue(this.id, error.message)];
+            } else {
+                console.log(error);
+                alert("Fatal parse error!");
+            }
+        }
+
+        return [];
     }
 }
 
@@ -848,6 +890,9 @@ export class PrintBlock extends SequenceBlock {
         } catch (error) {
             if(error instanceof StatementParseError) {
                 return [new StructogramIssue(this.id, error.message)];
+            } else {
+                console.log(error);
+                alert("Fatal parse error!");
             }
         }
 

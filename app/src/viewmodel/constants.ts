@@ -6,3 +6,4 @@ export const runningClass = ["fill-green-100"];
 export const notRunningClass = ["fill-white", "hover:fill-cyan-50"];
 export const selectedClass = ["fill-cyan-100"];
 export const unselectedClass = ["fill-white", "hover:fill-cyan-50"];
+export const errorBorder = ["border-2", "border-red-500"];

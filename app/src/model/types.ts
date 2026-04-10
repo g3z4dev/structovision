@@ -353,6 +353,7 @@ export class UtilityArray implements ClassIdentifiable, Value {
     public readonly id: string = `array${UtilityArray.idSeq++}`;
     public static readonly emitter = new EventEmitter2();
     public static readonly elementChanged = "utilityarray.element.changed";
+    public static readonly elementSwapped = "utilityarray.element.swapped";
 
     constructor(values: Value[], elementType: ValueType) {
         UtilityArray.ensureValuesAreHomogenous(values)
@@ -369,13 +370,21 @@ export class UtilityArray implements ClassIdentifiable, Value {
     }
 
     public indexGet(idx: number): Value {
-        return this.elements[idx]!;
+        return this.elements[idx] ?? SimpleValue.undefined();
     }
 
     public indexSet(idx: number, value: Value): void {
-        console.log(idx)
+        if(idx > this.elements.length) return;
         this.elements[idx] = value.tryClone();
         UtilityArray.emitter.emit(UtilityArray.elementChanged, this, idx, this.elements[idx]);
+    }
+
+    public indexSwap(idx1: number, idx2: number): void {
+        if(idx1 > this.elements.length || idx2 > this.elements.length) return;
+        const val1 = this.elements[idx1]!;
+        this.elements[idx1] = this.elements[idx2]!;
+        this.elements[idx2] = val1;
+        UtilityArray.emitter.emit(UtilityArray.elementSwapped, this, idx1, idx2);
     }
 
     public get length() {

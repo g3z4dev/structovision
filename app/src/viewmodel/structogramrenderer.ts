@@ -2,6 +2,7 @@ import { BlockOption, Structogram, StructogramIssue, type StructogramBlock } fro
 import { applyTransformation, CameraHandler, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
+import controlBlockTemplate from "../../resources/blocks/controlblock.html";
 import printBlockTemplate from "../../resources/blocks/printblock.html";
 import truefalseBranchingBlockTemplate from "../../resources/blocks/truefalsebranchingblock.html";
 import multiBranchingBlockTemplate from "../../resources/blocks/multibranchingblock.html";
@@ -62,6 +63,7 @@ export class StructogramRenderer {
         this.originOffsetX = getX(this.structogramSVG);
         this.originOffsetY = getY(this.structogramSVG);
         this.blockResourceManager.register("assignmentblock", assignmentBlockTemplate);
+        this.blockResourceManager.register("controlblock", controlBlockTemplate);
         this.blockResourceManager.register("printblock", printBlockTemplate);
         this.blockResourceManager.register("truefalsebranchingblock", truefalseBranchingBlockTemplate);
         this.blockResourceManager.register("multibranchingblock", multiBranchingBlockTemplate);

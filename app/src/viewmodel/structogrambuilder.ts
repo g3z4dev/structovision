@@ -1,7 +1,7 @@
 import EventEmitter2 from "eventemitter2";
 import type { VariableType } from "../model/memory";
-import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, PrintBlock, StatementOption, Structogram, StructogramBlock, TrueFalseBranchingBlock, type BlockOption } from "../model/structogram";
-import { baseBlockHeight, selectedClass, unselectedClass } from "./constants";
+import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, ControlBlock, StatementOption, Structogram, StructogramBlock, TrueFalseBranchingBlock, type BlockOption, PrintBlock } from "../model/structogram";
+import { baseBlockHeight, errorBorder, selectedClass, unselectedClass } from "./constants";
 import { StructogramRenderer, UndefinedBlockContext } from "./structogramrenderer";
 import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
@@ -13,12 +13,6 @@ import { booleanType, numberType, SimpleValue, stringType, parseType, typeRegist
 import { Translator } from "./dictionary";
 import type { ViewModel } from "./viewmodel";
 
-
-const strToType: Record<string, ValueType> = {
-    "number": numberType,
-    "string": stringType,
-    "boolean": booleanType
-}
 /**
  * Represents a block that is currently being dragged by the mouse with all of its context clues included.
  */
@@ -717,11 +711,16 @@ class BlockToolbar {
                 () => new AssignmentBlock(structogram)),
             new ToolbarEntry(
                 this,
+                document.querySelector("#toolbar-control-block")!, 
+                "Control block", 
+                "desc",
+                () => new ControlBlock(structogram)),
+            new ToolbarEntry(
+                this,
                 document.querySelector("#toolbar-print-block")!, 
                 "Print block", 
                 "desc",
                 () => new PrintBlock(structogram)),
-                
             new ToolbarEntry(
                 this,
                 document.querySelector("#toolbar-true-false-branching-block")!, 
@@ -917,10 +916,10 @@ class SpecificationSettingHandler {
     private auxDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
     private outDataElem = this.dataSettingsTemplateElem.cloneNode(true) as HTMLElement;
 
-    private parseEntryElem(elem: HTMLElement): [string, string] {
+    private parseEntryElem(elem: HTMLElement): [string, string, HTMLElement] {
         const textfield = elem.querySelector(`.t-key-textfield`) as HTMLFormElement;
         const select = elem.querySelector(`.t-type-selector`) as HTMLSelectElement;
-        return [textfield.value, Translator.getDictionary().untranslateType(select.value)];
+        return [textfield.value, Translator.getDictionary().untranslateType(select.value), elem];
     }
 
     private parseEntryElems(elems: NodeListOf<HTMLElement>) {
@@ -939,37 +938,37 @@ class SpecificationSettingHandler {
         this.structogramBuilder.structogram.clearData();
 
         const inputEntries = this.parseEntryElems(inputDataEntries);
-        for(const [key, type] of inputEntries) {
+        for(const [key, type, elem] of inputEntries) {
             try {
                 this.structogramBuilder.structogram.defineInputData(key, parseType(type));
+                elem.classList.remove(...errorBorder);
             } catch(error) {
                 if(error instanceof TypeParseError) {
-                    //TODO dynamic highlight
-                    alert("bad type");
+                    elem.classList.add(...errorBorder);
                 }
             }
         }
 
         const auxEntries = this.parseEntryElems(auxDataEntries);
-        for(const [key, type] of auxEntries) {
+        for(const [key, type, elem] of auxEntries) {
             try {
                 this.structogramBuilder.structogram.defineAuxData(key, parseType(type));
+                elem.classList.remove(...errorBorder);
             } catch(error) {
                 if(error instanceof TypeParseError) {
-                    //TODO dynamic highlight
-                    alert("bad type");
+                    elem.classList.add(...errorBorder);
                 }
             }
         }
 
         const outputEntries = this.parseEntryElems(outputDataEntries);
-        for(const [key, type] of outputEntries) {
+        for(const [key, type, elem] of outputEntries) {
             try {
                 this.structogramBuilder.structogram.defineOutputData(key, parseType(type));
+                elem.classList.remove(...errorBorder);
             } catch(error) {
                 if(error instanceof TypeParseError) {
-                    //TODO dynamic highlight
-                    alert("bad type");
+                    elem.classList.add(...errorBorder);
                 }
             }
         }

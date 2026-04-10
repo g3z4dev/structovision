@@ -532,13 +532,14 @@ abstract class ObjectRenderer {
     protected selectors: string[];
     private _height = 0;
     private _y = 0;
+    private objectReloadQueued = false;
     public get y() {
         return this._y;
     };
     public set y(y: number) {
         if(this._y != y) {
             this._y = y;
-            this.onObjectsChanged();
+            this.reloadObjects();
         }
     };
     public static readonly emitter = new EventEmitter2();
@@ -568,7 +569,7 @@ abstract class ObjectRenderer {
             acc[cur.id] = cur;
             return acc;
         }, {} as Record<string, Value>);
-        this.onObjectsChanged();
+        this.reloadObjects();
         this.memory.emitter.on(Memory.variableChangedEvent, (key: string, _prevValue: Value, value: Value) => {
             if(value.getType().baseIdentifier == objectBaseIdentifier) {
                 const prevValue = this.allObjectsByMemoryKey[key]!;
@@ -580,7 +581,7 @@ abstract class ObjectRenderer {
                     delete this.allObjectsByID[prevValue.id];
                     delete this.idToMemoryKey[key];
                 }
-                this.onObjectsChanged();
+                this.objectReloadQueued = true;
             }
         });
         UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, _key: string, value: Value) => {
@@ -588,7 +589,7 @@ abstract class ObjectRenderer {
                 this.allObjectsByID[value.id] = value;
             }
             if(object.getType().baseIdentifier == objectBaseIdentifier) {
-                this.onObjectsChanged();
+                this.objectReloadQueued = true;
             }
         });
         UtilityArray.emitter.addListener(UtilityArray.elementChanged, (object: UtilityObject, _idx: number, value: Value) => {
@@ -596,19 +597,29 @@ abstract class ObjectRenderer {
                 this.allObjectsByID[value.id] = value;
             }
             if(object.getType().baseIdentifier == objectBaseIdentifier) {
-                this.onObjectsChanged();
+                this.objectReloadQueued = true;
+            }
+        });
+        UtilityArray.emitter.addListener(UtilityArray.elementSwapped, (object: UtilityObject) => {
+            if(object.getType().baseIdentifier == objectBaseIdentifier) {
+                this.objectReloadQueued = true;
             }
         });
     }
 
     public updateSelectors(selectors: string[]) {
         this.selectors = [...selectors];
-        this.onObjectsChanged();
+        this.reloadObjects();
     }
 
-    protected abstract onObjectsChanged(): void;
+    public abstract reloadObjects(): void;
 
-    public abstract render(progress: number): void;
+    public render(progress: number): void {
+        if(this.objectReloadQueued) {
+            this.reloadObjects();
+            this.objectReloadQueued = false;
+        }
+    }
 }
 
 
@@ -655,12 +666,10 @@ abstract class NodeRenderData {
     }
 
     public set targetX(targetX: number) {
-        this.originX = this._targetX;
         this._targetX = targetX;
     }
     
     public set targetY(targetY: number) {
-        this.originY = this._targetY;
         this._targetY = targetY;
     }
 
@@ -747,14 +756,15 @@ class S1LRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "s1l", selectors, memory);
-        this.onObjectsChanged();
+        this.reloadObjects();
     }
 
     public override render(progress: number): void {
+        super.render(progress);
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override onObjectsChanged() {
+    public override reloadObjects() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
@@ -796,6 +806,7 @@ class S1LRenderer extends ObjectRenderer {
                     newRegistry[node.id] = data;
                 } else {
                     newRegistry[node.id] = new S1LRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                    newRegistry[node.id]!.originY += this.nodeHeight;
                 }
                 xOffset += newRegistry[node.id]!.w + this.nodeXSpacing;
             }
@@ -859,14 +870,15 @@ class S2LRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "s2l", selectors, memory);
-        this.onObjectsChanged();
+        this.reloadObjects();
     }
 
     public override render(progress: number): void {
+        super.render(progress);
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override onObjectsChanged() {
+    public override reloadObjects() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
@@ -909,6 +921,7 @@ class S2LRenderer extends ObjectRenderer {
                     newRegistry[node.id] = data;
                 } else {
                     newRegistry[node.id] = new S2LRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                    newRegistry[node.id]!.originY += this.nodeHeight;
                 }
                 xOffset += (newRegistry[node.id]!.w + this.nodeXSpacing);
             }
@@ -981,14 +994,15 @@ class BTNRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "btn", selectors, memory);
-        this.onObjectsChanged();
+        this.reloadObjects();
     }
 
     public override render(progress: number): void {
+        super.render(progress);
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override onObjectsChanged() {
+    public override reloadObjects() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
@@ -1056,6 +1070,7 @@ class BTNRenderer extends ObjectRenderer {
 
             let xOffset = 0;
             let maxNodeWidth = Math.max(...levels.flat().filter(n => n instanceof UtilityObject).map(n => NodeRenderData.getNodeWidthWithContent(this.objectCanvas, n.get("key").asString())));
+
             const treeHeight = levels.length;
             const treeWidth = calcTreeWidth(treeHeight, maxNodeWidth, this.nodeXSpacing);
             for(let i = 0; i < treeHeight; i++) {
@@ -1146,14 +1161,15 @@ class ArrayRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "array", selectors, memory);
-        this.onObjectsChanged();
+        this.reloadObjects();
     }
 
     public override render(progress: number): void {
+        super.render(progress);
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override onObjectsChanged() {
+    public override reloadObjects() {
         const arraysWithKey: [string,UtilityArray][] = Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityArray).map(e => [e[0]!, e[1]!]) as [string, UtilityArray][];
         let yOffset = this.y;
         const newRegistry: Record<string, ArrayElementRenderData> = {};
@@ -1257,6 +1273,7 @@ class ObjectView extends ProgramView implements AnimatedView {
         this.objectCanvas.height = this.objectCanvas.clientHeight;
         for(const renderer of this.renderers) {
             renderer.updateSelectors(this.selectors);
+            renderer.reloadObjects();
         }
     }
 }
