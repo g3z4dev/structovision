@@ -1,8 +1,7 @@
 import EventEmitter2 from "eventemitter2";
-import {Memory, VariableCreationError, type VariableType} from "./memory";
-import {AnyStatement, BooleanStatement, NumericStatement, Statement, CharStatement, StatementParseError, StringStatement, IndexResolver} from "./statement";
-import { anyType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, parseType, typeRegistry, undefinedType, UtilityArray, UtilityString, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
-import { Translator } from "../viewmodel/dictionary";
+import {Memory, VariableCreationError} from "./memory";
+import {AnyStatement, BooleanStatement, NumericStatement, Statement, StatementParseError, StringStatement, IndexResolver} from "./statement";
+import { numberType, SimpleValue, parseType, undefinedType, UtilityArray, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
 
 
 export interface Identifiable {
@@ -11,14 +10,14 @@ export interface Identifiable {
 
 export class StructogramIssue {
     public readonly id: string;
-    public readonly translationKey: string;
-    public get message() {
-        return Translator.getDictionary().translate(this.translationKey);
-    }
+    public readonly issueID: string;
 
-    constructor(id: string, message: string, translationKey: string) {
+    /**
+     * @param _message Unused parameter used for documentation purposes
+     */
+    constructor(id: string, _message: string, translationKey: string) {
         this.id = id;
-        this.translationKey = translationKey;
+        this.issueID = translationKey;
     }
 }
 
@@ -785,20 +784,6 @@ export class AssignmentBlock extends SequenceBlock {
             return type;
         }
 
-        function isFieldSetable() {
-            let type = memory.getType(memoryKey);
-            if(keyTokens.length <= 1) return true;
-            for(let i = 1; i < keyTokens.length-1; i++) {
-                const token = keyTokens[i]!;
-                if(isNumeric(token) && type instanceof ArrayType) {
-                    type = type.elementType;
-                } else {
-                    type = (type as ObjectType).getFieldType(keyTokens[i]!);
-                }
-            }
-            return type instanceof ArrayType || (type as ObjectType).canBeSet(keyTokens.at(-1)!);
-        }
-
         try {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
@@ -814,8 +799,6 @@ export class AssignmentBlock extends SequenceBlock {
             issues.push(new StructogramIssue(this.id, `[${this.key}] does not exist!`, "erro_no_field"));
         } else if(!getObjectOrFieldType().matches(this.statement?.getReturnType() ?? undefinedType)) {
             issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`, "error_type"));
-        } else if(!isFieldSetable()) {
-            issues.push(new StructogramIssue(this.id, `[${this.key}] cannot be set!`, "error_query_field"));
         } else if(keyTokens.length == 1 && this._associatedStructogram.memory.isConstant(this.key)) {
             issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`, "error_constant"));
         }
@@ -1051,11 +1034,6 @@ export class MultiBranchingBlock extends BracketBlock {
 
     public override getOptions(): BlockOption[] {
         return [this.conditionListOption];
-    }
-
-    public setBranch(index: number, block: StructogramBlock) {
-        // todo checks
-        this.subBlocks["branch"+index] = block;
     }
 
     public override parseAndCheckForIssues(): StructogramIssue[] {

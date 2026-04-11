@@ -11,7 +11,7 @@ export interface Value {
     getType(): ValueType;
     equals(t: Value): boolean;
     asString(): string;
-    tryClone(): Value;
+    clone(): Value;
 }
 
 export interface Ordered<T> {
@@ -60,16 +60,14 @@ export class ObjectType extends ValueType {
      * This way we can have self-referencing types without these issues.
      */
     private readonly fields: FieldTypes;
-    private readonly setableFields: Set<string>;
 
-    constructor(identifier: string, typeParameter: ValueType[], fields: FieldTypes, setableFields: string[]) {
+    constructor(identifier: string, typeParameter: ValueType[], fields: FieldTypes) {
         super(identifier);
         this.typeParameter = typeParameter;
         this.fields = {};
         for(const [field,type] of Object.entries(fields)) {
             this.fields[field] = type;
         }
-        this.setableFields = new Set<string>(setableFields);
     }
 
     public getFieldType(field: string): ValueType {
@@ -83,10 +81,6 @@ export class ObjectType extends ValueType {
 
     public hasField(field: string) {
         return field in this.fields;
-    }
-
-    public canBeSet(field: string) {
-        return this.setableFields.has(field);
     }
 
     public override hasFields(): boolean {
@@ -180,15 +174,12 @@ export const stringType = new StringType();
 // Field definitions
 
 type FieldTypes = Record<string, ValueTypeFunction>;
-type FieldAccess = "get" | "set" | "getset";
 
 export abstract class Field {
     public readonly name: string;
-    public readonly access: FieldAccess;
 
-    constructor(name: string, access: FieldAccess) {
+    constructor(name: string) {
         this.name = name;
-        this.access = access;
     }
     
     /**
@@ -197,14 +188,6 @@ export abstract class Field {
      * @param fields the record to add the type information to
      */
     public abstract addTypeInformationTo(template: UtilityObjectTemplate, typeParameters: ValueType[], fields: FieldTypes): void;
-
-    public isSettable(): boolean {
-        return this.access == "set" || this.access == "getset";
-    }
-
-    public isGettable(): boolean {
-        return this.access == "get" || this.access == "getset";
-    }
 }
 
 export class SelfReferentialField extends Field {
@@ -217,8 +200,8 @@ export class SelfReferentialField extends Field {
 export class PredefinedField extends Field {
     public readonly type: ValueTypeFunction;
 
-    constructor(name: string, access: FieldAccess, type: ValueTypeFunction) {
-        super(name, access);
+    constructor(name: string, type: ValueTypeFunction) {
+        super(name);
         this.type = type;
     }
 
@@ -235,8 +218,8 @@ export class PredefinedField extends Field {
  * This way we can preserve encapsulation.
  */
 export interface UtilityObjectTemplateBuilder {
-    addField(name: string, access: FieldAccess, type: ValueTypeFunction): UtilityObjectTemplateBuilder;
-    addSelfReferentialField(name: string, access: FieldAccess): UtilityObjectTemplateBuilder;
+    addField(name: string, type: ValueTypeFunction): UtilityObjectTemplateBuilder;
+    addSelfReferentialField(name: string): UtilityObjectTemplateBuilder;
     build(): UtilityObjectTemplate;
 }
 
@@ -293,7 +276,7 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
         return this.value?.toString() ?? "undefined";
     }
 
-    public tryClone(): SimpleValue {
+    public clone(): SimpleValue {
         return new SimpleValue(this.value, this.type);
     }
 }
@@ -309,11 +292,10 @@ export class UtilityObjectTemplate {
 
     public getType(typeParameters: ValueType[]): ObjectType {
         const fieldTypes: FieldTypes = {}; 
-        const setableFields = this.fields.filter(f => f.access != "get").map(f => f.name);
         for(const field of this.fields) {
             field.addTypeInformationTo(this, typeParameters, fieldTypes);
         }
-        return new ObjectType(this.id, typeParameters, fieldTypes, setableFields);
+        return new ObjectType(this.id, typeParameters, fieldTypes);
     }
 
     public construct(args: Value[]) {
@@ -329,13 +311,13 @@ export class UtilityObjectTemplate {
                 this.id = id;
             }
 
-            public addField(name: string, access: FieldAccess, type: ValueTypeFunction): UtilityObjectTemplateBuilder {
-                this.fields.push(new PredefinedField(name, access, type));
+            public addField(name: string, type: ValueTypeFunction): UtilityObjectTemplateBuilder {
+                this.fields.push(new PredefinedField(name, type));
                 return this;
             }
 
-            public addSelfReferentialField(name: string, access: FieldAccess): UtilityObjectTemplateBuilder {
-                this.fields.push(new SelfReferentialField(name, access));
+            public addSelfReferentialField(name: string): UtilityObjectTemplateBuilder {
+                this.fields.push(new SelfReferentialField(name));
                 return this;
             }
 
@@ -375,7 +357,11 @@ export class UtilityArray implements ClassIdentifiable, Value {
 
     public indexSet(idx: number, value: Value): void {
         if(idx > this.elements.length) return;
-        this.elements[idx] = value.tryClone();
+        /**
+         * We must ensure we are cloning the value! This way we can avoid recursive arrays.
+         * The values of an array must be unique.
+         */
+        this.elements[idx] = value.clone();
         UtilityArray.emitter.emit(UtilityArray.elementChanged, this, idx, this.elements[idx]);
     }
 
@@ -407,7 +393,7 @@ export class UtilityArray implements ClassIdentifiable, Value {
     }
 
     public concat(other: UtilityArray): UtilityArray {
-        // todo type check
+        if(!this.elementType.matches(other.elementType)) throw new Error("Cannot concatenate two arrays of different element types!");
         return new UtilityArray(this.elements.concat(other.elements), this.elementType);
     }
 
@@ -415,8 +401,8 @@ export class UtilityArray implements ClassIdentifiable, Value {
         return "{" + this.elements.map(e => e.asString()).join() + "}"
     }
 
-    public tryClone(): UtilityArray {
-        return this;
+    public clone(): UtilityArray {
+        return new UtilityArray(this.elements.map(e => e.clone()), this.elementType);
     }
 }
 
@@ -449,7 +435,6 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
     }
 
     public concat(other: UtilityString): UtilityString {
-        // todo type check
         return new UtilityString(this.elements.concat(other.elements));
     }
 
@@ -462,15 +447,18 @@ export class UtilityObject implements ClassIdentifiable, Value {
     protected static idSeq = 0;
     public readonly id: string = `object${UtilityObject.idSeq++}`;
     public fieldData: Record<string, Value> = {};
-    public fieldAccessData: Record<string, FieldAccess> = {};
-    private type: ValueType;
+    /**
+     * We store the data used for construction so that we can replicate the object.
+     */
+    private readonly fields;
+    private readonly args;
+    private type: ObjectType;
     public static readonly emitter = new EventEmitter2();
     public static readonly fieldChanged = "utilityobject.field.changed";
 
-    constructor(fields: Field[], args: Value[], type: ValueType) {
+    constructor(fields: Field[], args: Value[], type: ObjectType) {
         let fieldIdx = 0;
         for(const field of fields) {
-            this.fieldAccessData[field.name] = field.access;
             if(fieldIdx < args.length) {
                 this.fieldData[field.name] = args[fieldIdx]!;
             } else {
@@ -478,6 +466,8 @@ export class UtilityObject implements ClassIdentifiable, Value {
             }
             fieldIdx += 1;
         }
+        this.fields = fields;
+        this.args = args;
         this.type = type;
     }
 
@@ -488,12 +478,12 @@ export class UtilityObject implements ClassIdentifiable, Value {
 
     public set(name: string, value: Value) {
         if(!(name in this.fieldData)) throw new Error("Field does not exist!");
-        if(!this.fieldData[name]!.getType().matches(value.getType())) throw new Error("Type mismatch!");
+        if(!this.getType().getFieldType(name).matches(value.getType())) throw new Error("Type mismatch!");
         this.fieldData[name] = value;
         UtilityObject.emitter.emit(UtilityObject.fieldChanged, this, name, value);
     }
 
-    public getType(): ValueType {
+    public getType(): ObjectType {
         return this.type;
     }
 
@@ -512,30 +502,34 @@ export class UtilityObject implements ClassIdentifiable, Value {
         return this.id;
     }
 
-    public tryClone(): UtilityObject {
-        return this;
+    public clone(): UtilityObject {
+        const object = new UtilityObject(this.fields, this.args, this.type);
+        for(const [name, value] of Object.entries(this.fieldData)) {
+            object.set(name, value);
+        }
+        return object;
     }
 }
 
 export const SinglyLinkedListNodeTemplate = 
     UtilityObjectTemplate.Builder("s1l")
-        .addField("key", "getset", typeParams => typeParams[0]!)
-        .addSelfReferentialField("next", "getset")
+        .addField("key", typeParams => typeParams[0]!)
+        .addSelfReferentialField("next")
         .build();
         
 export const DoublyLinkedListNodeTemplate = 
     UtilityObjectTemplate.Builder("s2l")
-        .addField("key", "getset", typeParams => typeParams[0]!)
-        .addSelfReferentialField("next", "getset")
-        .addSelfReferentialField("prev", "getset")
+        .addField("key", typeParams => typeParams[0]!)
+        .addSelfReferentialField("next")
+        .addSelfReferentialField("prev")
         .build();
 
 export const BinaryTreeNodeTemplate = 
     UtilityObjectTemplate.Builder("btn")
-        .addField("key", "getset", typeParams => typeParams[0]!)
-        .addSelfReferentialField("parent", "getset")
-        .addSelfReferentialField("left", "getset")
-        .addSelfReferentialField("right", "getset")
+        .addField("key", typeParams => typeParams[0]!)
+        .addSelfReferentialField("parent")
+        .addSelfReferentialField("left")
+        .addSelfReferentialField("right")
         .build();
 
 export const typeRegistry: Record<string, (v: ValueType) => ValueType> = {};

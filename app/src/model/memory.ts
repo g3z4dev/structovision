@@ -93,9 +93,8 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
-    // todo test if this exposes the inner state or not
     public getEntries(): MemoryEntry[] {
-        return [...Object.values(this.variables)];
+        return [...Object.values(this.variables)].map(e => new ReadOnlyMemoryEntry(e));
     }
 
     public getAllValuesWithBaseIdentifier(id: string) {
@@ -143,7 +142,7 @@ export class Memory {
 
 export class MemoryEntry {
     public readonly key: string;
-    private _value: Value;
+    protected _value: Value;
     public readonly type: ValueType;
     public readonly constant: boolean;
 
@@ -166,5 +165,22 @@ export class MemoryEntry {
             throw new Error(`Value must be of type [${this.type.baseIdentifier}] but is [${value.getType().baseIdentifier}]!`);
         }
         this._value = value;
+    }
+}
+
+export class ReadOnlyMemoryEntry extends MemoryEntry {
+
+    constructor(entry: MemoryEntry) {
+        super(entry.key, entry.type, entry.constant);
+        this._value = entry.value;
+    }
+
+    // the overridden setter will also override the getter so we need to redefine it
+    public get value() {
+        return this._value;
+    }
+
+    public override set value(_value: Value) {
+        throw new Error("ReadOnlyMemoryEntry cannot be changed!");
     }
 }

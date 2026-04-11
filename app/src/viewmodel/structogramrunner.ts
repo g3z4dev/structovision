@@ -12,6 +12,7 @@ import operandTemplate from "../../resources/program-views/logic-view-templates/
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
 import { UtilityArray, UtilityObject, type Value } from "../model/types";
 import type { ViewModel } from "./viewmodel";
+import { Translator } from "./dictionary";
 
 type RunMode = "onestep" | "run" | "paused";
 
@@ -137,7 +138,7 @@ export class StructogramRunner extends StructogramRenderer {
         const issues = this.structogram.preRun(this.getInputs());
         if(issues.length > 0) {
             for(const issue of issues) {
-                this.runIssueWindow.addEntry(issue.id + ": " + issue.message);
+                this.runIssueWindow.addEntry(issue.id + ": " + Translator.getDictionary().translate(issue.issueID));
             }
             this.runIssueWindow.show();
             return false;

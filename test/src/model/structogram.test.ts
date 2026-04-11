@@ -141,9 +141,12 @@ test("multi branching blocks should work as expected", assertion => {
     secondBlock.statementOption.setStatement("\"second\"");
     const thirdBlock = new PrintBlock(structogram);
     thirdBlock.statementOption.setStatement("\"third\"");
-    multiBranchingBlock.setBranch(0, firstBlock);
-    multiBranchingBlock.setBranch(1, secondBlock);
-    multiBranchingBlock.setBranch(2, thirdBlock);
+    const fourthBlock = new PrintBlock(structogram);
+    fourthBlock.statementOption.setStatement("\"fourth\"");
+    multiBranchingBlock.setSubBlock("branch0", firstBlock);
+    multiBranchingBlock.setSubBlock("branch1", secondBlock);
+    multiBranchingBlock.setSubBlock("branch2", thirdBlock);
+    multiBranchingBlock.setSubBlock("else", fourthBlock);
     assignmentBlock.next = multiBranchingBlock;
 
     structogram.startingBlock = assignmentBlock;
@@ -163,6 +166,12 @@ test("multi branching blocks should work as expected", assertion => {
     runStructogram(structogram);
 
     assertion.eq(printedText, "third", "the multi branching block should direct the control to the correct branch (3)");
+
+    assignmentBlock.statementOption.setStatement("4");
+
+    runStructogram(structogram);
+
+    assertion.eq(printedText, "fourth", "the multi branching block should direct the control to the correct branch (4)");
 });
 
 test("counting loop blocks should work as expected", assertion => {
@@ -346,10 +355,10 @@ test("a complex structogram should work as expected", assertion => {
     printBlock6.statementOption.setStatement("\"the last value is divisble by 11\"");
     const printBlock7 = new PrintBlock(structogram);
     printBlock7.statementOption.setStatement("\"the last value is not divisble by 3, 7 or 11\"");
-    multiBlock.setBranch(0, printBlock4);
-    multiBlock.setBranch(1, printBlock5);
-    multiBlock.setBranch(2, printBlock6);
-    multiBlock.setBranch(3, printBlock7);
+    multiBlock.setSubBlock("branch0", printBlock4);
+    multiBlock.setSubBlock("branch1", printBlock5);
+    multiBlock.setSubBlock("branch2", printBlock6);
+    multiBlock.setSubBlock("branch3", printBlock7);
     const printBlock8 = new PrintBlock(structogram);
     printBlock8.statementOption.setStatement("\"it's done\"");
     multiBlock.next = printBlock8;

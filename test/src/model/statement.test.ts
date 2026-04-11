@@ -1,33 +1,30 @@
 import {test, type IAssert} from "zora";
-import {BooleanStatement, NumericStatement, CharStatement, StatementParseError, AnyStatement, StringStatement} from "@structovision/app/model/statement";
+import {BooleanStatement, NumericStatement, CharStatement, StatementParseError, AnyStatement, StringStatement, IndexResolver} from "@structovision/app/model/statement";
 import { Memory } from "@structovision/app/model/memory";
-import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityArray, UtilityString, type Primitive, type Value } from "@structovision/app/model/types";
+import { ArrayType, BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityArray, UtilityObject, UtilityString, type Primitive, type Value } from "@structovision/app/model/types";
 import { array, b, boolArray, btn, c, charArray, jsonEqual, n, numArray, s1l, s2l, str, ud } from "../testutil.ts";
 
-const placeholderMemory: Memory = new Memory();
+const placeholderMemory = new Memory();
+const placeholderIndexResolver = new IndexResolver(0);
 
-function testNumericStatement(assertion: IAssert, statement: string, result: number, memory: Memory = placeholderMemory) {
-    assertion.equal(NumericStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
+function testNumericStatement(assertion: IAssert, statement: string, result: number, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+    assertion.equal(NumericStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testCharStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory) {
-    assertion.equal(CharStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
+function testCharStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+    assertion.equal(CharStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testStringStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory) {
-    assertion.equal(StringStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
+function testStringStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+    assertion.equal(StringStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testBooleanStatement(assertion: IAssert, statement: string, result: boolean, memory: Memory = placeholderMemory) {
-    assertion.equal(BooleanStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
+function testBooleanStatement(assertion: IAssert, statement: string, result: boolean, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+    assertion.equal(BooleanStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testAnyStatement(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory) {
-    assertion.equal(AnyStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
-}
-
-function testAnyStatementObject(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory) {
-    jsonEqual(assertion, AnyStatement.parse(statement, memory).evaluate(), result, `${statement} should be ${result}`);
+function testAnyStatement(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+    jsonEqual(assertion, AnyStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
 test("statements with one literal should work correctly", (assertion) => {
@@ -81,14 +78,14 @@ test("numeric statements should respect precedence", (assertion) => {
     testNumericStatement(assertion, "4--5", 9);
 });
 
-test("numeric statements should respect brackets", (assertion) => {
+test("statements should respect brackets", (assertion) => {
     testNumericStatement(assertion, "3*(5-4)", 3);
     testNumericStatement(assertion, "sqrt(2*12*3*2)/(3*4)", 1);
     testNumericStatement(assertion, "((3+2)/(3-2)+(12-6)/(4-1)+(2+3)/(5/5))/((15-9)*(2^2)/(2*6))", 6);
     testNumericStatement(assertion, "(10-(9-(8-(7-(6-(5-(4-(3-(2-(1))))))))))", 5);
 });
 
-test("numeric statements should be to handle edge cases", (assertion) => {
+test("statements should be to handle edge cases", (assertion) => {
     testNumericStatement(assertion, "4------------5", 9);
     testNumericStatement(assertion, "1+2+3+4+5+6+7+8+9+10+11+12+13+14+15+16+17+18+19+20", 210);
     testNumericStatement(assertion, "-1^3", -1);
@@ -207,11 +204,15 @@ test("any statements with variables should work as intended", assertion => {
 });
 
 test("statements with invalid tokens should throw an error", assertion => {
-    assertion.throws(() => NumericStatement.parse("3+3,4", placeholderMemory), StatementParseError, "Statements should throw an error if given an invalid token");
-    assertion.throws(() => BooleanStatement.parse("truee or false", placeholderMemory), StatementParseError, "Statements should throw an error if given a typo");
-    assertion.throws(() => BooleanStatement.parse("true orfalse", placeholderMemory), StatementParseError, "Statements should throw an error if lacking spacing");
-    assertion.throws(() => BooleanStatement.parse("true false", placeholderMemory), StatementParseError, "Statements should throw an error if the result is ambigous");
-    assertion.throws(() => AnyStatement.parse("ikjjaslkjdklasljrljldjljksdf", placeholderMemory), StatementParseError, "Statements should throw an error if it makes no sense");
+    assertion.throws(() => NumericStatement.parse("3+3:4", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if given an invalid token");
+    assertion.throws(() => NumericStatement.parse("3+3,4", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if the result is ambigious");
+    assertion.throws(() => NumericStatement.parse("/3", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if an infix operator is used as a prefix operator");
+    assertion.throws(() => NumericStatement.parse("true!false", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if an prefix operator is used as an infix operator");
+    assertion.throws(() => BooleanStatement.parse("truee or false", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if given a typo");
+    assertion.throws(() => BooleanStatement.parse("true orfalse", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if lacking spacing");
+    assertion.throws(() => BooleanStatement.parse("true false", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if the result is ambigous");
+    assertion.throws(() => AnyStatement.parse("ikjjaslkjdklasljrljldjljksdf", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it makes no sense");
+    assertion.throws(() => AnyStatement.parse("////123/asd,,,asd-----,,,****-.-.-...::.,,saeawedsdxcdfdf", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it makes no sense with special characters");
 });
 
 test("statements with result types should throw an error", assertion => {
@@ -240,7 +241,7 @@ test("statements with result types should throw an error", assertion => {
     for(let i = 0; i < parsers.length; i++) {
         for(let j = 0; j < values.length; j++) {
             if(i == j) continue;
-            assertion.throws(() => parsers[i]!(values[j]!, placeholderMemory), StatementParseError, `${parsersNames[i]} should throw an error if the result is a(n) ${valueNames[j]}`);
+            assertion.throws(() => parsers[i]!(values[j]!, placeholderMemory, placeholderIndexResolver), StatementParseError, `${parsersNames[i]} should throw an error if the result is a(n) ${valueNames[j]}`);
         }
     }
 });
@@ -252,21 +253,21 @@ test("statements should be able to define arrays", (assertion) => {
 });
 
 test("statements should be able to define arrays of nested types", (assertion) => {
-    testAnyStatementObject(assertion, "{s1l(3),s1l(5),s1l(10)}", array([s1l(n(3)),s1l(n(5)),s1l(n(10))]));
-    testAnyStatementObject(assertion, "{s1l(s2l(3)),s1l(s2l(5)),s1l(s2l(10))}", array([s1l(s2l(n(3))),s1l(s2l(n(5))),s1l(s2l(n(10)))]));
-    testAnyStatementObject(assertion, "{s1l({1,2,3}),s1l({4,5}),s1l({6})}", array([s1l(numArray([1,2,3])),s1l(numArray([4,5])),s1l(numArray([6]))]));
-    testAnyStatementObject(assertion, "{{1},{2,3},{4,5,6}}", array([numArray([1]), numArray([2,3]), numArray([4,5,6])]));
-    testAnyStatementObject(assertion, "{{{1},{2,3},{4,5,6}},{{7},{8,9},{10}}}", array([array([numArray([1]), numArray([2,3]), numArray([4,5,6])]),array([numArray([7]), numArray([8,9]), numArray([10])])]))
+    testAnyStatement(assertion, "{s1l(3),s1l(5),s1l(10)}", array([s1l(n(3)),s1l(n(5)),s1l(n(10))]));
+    testAnyStatement(assertion, "{s1l(s2l(3)),s1l(s2l(5)),s1l(s2l(10))}", array([s1l(s2l(n(3))),s1l(s2l(n(5))),s1l(s2l(n(10)))]));
+    testAnyStatement(assertion, "{s1l({1,2,3}),s1l({4,5}),s1l({6})}", array([s1l(numArray([1,2,3])),s1l(numArray([4,5])),s1l(numArray([6]))]));
+    testAnyStatement(assertion, "{{1},{2,3},{4,5,6}}", array([numArray([1]), numArray([2,3]), numArray([4,5,6])]));
+    testAnyStatement(assertion, "{{{1},{2,3},{4,5,6}},{{7},{8,9},{10}}}", array([array([numArray([1]), numArray([2,3]), numArray([4,5,6])]),array([numArray([7]), numArray([8,9]), numArray([10])])]))
 });
 
 test("statements should not be able to define a heterogenous array", (assertion) => {
-    assertion.throws(() => AnyStatement.parse('{1,"alma",false}', placeholderMemory), StatementParseError, "Any statement should throw an error if trying to parse an array with heterogenous elements");
+    assertion.throws(() => AnyStatement.parse('{1,"alma",false}', placeholderMemory, placeholderIndexResolver), StatementParseError, "Any statement should throw an error if trying to parse an array with heterogenous elements");
 });
 
 test("statements should be able to define objects", (assertion) => {
-    testAnyStatementObject(assertion, "s1l(3)", SinglyLinkedListNodeTemplate.construct([n(3)]));
-    testAnyStatementObject(assertion, 's2l(\'a\')', DoublyLinkedListNodeTemplate.construct([c("a")]));
-    testAnyStatementObject(assertion, "btn(false)", BinaryTreeNodeTemplate.construct([b(false)]));
+    testAnyStatement(assertion, "s1l(3)", SinglyLinkedListNodeTemplate.construct([n(3)]));
+    testAnyStatement(assertion, 's2l(\'a\')', DoublyLinkedListNodeTemplate.construct([c("a")]));
+    testAnyStatement(assertion, "btn(false)", BinaryTreeNodeTemplate.construct([b(false)]));
 });
 
 test("statements should be able to access fields of objects", (assertion) => {
@@ -282,21 +283,72 @@ test("statements should be able to access fields of objects", (assertion) => {
 });
 
 test("statements should be able to construct nested types", (assertion) => {
-    testAnyStatementObject(assertion, "s1l(s1l(3))", s1l(s1l(n(3))));
-    testAnyStatementObject(assertion, 's2l(s2l(\'a\'))', s2l(s2l(c("a"))));
-    testAnyStatementObject(assertion, "btn(btn(false))", btn(btn(b(false))));
+    testAnyStatement(assertion, "s1l(s1l(3))", s1l(s1l(n(3))));
+    testAnyStatement(assertion, 's2l(s2l(\'a\'))', s2l(s2l(c("a"))));
+    testAnyStatement(assertion, "btn(btn(false))", btn(btn(b(false))));
 });
 
 test("statements should not be able to access fields of objects that does not exist", (assertion) => {
-    assertion.throws(() => AnyStatement.parse('s1l(3).alma', placeholderMemory), StatementParseError, "Any statement should throw an error if trying to access a field of an s1l that does not exist");
-    assertion.throws(() => AnyStatement.parse("s2l('a').parent", placeholderMemory), StatementParseError, "Any statement should throw an error if trying to access a field of an s2l that does not exist");
-    assertion.throws(() => AnyStatement.parse('btn(false).next', placeholderMemory), StatementParseError, "Any statement should throw an error if trying to access a field of an btn that does not exist");
+    assertion.throws(() => AnyStatement.parse('s1l(3).alma', placeholderMemory, placeholderIndexResolver), StatementParseError, "Any statement should throw an error if trying to access a field of an s1l that does not exist");
+    assertion.throws(() => AnyStatement.parse("s2l('a').parent", placeholderMemory, placeholderIndexResolver), StatementParseError, "Any statement should throw an error if trying to access a field of an s2l that does not exist");
+    assertion.throws(() => AnyStatement.parse('btn(false).next', placeholderMemory, placeholderIndexResolver), StatementParseError, "Any statement should throw an error if trying to access a field of an btn that does not exist");
 });
 
 test("statements should be return an undefined value if there is one undefined operand", (assertion) => {
     const mem = new Memory();
     mem.createVariable("a", numberType);
-    testAnyStatementObject(assertion, "s1l(a).key", ud(), mem);
-    testAnyStatementObject(assertion, "len {1,2,a}", ud(), mem);
-    testAnyStatementObject(assertion, "(3+5)/4+len(\"alma\")*a", ud(), mem);
+    testAnyStatement(assertion, "s1l(a).key", ud(), mem);
+    testAnyStatement(assertion, "len {1,2,a}", ud(), mem);
+    testAnyStatement(assertion, "(3+5)/4+len(\"alma\")*a", ud(), mem);
+});
+
+test("statements with function operators should work as expected", (assertion) => {
+    const mem = new Memory();
+    mem.createVariable("a", new ArrayType(numberType));
+    mem.createVariable("b", SinglyLinkedListNodeTemplate.getType([numberType]));
+    mem.createVariable("c", DoublyLinkedListNodeTemplate.getType([numberType]));
+    mem.createVariable("d", BinaryTreeNodeTemplate.getType([numberType]));
+    mem.setVariable("a", array([n(1), n(2), n(3), n(4)]));
+    mem.setVariable("b", SinglyLinkedListNodeTemplate.construct([n(1)]));
+    mem.setVariable("c", DoublyLinkedListNodeTemplate.construct([n(2)]));
+    mem.setVariable("d", BinaryTreeNodeTemplate.construct([n(3)]));
+
+    testAnyStatement(assertion, "swap(a,0,1)", ud(), mem);
+    jsonEqual(assertion, mem.getVariable("a"), array([n(2), n(1), n(3), n(4)]), "the swap function should work as expected");
+    
+    testAnyStatement(assertion, "is1l(b,s1l(2))", ud(), mem);
+    const expected1 = SinglyLinkedListNodeTemplate.construct([n(1)]);
+    expected1.set("next", SinglyLinkedListNodeTemplate.construct([n(2)]));
+    jsonEqual(assertion, mem.getVariable("b"), expected1, "the is1l function should work as expected");
+    
+    testAnyStatement(assertion, "is2l(c,s2l(10))", ud(), mem);
+    const expected2 = DoublyLinkedListNodeTemplate.construct([n(2)]);
+    const next = DoublyLinkedListNodeTemplate.construct([n(10)])
+    expected2.set("next", next);
+    next.set("prev", expected2)
+    const circularFilter1 = 
+        (key: string, value: any) => {
+            if((key == "next" || key == "prev") && value instanceof UtilityObject) return value.get("key");
+            return value;
+        }
+    jsonEqual(assertion, mem.getVariable("c"), expected2, "the is2l function should work as expected 1", circularFilter1);
+    jsonEqual(assertion, mem.getVariable("c").get("next"), next, "the is2l function should work as expected 2", circularFilter1);
+
+    testAnyStatement(assertion, "ileft(d,btn(4))", ud(), mem);
+    testAnyStatement(assertion, "iright(d,btn(5))", ud(), mem);
+    const expected3 = BinaryTreeNodeTemplate.construct([n(3)]);
+    const left = BinaryTreeNodeTemplate.construct([n(4)]);
+    const right = BinaryTreeNodeTemplate.construct([n(5)]);
+    expected3.set("left", left);
+    left.set("parent", expected3);
+    expected3.set("right", right)
+    right.set("parent", expected3);
+    const circularFilter = 
+        (key: string, value: any) => {
+            if((key == "parent" || key == "left" || key == "right") && value instanceof UtilityObject) return value.get("key");
+            return value;
+        }
+    jsonEqual(assertion, mem.getVariable("d"), expected3, "the ileft and iright functions should work as expected", circularFilter);
+    jsonEqual(assertion, mem.getVariable("d").get("left"), left, "the ileft function should work as expected", circularFilter);
+    jsonEqual(assertion, mem.getVariable("d").get("right"), right, "the iright function should work as expected", circularFilter);
 });

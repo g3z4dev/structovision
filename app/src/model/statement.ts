@@ -225,7 +225,7 @@ class ObjectConstructor extends Operator {
 class ObjectGetOperator extends Operator {
 
     public constructor() {
-        super(99, "prefix", ".", types => types[0]!.hasFields() && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
+        super(99, "infix", ".", types => types[0]!.hasFields() && types[1]!.getIdentifier() == "token", new ValueType("unknown"), false);
     }
 
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
@@ -366,10 +366,12 @@ registerOperator(new FunctionOperator("is1l", 2,
     undefinedType,
     (operands) => {
         const c = (operands[0] as UtilityObject);
-        const d = (operands[1] as UtilityObject);
+        const d = (operands[1] as Value);
         const e = c.get("next");
         c.set("next", d);
-        d.set("next", e);
+        if(d instanceof UtilityObject) {
+            d.set("next", e);
+        }
     }
 ));
 registerOperator(new FunctionOperator("is2l", 2, 
@@ -379,13 +381,47 @@ registerOperator(new FunctionOperator("is2l", 2,
     undefinedType,
     (operands) => {
         const c = (operands[0] as UtilityObject);
-        const d = (operands[1] as UtilityObject);
+        const d = (operands[1] as Value);
         const e = c.get("next");
         c.set("next", d);
-        d.set("prev", c);
-        d.set("next", e);
+        if(d instanceof UtilityObject) {
+            d.set("prev", c);
+            d.set("next", e);
+        }
         if(e instanceof UtilityObject) {
             e.set("prev", d);
+        }
+    }
+));
+registerOperator(new FunctionOperator("ileft", 2, 
+    ops => {
+        return ops[0]!.baseIdentifier == "btn" && ops[0]!.matches(ops[1]!);
+    },
+    undefinedType,
+    (operands) => {
+        const p = (operands[0] as UtilityObject);
+        const c = (operands[1] as UtilityObject);
+        const l = p.get("left")!;
+        p.set("left", c);
+        c.set("parent", p);
+        if(l instanceof UtilityObject) {
+            l.set("parent", SimpleValue.undefined());
+        }
+    }
+));
+registerOperator(new FunctionOperator("iright", 2, 
+    ops => {
+        return ops[0]!.baseIdentifier == "btn" && ops[0]!.matches(ops[1]!);
+    },
+    undefinedType,
+    (operands) => {
+        const p = (operands[0] as UtilityObject);
+        const c = (operands[1] as UtilityObject);
+        const r = p.get("right")!;
+        p.set("right", c);
+        c.set("parent", p);
+        if(r instanceof UtilityObject) {
+            r.set("parent", SimpleValue.undefined());
         }
     }
 ));
@@ -790,16 +826,21 @@ export abstract class Statement<T> {
                     const afterOperator = () => !(partialParsedTokens[i-1] instanceof Operand);
                     if((i == 0 || i == tokens.length-1) && partialParsedTokens[i+1] instanceof Operand) {
                         return "prefix";
-                    } else if(afterOperator() || afterComma()) {
-                        return "prefix";
                     } else if (afterOperand()) {
                         return "infix";
+                    } else if(afterOperator() || afterComma()) {
+                        return "prefix";
                     } else {
                         throw new StatementParseError(`Cannot decide the operator type for given operator [${token}]`, "error_undecidable_operator_type");
                     }
                 }
 
                 const operatorType = decideOperandType();
+                const operator = operatorsByType[operatorType]![token]!;
+                if(!operator) {
+                    console.log(operatorType, token)
+                    throw new StatementParseError(`Operator was used at the wrong location!`, "error_operator_location");
+                }
 
                 parsedTokens.push(operatorsByType[operatorType]![token]!);
             }
@@ -844,7 +885,12 @@ export abstract class Statement<T> {
                         flushOperatorsWhile(() => operators.at(-1) != "(");
                         operators.pop();
                     } else {
-                        operands.push(new GroupedOperand([token], token.getType()));
+                        try {
+                            operands.push(new GroupedOperand([token], token.getType()));
+                        } catch(error) {
+                            console.log(tokens, parsedTokens)
+                            throw error;
+                        }
                     }
                 }
             }

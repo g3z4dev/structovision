@@ -59,9 +59,9 @@ export function ud() {
 
 // we need to scrub the uniqueness of objects to compare them by json
 function scrubID(jsonText: string) {
-    jsonText.replace(new RegExp("\"object\d+\""), "\"object\"");
+    return jsonText.replaceAll(/\"id\":\"[a-zA-Z0-9]+\"/g, "\"id\":\"\"");
 }
 
-export function jsonEqual(assertion: IAssert, a: any, b: any, text: string) {
-    assertion.equal(scrubID(JSON.stringify(a)), scrubID(JSON.stringify(b)), text);
+export function jsonEqual(assertion: IAssert, a: any, b: any, text: string, filter?: (k: string, v: any) => any) {
+    assertion.equal(scrubID(JSON.stringify(a, filter)), scrubID(JSON.stringify(b, filter)), text);
 }
