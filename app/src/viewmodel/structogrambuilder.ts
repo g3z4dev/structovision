@@ -863,20 +863,9 @@ class BooleanStatementListOptionHandler extends OptionHandler {
         (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;
         const form = node.querySelector("form") as HTMLElement;
         const conditionEntry = node.querySelector(".t-condition-entry") as HTMLElement;
-        const textField = conditionEntry.querySelector("input[type=\"text\"]") as HTMLFormElement;
-        const removeButton = conditionEntry.querySelector("input[type=\"button\"]") as HTMLFormElement;
-        removeButton.addEventListener("click", event => {
-            if(event.button == 0) {
-                const oldValues = option.getRawValues();
-                form.removeChild(conditionEntry);
-                this.updateStatements(form, option);
-                this.changed(option, option.getRawValues(), oldValues);
-            }
-        })
+        form.removeChild(conditionEntry);
         const statementCount = option.getStatements().length;
-        textField.value = option.getStatements()[0];
-        this.addUpdateEventTo(form, textField, option);
-        let i = 1;
+        let i = 0;
         for(; i < statementCount; i++) {
             this.cloneAndAddTextField(form, conditionEntry, i, option);
         }

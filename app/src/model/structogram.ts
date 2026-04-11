@@ -269,7 +269,7 @@ export class Structogram {
     public removeBlock(block: StructogramBlock, supressEvent: boolean = false) {
         if(this.isRunning()) throw new Error("Cannot remove block while structogram is running!");
         delete this.idMap[block.id];
-        for(const subBlock of Object.values(block.getSubBlocks())) {
+        for(const [_key, subBlock] of block.getOrderedSubBlocks()) {
             if(subBlock) {
                 this.removeBlock(subBlock, true);
             }
@@ -601,8 +601,12 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
         this._subBlockKey = key;
     }
 
-    public getSubBlocks(): Record<string,StructogramBlock | undefined> {
-        return this.subBlocks;
+    public getOrderedSubBlocks(): [string,StructogramBlock | undefined][] {
+        return Object.entries(this.subBlocks);
+    }
+
+    public getSubBlocks(): Record<string, StructogramBlock |undefined> {
+        return {...this.subBlocks};
     }
 
     public setSubBlock(key: string, block: StructogramBlock | undefined) {
@@ -801,7 +805,6 @@ export class AssignmentBlock extends SequenceBlock {
             if(error instanceof StatementParseError) {
                 issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
             } else {
-                console.log(error);
                 alert("Fatal parse error!");
             }
         }
@@ -849,7 +852,6 @@ export class ControlBlock extends SequenceBlock {
             if(error instanceof StatementParseError) {
                 return [new StructogramIssue(this.id, error.message, error.translationKey)];
             } else {
-                console.log(error);
                 alert("Fatal parse error!");
             }
         }
@@ -887,7 +889,6 @@ export class PrintBlock extends SequenceBlock {
             if(error instanceof StatementParseError) {
                 return [new StructogramIssue(this.id, error.message, error.translationKey)];
             } else {
-                console.log(error);
                 alert("Fatal parse error!");
             }
         }
@@ -980,7 +981,9 @@ export class MultiBranchingBlock extends BracketBlock {
     private branches: BooleanStatement[] = [];
     private foundBranch: boolean = false;
     private finished: boolean = false;
-    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {
+        "else": undefined
+    };
     protected branchIndex = 0;
     public readonly conditionListOption = new BooleanStatementListOption(this._associatedStructogram, "conditions", "the list of conditions the branches have");
 
@@ -1014,9 +1017,9 @@ export class MultiBranchingBlock extends BracketBlock {
             this.fillOutBranches();
             this.trimBranches();
         });
+        this.fillOutBranches();
     }
 
-    // TODO else branch
     public override run(): StructogramBlock | undefined {
         if(this.foundBranch) {
             this.finished = true;
@@ -1026,13 +1029,20 @@ export class MultiBranchingBlock extends BracketBlock {
             this.activeStep = `branch${this.branchIndex}`;
             if(this.branches[this.branchIndex]!.evaluate()) {
                 this.foundBranch = true;
-                return Object.values(this.subBlocks)[this.branchIndex];
+                return this.getOrderedSubBlocks()[this.branchIndex]![1];
             } else {
                 this.branchIndex++;
                 return this;
             }
         }
-        return undefined;
+        this.activeStep = "else";
+        this.foundBranch = true;
+        return this.subBlocks["else"]!;
+    }
+
+    // alphabethically ordering subblocks by key will make sure that the else subblock is at the end
+    public getOrderedSubBlocks(): [string, StructogramBlock | undefined][] {
+        return super.getOrderedSubBlocks().sort((e1, e2) => e1[0]!.localeCompare(e2[0]!));
     }
 
     public override getClassIdentifier() {

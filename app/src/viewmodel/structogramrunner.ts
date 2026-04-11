@@ -52,13 +52,17 @@ export class StructogramRunner extends StructogramRenderer {
 
     protected set activeBlockStep(step: string | undefined) {
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.idPrefix}-${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
+            const nonSVGChildrenContent = `#${this.idPrefix}-${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}`;
+            const subSVGChildrenContent = `#${this.idPrefix}-${this.currentBlock.id} >  svg.t-subsvg .t-step-${this._activeBlockStep}`;
+            for(const e of this.renderTarget.querySelectorAll(`${nonSVGChildrenContent}, ${subSVGChildrenContent}`) ?? []) {
                 e?.classList.remove("font-bold", "stroke-green-500");
             }
         }
         this._activeBlockStep = step;
         if(this._activeBlockStep && this.currentBlock) {
-            for(const e of this.renderTarget.querySelectorAll(`#${this.idPrefix}-${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}, #${this.currentBlock.id} >  svg.t-subblock-header .t-step-${this._activeBlockStep}`) ?? []) {
+            const nonSVGChildrenContent = `#${this.idPrefix}-${this.currentBlock.id} > :not(svg) .t-step-${this._activeBlockStep}`;
+            const subSVGChildrenContent = `#${this.idPrefix}-${this.currentBlock.id} >  svg.t-subsvg .t-step-${this._activeBlockStep}`;
+            for(const e of this.renderTarget.querySelectorAll(`${nonSVGChildrenContent}, ${subSVGChildrenContent}`) ?? []) {
                 e?.classList.add("font-bold", "stroke-green-500");
             }
         }
@@ -344,7 +348,6 @@ class ProgramViewSettings {
     public loadData(data: any) {
         function load(input: HTMLInputElement, view: ProgramView, key: string) {
             input.checked = data[key] ?? true;
-            console.log(view, input.checked);
             view.setVisibility(input.checked);
         }
         load(this.outputVisibleInput, this.viewManager.outputView, "output_visible");

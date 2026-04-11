@@ -101,7 +101,8 @@ export class EnglishDictionary extends Dictionary {
         "error_string_result_mismatch": "String statement expects to receive a string as its result!",
         "error_boolean_result_mismatch": "Boolean statement expects to receive a boolean as its result!",
         "error_forbidden_key": "Forbidden key was used for variable definition!",
-        "error_duplicate_key": "Duplicate key was used for variable definition!"
+        "error_duplicate_key": "Duplicate key was used for variable definition!",
+        "structogram-else": "else"
     }
 
     public override getFlag(): string {
@@ -177,7 +178,8 @@ export class HungarianDictionary extends Dictionary {
         "error_string_result_mismatch": "Szöveges állítás szöveges eredményt vár!",
         "error_boolean_result_mismatch": "Logikai állítás logikai eredményt vár!",
         "error_forbidden_key": "Tiltott kulcs használat a változó definíciójában!",
-        "error_duplicate_key": "Foglalt kulcs használat a változó definíciójában!"
+        "error_duplicate_key": "Foglalt kulcs használat a változó definíciójában!",
+        "structogram-else": "különben"
     }
 
     public override getFlag(): string {

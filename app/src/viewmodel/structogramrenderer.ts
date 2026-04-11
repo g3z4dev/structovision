@@ -1,4 +1,4 @@
-import { BlockOption, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
+import { BlockOption, MultiBranchingBlock, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
 import { applyTransformation, CameraHandler, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
@@ -152,7 +152,8 @@ export class StructogramRenderer {
     private setupTextFor(elem: HTMLElement, options: BlockOption[], width: number, height:number, index: number = 0) {
         if(!this.structogramSVG) return;
         this.replaceOptionValues(elem, options, index);
-        const textLabel = elem.querySelector(".t-text") as SVGTextElement;
+        const textLabel = elem.querySelector(".t-text") as SVGTextElement | undefined;
+        if(!textLabel) return;
         const textHLocation = elem.dataset.textHLocation ?? "left";
         if(textHLocation == "center") {
             centerX(textLabel, width/2);
@@ -198,26 +199,30 @@ export class StructogramRenderer {
             this.onBlockAdded(currentBlock, prevBlock, elem);
             parent.appendChild(elem);
             const subBlocks = currentBlock.getSubBlocks();
-            const subBlockKeys = Object.keys(subBlocks);
-            const subBlockCount = Object.keys(subBlocks).length;
+            const orderedSubBlocks = currentBlock.getOrderedSubBlocks();
+            const subBlockKeys = orderedSubBlocks.map(e => e[0]!);
+            const subBlockCount = orderedSubBlocks.length;
             let maxSubBlockHeight = 0;
             
             function resolveSubBlocks(renderer: StructogramRenderer, currentBlock: StructogramBlock, i: number) {
                 let subBlockXOffset = Number.parseInt(elem.dataset.subblockXOffset ?? "0");
                 let subBlockYOffset = Number.parseInt(elem.dataset.subblockYOffset ?? "0");
                 const newWidth = (width-subBlockXOffset)/subBlockCount;
-                const childHeader = elem.querySelector(".t-subblock-header") as HTMLElement | undefined;
-                if(childHeader) {
-                    const header = childHeader.cloneNode(true) as HTMLElement;
-                    elem.appendChild(header);
-                    for(const child of header.querySelectorAll(":not(svg) *") ?? []) {
-                        for(const clazz of child.classList.values()) {
-                            if(clazz.includes("%i%")) {
-                                child.classList.remove(clazz);
-                                child.classList.add(clazz.replace("%i%", `${i}`));
+                
+                if(currentBlock instanceof MultiBranchingBlock) {
+                    let header = undefined;
+                    if(i == subBlockCount-1) {
+                        header = elem.querySelector(".t-else-header")!.cloneNode(true) as HTMLElement;
+                    } else {
+                        const subBlockHeader = elem.querySelector(".t-subblock-header") as HTMLElement;
+                        header = subBlockHeader.cloneNode(true) as HTMLElement;
+                        for(const child of (header.querySelectorAll(":not(svg) *") ?? []) as NodeListOf<HTMLElement>) {
+                            if("indexedClass" in child.dataset) {
+                                child.classList.add(`${child.dataset["indexedClass"]!}${i}`);
                             }
                         }
                     }
+                    elem.appendChild(header);
                     const x = subBlockXOffset + newWidth*i;
                     const y = 0;
                     setPosition(header, x, y);
