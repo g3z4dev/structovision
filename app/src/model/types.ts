@@ -339,7 +339,7 @@ export class UtilityArray implements ClassIdentifiable, Value {
 
     constructor(values: Value[], elementType: ValueType) {
         UtilityArray.ensureValuesAreHomogenous(values)
-        this.elements = [...values];
+        this.elements = [...values.map(value => value.clone())];
         this.elementType = elementType;
     }
 
@@ -441,6 +441,10 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
     public getClassIdentifier(): string {
         return "string"
     }
+
+    public clone(): UtilityArray {
+        return new UtilityString(this.elements.map(e => e.clone()));
+    }
 }
 
 export class UtilityObject implements ClassIdentifiable, Value {
@@ -505,7 +509,11 @@ export class UtilityObject implements ClassIdentifiable, Value {
     public clone(): UtilityObject {
         const object = new UtilityObject(this.fields, this.args, this.type);
         for(const [name, value] of Object.entries(this.fieldData)) {
-            object.set(name, value);
+            if(value.id == this.id) {
+                object.set(name, object);
+            } else {
+                object.set(name, value.clone());
+            }
         }
         return object;
     }
