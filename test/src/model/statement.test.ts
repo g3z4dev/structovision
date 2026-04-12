@@ -24,7 +24,7 @@ function testBooleanStatement(assertion: IAssert, statement: string, result: boo
 }
 
 function testAnyStatement(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
-    jsonEqual(assertion, AnyStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
+    jsonEqual(assertion, AnyStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result.asString()}`);
 }
 
 test("statements with one literal should work correctly", (assertion) => {
@@ -33,6 +33,7 @@ test("statements with one literal should work correctly", (assertion) => {
     testStringStatement(assertion, "\"almafa\"", "almafa");
     testBooleanStatement(assertion, "true", true);
     testAnyStatement(assertion, "10", n(10));
+    testAnyStatement(assertion, "undefined", ud());
 });
 
 test("statements with extra spaces should still be parsed correctly", (assertion) => {
@@ -78,14 +79,14 @@ test("numeric statements should respect precedence", (assertion) => {
     testNumericStatement(assertion, "4--5", 9);
 });
 
-test("statements should respect brackets", (assertion) => {
+test("numeric statements should respect brackets", (assertion) => {
     testNumericStatement(assertion, "3*(5-4)", 3);
     testNumericStatement(assertion, "sqrt(2*12*3*2)/(3*4)", 1);
     testNumericStatement(assertion, "((3+2)/(3-2)+(12-6)/(4-1)+(2+3)/(5/5))/((15-9)*(2^2)/(2*6))", 6);
     testNumericStatement(assertion, "(10-(9-(8-(7-(6-(5-(4-(3-(2-(1))))))))))", 5);
 });
 
-test("statements should be to handle edge cases", (assertion) => {
+test("numeric statements should be to handle edge cases", (assertion) => {
     testNumericStatement(assertion, "4------------5", 9);
     testNumericStatement(assertion, "1+2+3+4+5+6+7+8+9+10+11+12+13+14+15+16+17+18+19+20", 210);
     testNumericStatement(assertion, "-1^3", -1);
@@ -148,7 +149,7 @@ test("any statements with just one operator should work correctly", assertion =>
     testAnyStatement(assertion, "true and false", b(false));
 });
 
-test("complex statements with numeric, string and boolean components should work correctly", (assertion) => {
+test("complex statements with numeric, string and boolean components should work correctly", assertion => {
     testNumericStatement(assertion, "len(\"this is \"&str(4=5-1))", 12);
     testNumericStatement(assertion, "sqrt(len(\"this is \"&str(4=5-1)&\" no?\"))", 4);
     testNumericStatement(assertion, "len(\"alma\"&\"fa\")+-sqrt(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", 4);
@@ -159,7 +160,7 @@ test("complex statements with numeric, string and boolean components should work
     testBooleanStatement(assertion, "sqrt(len(\"almaalmaalmaalma\"))<(3.4+4.5)/2*16^(1/4)", true);
     testBooleanStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(9))", false);
     testAnyStatement(assertion, "len(\"alma\"&\"fa\")+-sqrt(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", n(4));
-    testAnyStatement(assertion, "len(\"\"&true)&\"=\"&sqrt(len(\"this is \"&str(4=5-1)&\" no?\"))&\" is \"&(len(\"\"&true)=sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", str("4=4 is true"));
+    testAnyStatement(assertion, "str(len(\"\"&str(true)))&\"=\"&str(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))&\" is \"&str(len(\"\"&str(true))=sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", str("4=4 is true"));
     testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(9))", b(false));
 });
 
@@ -351,4 +352,10 @@ test("statements with function operators should work as expected", (assertion) =
     jsonEqual(assertion, mem.getVariable("d"), expected3, "the ileft and iright functions should work as expected", circularFilter);
     jsonEqual(assertion, mem.getVariable("d").get("left"), left, "the ileft function should work as expected", circularFilter);
     jsonEqual(assertion, mem.getVariable("d").get("right"), right, "the iright function should work as expected", circularFilter);
+});
+
+test("statements with any undefined operands should result in being undefined", (assertion) => {
+    testAnyStatement(assertion, "len(\"alma\"&\"fa\")+-sqrt(sqrt(len(\"this is \"&str(undefined=5-1)&\" no?\")))", ud());
+    testAnyStatement(assertion, "str(len(\"\"&str(true)))&\"=\"&str(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))&\" is \"&str(len(\"\"&undefined)=sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", ud());
+    testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(undefined))", ud());
 });

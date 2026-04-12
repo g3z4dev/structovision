@@ -419,7 +419,7 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
     }
     
     public greaterThan(other: UtilityString): boolean {
-        throw this.getString() > other.getString();
+        return this.getString() > other.getString();
     }
 
     public getType(): ArrayType {

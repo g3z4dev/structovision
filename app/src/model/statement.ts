@@ -315,7 +315,7 @@ registerOperator(new UnaryOperator(7, "-", UnaryOperator.matchesSomeFn([numberTy
 registerOperator(new UnaryOperator(7, "sqrt", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.sqrt(((a as SimpleValue).value as number)))));
 registerOperator(new UnaryOperator(7, "log", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))));
 registerOperator(new UnaryOperator(7, "abs", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.abs(((a as SimpleValue).value as number)))));
-registerOperator(new UnaryOperator(7, "len", types => types[0]!.baseIdentifier == "array" || types[0]!.baseIdentifier == "string", numberType, a => SimpleValue.number((a as UtilityArray).length)));
+registerOperator(new UnaryOperator(7, "len", types => types[0]!.isUndefined() || types[0]!.baseIdentifier == "array" || types[0]!.baseIdentifier == "string", numberType, a => SimpleValue.number((a as UtilityArray).length)));
 
 // Logic Operators
 registerOperator(new BinaryOperator(1, "and", BinaryOperator.matchesSomePairsFn([[booleanType, booleanType]]), booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) && ((b as SimpleValue).value as boolean))));
@@ -333,7 +333,7 @@ registerOperator(new class extends BinaryOperator {
     public getReturnType(parameterTypes: ValueType[]): ValueType {
         return parameterTypes[0]!;
     }
-}(4, "&", types => types[0]!.getIdentifier().startsWith("array") || types[0]!.getIdentifier() == "string" && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityString).concat(b as UtilityString)));
+}(4, "&", types => (types[0]!.baseIdentifier == "array" || types[0]!.getIdentifier() == "string" || types[0]!.isUndefined()) && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityArray).concat(b as UtilityArray)));
 registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([anyType]), stringType, a => new UtilityString([...a.asString()].map(SimpleValue.char))));
 
 // Constructors
@@ -460,7 +460,7 @@ function parseOperand(text: string, memory: Memory, indexResolver: IndexResolver
         return new VariableOperand(text, memory);
     }
     if(text.startsWith("{") && text.endsWith("}")) {
-        return ArrayLiteral.parse(text, memory, indexResolver);
+        return ArrayLiteralOperand.parse(text, memory, indexResolver);
     }
     if(text.startsWith("\"") && text.endsWith("\"")) {
         return StringLiteral.parse(text);
@@ -483,6 +483,8 @@ class LiteralOperand extends ResolvableOperand {
             return new LiteralOperand(SimpleValue.boolean(true));
         } else if (text == "false") {
             return new LiteralOperand(SimpleValue.boolean(false));
+        } else if (text == "undefined") {
+            return new LiteralOperand(SimpleValue.undefined());
         } else if (text.startsWith("\'") && text.endsWith("\'") && text.length == 3) {
             return new LiteralOperand(SimpleValue.char(text.substring(1,2)));
         } else {
@@ -507,7 +509,7 @@ class LiteralOperand extends ResolvableOperand {
     }
 }
 
-class ArrayLiteral extends ResolvableOperand {
+class ArrayLiteralOperand extends ResolvableOperand {
     values: AnyStatement[];
     type: ArrayType;
 
@@ -537,18 +539,18 @@ class ArrayLiteral extends ResolvableOperand {
         return tokens;
     }
 
-    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): ArrayLiteral {
+    public static parse(text: string, memory: Memory, indexResolver: IndexResolver): ArrayLiteralOperand {
         if(!text.startsWith("{") || !text.endsWith("}")) {
             throw new Error("Not an array literal!");
         }
         text = text.substring(1,text.length-1);
-        const values = ArrayLiteral.splitElements(text).map(token => AnyStatement.parse(token, memory, indexResolver));
+        const values = ArrayLiteralOperand.splitElements(text).map(token => AnyStatement.parse(token, memory, indexResolver));
         for(let i = 0; i < values.length; i++) {
             for(let j = i+1; j < values.length; j++) {
                 if(!values[i]!.getReturnType().matches(values[j]!.getReturnType())) throw new StatementParseError("Arrays cannot be heterogeneous!", "error_array_heterogeneous")
             }
         }
-        return new ArrayLiteral(values, values.length > 0 ? values[0]!.getReturnType() : anyType);
+        return new ArrayLiteralOperand(values, values.length > 0 ? values[0]!.getReturnType() : anyType);
     }
 
     public resolve(): Value {
@@ -824,7 +826,7 @@ export abstract class Statement<T> {
                     const afterComma = () => partialParsedTokens[i-1] == ",";
                     const afterOperand = () => partialParsedTokens[i-1] instanceof Operand || partialParsedTokens[i-1] == ")" || partialParsedTokens[i-1] == "]";
                     const afterOperator = () => !(partialParsedTokens[i-1] instanceof Operand);
-                    if((i == 0 || i == tokens.length-1) && partialParsedTokens[i+1] instanceof Operand) {
+                    if((i == 0 || i == partialParsedTokens.length-1) && partialParsedTokens[i+1] instanceof Operand) {
                         return "prefix";
                     } else if (afterOperand()) {
                         return "infix";
@@ -838,7 +840,6 @@ export abstract class Statement<T> {
                 const operatorType = decideOperandType();
                 const operator = operatorsByType[operatorType]![token]!;
                 if(!operator) {
-                    console.log(operatorType, token)
                     throw new StatementParseError(`Operator was used at the wrong location!`, "error_operator_location");
                 }
 
@@ -888,7 +889,6 @@ export abstract class Statement<T> {
                         try {
                             operands.push(new GroupedOperand([token], token.getType()));
                         } catch(error) {
-                            console.log(tokens, parsedTokens)
                             throw error;
                         }
                     }
@@ -952,7 +952,7 @@ export class NumericStatement extends Statement<number> {
 export class CharStatement extends Statement<string> {
     public override evaluate(): string {
         const result = this.evaluateInternally();
-        if(result.getType().getIdentifier() == "undefined") return "a";
+        if(result.getType().isUndefined()) return "a";
         return (result as SimpleValue).value as string;
     }
 
@@ -978,7 +978,7 @@ export class CharStatement extends Statement<string> {
 export class StringStatement extends Statement<string> {
     public override evaluate(): string {
         const result = this.evaluateInternally();
-        if(result.getType().getIdentifier() == "undefined") return "";
+        if(result.getType().isUndefined()) return "";
         return (result as UtilityString).getString();
     }
 
@@ -1004,7 +1004,7 @@ export class StringStatement extends Statement<string> {
 export class BooleanStatement extends Statement<boolean> {
     public override evaluate(): boolean {
         const result = this.evaluateInternally();
-        if(result.getType().getIdentifier() == "undefined") return false;
+        if(result.getType().isUndefined()) return false;
         return (result as SimpleValue).value as boolean;
     }
 

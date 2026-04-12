@@ -1113,13 +1113,13 @@ class StructogramSpecificator {
         this.builder = builder;
         this.reset();
         builder.structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-in", `${key}: ${Translator.getDictionary().translateType(type)}`);
+            this.addEntryTo("spec-in", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         });
         builder.structogram.emitter.addListener(Structogram.auxSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-aux", `${key}: ${Translator.getDictionary().translateType(type)}`);
+            this.addEntryTo("spec-aux", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         });
         builder.structogram.emitter.addListener(Structogram.outputSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-out", `${key}: ${Translator.getDictionary().translateType(type)}`);
+            this.addEntryTo("spec-out", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         });
         builder.structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             setTemplateText(this.specificationElem, "spec-in", "");

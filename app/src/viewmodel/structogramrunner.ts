@@ -10,7 +10,7 @@ import operatorTemplate from "../../resources/program-views/logic-view-templates
 import operandTemplate from "../../resources/program-views/logic-view-templates/operand.html";
 
 import inputDataEntryTemplate from "../../resources/settings/inputdataentry.html";
-import { UtilityArray, UtilityObject, type Value } from "../model/types";
+import { UtilityArray, UtilityObject, ValueType, type Value } from "../model/types";
 import type { ViewModel } from "./viewmodel";
 import { Translator } from "./dictionary";
 
@@ -85,9 +85,9 @@ export class StructogramRunner extends StructogramRenderer {
         return Math.min(1, this.timeElapsed / this.stepLength);
     }
 
-    private addInputEntry(key: string) {
+    private addInputEntry(key: string, type: ValueType) {
         const entry = parseIntoHTML(inputDataEntryTemplate);
-        setTemplateText(entry, "key", key);
+        setTemplateText(entry, "key", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
         entry.querySelector("input[type=\"text\"]")!.addEventListener("change", () => {
             this.viewModel.saveCache();
         })
@@ -120,11 +120,11 @@ export class StructogramRunner extends StructogramRenderer {
 
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(viewModel, structogram, document.querySelector("#structogram-runner")!, "runner")
-        for(const [key, _] of structogram.inputData) {
-            this.addInputEntry(key);
+        for(const [key, type] of structogram.inputData) {
+            this.addInputEntry(key, type);
         }
-        structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, _) => {
-            this.addInputEntry(key);
+        structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, type) => {
+            this.addInputEntry(key, type);
         });
         structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             this.inputDataElem.textContent = "";
@@ -152,7 +152,7 @@ export class StructogramRunner extends StructogramRenderer {
         this.currentBlock = undefined;
         this.prepared = false;
         for(const [key, value] of this.structogram.getResults()) {
-            this.runResultsWindow.addEntry(key + " = " + value);
+            this.runResultsWindow.addEntry(key + " = " + value.asString());
         }
         this.runResultsWindow.show();
         this.emitter.emit(StructogramRunner.runFinished);

@@ -20,7 +20,8 @@ export class Memory {
 
     private static readonly forbiddenKeys = [
         "true",
-        "false"
+        "false",
+        "undefined"
     ];
 
     public static readonly variableAddedEvent: string = "memory.variable.added";

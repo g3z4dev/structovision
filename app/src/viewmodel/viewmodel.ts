@@ -16,7 +16,7 @@ export class ViewModel {
     }
 
     private set structogramWidth(width: number) {
-        this._structogramWidth = Math.max(Math.min(width, 8096), 1024);
+        this._structogramWidth = Math.max(Math.min(width, 8096), 128);
         this.structogramBuilder.updateHTML();
         this.structogramRunner.updateHTML();
         this.saveCache();

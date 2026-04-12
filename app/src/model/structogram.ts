@@ -125,17 +125,17 @@ export class Structogram {
 
     public defineInputData(key: string, type: ValueType) {
         this._inData[key] = type;
-        this.emitter.emit(Structogram.inputSpecificationEvent, key, type.getIdentifier());
+        this.emitter.emit(Structogram.inputSpecificationEvent, key, type);
     }
 
     public defineAuxData(key: string, type: ValueType) {
         this._auxData[key] = type;
-        this.emitter.emit(Structogram.auxSpecificationEvent, key, type.getIdentifier());
+        this.emitter.emit(Structogram.auxSpecificationEvent, key, type);
     }
 
     public defineOutputData(key: string, type: ValueType) {
         this._outData[key] = type;
-        this.emitter.emit(Structogram.outputSpecificationEvent, key, type.getIdentifier());
+        this.emitter.emit(Structogram.outputSpecificationEvent, key, type);
     }
 
     public get currentBlock() {
