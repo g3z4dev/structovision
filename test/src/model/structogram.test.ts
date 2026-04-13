@@ -1,7 +1,7 @@
 import {test} from "zora";
 import ee2 from "eventemitter2"
-import {Structogram, AssignmentBlock, PrintBlock, TrueFalseBranchingBlock, MultiBranchingBlock, CountingLoopBlock, FrontTestingLoopBlock, BackTestingLoopBlock} from "@structovision/app/model/structogram";
-import { cartesian, jsonEqual, n } from "../testutil.ts";
+import {Structogram, AssignmentBlock, PrintBlock, TrueFalseBranchingBlock, MultiBranchingBlock, CountingLoopBlock, FrontTestingLoopBlock, BackTestingLoopBlock, ControlBlock} from "@structovision/app/model/structogram";
+import { cartesian, jsonEqual, n, str } from "../testutil.ts";
 import { booleanType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityObject } from "@structovision/app/model/types";
 
 function createBasicStructogram(): [ee2.EventEmitter2, Structogram] {
@@ -11,17 +11,17 @@ function createBasicStructogram(): [ee2.EventEmitter2, Structogram] {
 }
 
 function runStructogram(structogram: Structogram, input: string[] = []) {
-    structogram.preRun(input)
+    console.log(structogram.preRun(input))
     structogram.runStep();
-    while(structogram.isRunning()) {
+    while(structogram.running) {
         structogram.runStep();
     }
 }
 
-test("input data definition should create entry in memory", assertion => {
+test("input data declaration should create entry in memory", assertion => {
     const [_, structogram] = createBasicStructogram();
 
-    structogram.defineInputData("a", numberType);
+    structogram.declareInputData("a", numberType);
     
     structogram.preRun(["12"]);
 
@@ -31,20 +31,20 @@ test("input data definition should create entry in memory", assertion => {
 
 });
 
-test("auxilary data definition should create entry in memory", assertion => {
+test("auxilary data declaration should create entry in memory", assertion => {
     const [_, structogram] = createBasicStructogram();
 
-    structogram.defineAuxData("a", numberType);
+    structogram.declareAuxData("a", numberType);
     
     structogram.preRun([]);
 
     assertion.truthy(structogram.memory.hasVariable("a"), "the memory should have a variable with key [a] defined");
 });
 
-test("output data definition should create entry in memory", assertion => {
+test("output data declaration should create entry in memory", assertion => {
     const [_, structogram] = createBasicStructogram();
 
-    structogram.defineOutputData("a", numberType);
+    structogram.declareOutputData("a", numberType);
     
     structogram.preRun([]);
 
@@ -54,7 +54,7 @@ test("output data definition should create entry in memory", assertion => {
 test("assignment blocks should work as expected", assertion => {
     const [_, structogram] = createBasicStructogram();
 
-    structogram.defineAuxData("a", numberType);
+    structogram.declareAuxData("a", numberType);
 
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setKey("a");
@@ -66,6 +66,20 @@ test("assignment blocks should work as expected", assertion => {
     jsonEqual(assertion, structogram.memory.getVariable("a"), SimpleValue.number(12), "a stuctrogram should be able to assign a value")
 });
 
+test("control blocks should work as expected", assertion => {
+    const [_, structogram] = createBasicStructogram();
+
+    structogram.declareInputData("text", stringType);
+
+    const controlBlock = new ControlBlock(structogram);
+    controlBlock.statementOption.setStatement("swap(text, 0, 7)");
+    structogram.startingBlock = controlBlock;
+
+    runStructogram(structogram, ["\"körtés pite\""]);
+
+    jsonEqual(assertion, structogram.memory.getVariable("text"), str("pörtés kite"), "a stuctrogram should be able to handle control blocks")
+});
+
 test("print blocks should work as expected", assertion => {
     const [emitter, structogram] = createBasicStructogram();
     
@@ -73,7 +87,7 @@ test("print blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printedText = text);
 
-    structogram.defineInputData("text", stringType);
+    structogram.declareInputData("text", stringType);
 
     const printBlock = new PrintBlock(structogram);
     printBlock.statementOption.setStatement("text");
@@ -81,7 +95,7 @@ test("print blocks should work as expected", assertion => {
 
     runStructogram(structogram, ["\"hello world\""]);
 
-    assertion.eq(printedText, "hello world", "The stuctrogram should able to print a value")
+    assertion.eq(printedText, "hello world", "a stuctrogram should able to print a value")
 });
 
 test("true-false branching blocks should work as expected", assertion => {
@@ -91,7 +105,7 @@ test("true-false branching blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printedText = text);
 
-    structogram.defineAuxData("a", booleanType);
+    structogram.declareAuxData("a", booleanType);
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setKey("a");
     assignmentBlock.statementOption.setStatement("true");
@@ -125,7 +139,7 @@ test("multi branching blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printedText = text);
 
-    structogram.defineAuxData("v", numberType);
+    structogram.declareAuxData("v", numberType);
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setKey("v");
     assignmentBlock.statementOption.setStatement("1");
@@ -181,7 +195,7 @@ test("counting loop blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineAuxData("i", numberType);
+    structogram.declareAuxData("i", numberType);
 
     const countingLoopBlock = new CountingLoopBlock(structogram);
     countingLoopBlock.variableKeyOption.setKey("i");
@@ -215,7 +229,7 @@ test("front testing loop blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineAuxData("i", stringType);
+    structogram.declareAuxData("i", stringType);
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setKey("i");
     assignmentBlock.statementOption.setStatement("\"a\"")
@@ -247,7 +261,7 @@ test("back testing loop blocks should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineAuxData("i", stringType);
+    structogram.declareAuxData("i", stringType);
     const assignmentBlock = new AssignmentBlock(structogram);
     assignmentBlock.keyOption.setKey("i");
     assignmentBlock.statementOption.setStatement("\"a\"")
@@ -279,10 +293,10 @@ test("a complex structogram should work as expected", assertion => {
 
     emitter.addListener(Structogram.printEvent, text => printLog.push(text));
 
-    structogram.defineAuxData("a", numberType);
-    structogram.defineAuxData("b", numberType);
-    structogram.defineAuxData("c", numberType);
-    structogram.defineAuxData("i", numberType);
+    structogram.declareAuxData("a", numberType);
+    structogram.declareAuxData("b", numberType);
+    structogram.declareAuxData("c", numberType);
+    structogram.declareAuxData("i", numberType);
     const assignmentBlocka = new AssignmentBlock(structogram);
     assignmentBlocka.keyOption.setKey("a");
     assignmentBlocka.statementOption.setStatement("1")
@@ -370,7 +384,6 @@ test("a complex structogram should work as expected", assertion => {
     assertion.eq(printLog, ["2", "8", "34", "144", "610", "2584", "10946", "46368", "196418", "832040", "the last value is greater than 100000", "the last value is divisble by 11", "it's done"], "complex structogram should have the expected output");
 });
 
-//todo these tests should check message after the translation layer has been implemented
 test("assignment block should raise issues when expected", assertion => {
     const [_, structogram] = createBasicStructogram();
 
@@ -379,9 +392,9 @@ test("assignment block should raise issues when expected", assertion => {
     block.statementOption.setStatement("\"hello\"");
     structogram.startingBlock = block;
 
-    assertion.truthy(structogram.preRun().length > 0, "assignment block should raise an issue on the assignment of an undefined variable");
+    assertion.truthy(structogram.preRun().length > 0, "assignment block should raise an issue on the assignment of an undeclared variable");
     
-    structogram.defineAuxData("a", numberType);
+    structogram.declareAuxData("a", numberType);
 
     assertion.truthy(structogram.preRun().length > 0, "assignment block should raise an issue on the violation of type restrictions");
 
@@ -390,10 +403,20 @@ test("assignment block should raise issues when expected", assertion => {
     assertion.truthy(structogram.preRun().length > 0, "assignment block should raise an issue if its statement is invalid");
 
     structogram.clearData();
-    structogram.defineInputData("a", numberType);
+    structogram.declareInputData("a", numberType);
     block.statementOption.setStatement("1");
 
     assertion.truthy(structogram.preRun(["1"]).length > 0, "assignment block should raise an issue on the assignment of a constant variable");
+});
+
+test("print block should raise issues when expected", assertion => {
+    const [_, structogram] = createBasicStructogram();
+
+    const block = new ControlBlock(structogram);
+    block.statementOption.setStatement("an invalid statement");
+    structogram.startingBlock = block;
+
+    assertion.truthy(structogram.preRun().length > 0, "control block should raise an issue if its statement is invalid");
 });
 
 test("print block should raise issues when expected", assertion => {
@@ -403,7 +426,7 @@ test("print block should raise issues when expected", assertion => {
     block.statementOption.setStatement("an invalid statement");
     structogram.startingBlock = block;
 
-    assertion.truthy(structogram.preRun().length > 0, "print block should raise an issue on the assignment of an undefined variable");
+    assertion.truthy(structogram.preRun().length > 0, "print block should raise an issue if its statement is invalid");
 });
 
 test("truefalsebranching block should raise issues when expected", assertion => {
@@ -454,19 +477,19 @@ test("countingloop block should raise issues when expected", assertion => {
     block.stepOption.setStatement("1");
     structogram.startingBlock = block;
     
-    assertion.truthy(structogram.preRun().length > 0, "countingloop block should raise an issue on the usage of an undefined variable");
+    assertion.truthy(structogram.preRun().length > 0, "countingloop block should raise an issue on the usage of an undeclared variable");
 
-    structogram.defineInputData("i", numberType)
+    structogram.declareInputData("i", numberType)
 
     assertion.truthy(structogram.preRun(["1"]).length > 0, "countingloop block should raise an issue on the usage of a constant variable");
     
     structogram.clearData();
-    structogram.defineAuxData("i", stringType);
+    structogram.declareAuxData("i", stringType);
 
     assertion.truthy(structogram.preRun().length > 0, "countingloop block should raise an issue on the violation of type restrictions");
 
     structogram.clearData();
-    structogram.defineAuxData("i", numberType);
+    structogram.declareAuxData("i", numberType);
     block.fromOption.setStatement("invalid statement");
 
     assertion.truthy(structogram.preRun().length > 0, "countingloop block should raise an issue if its from statement is invalid");
@@ -526,9 +549,9 @@ test("duplicate data key in specification should result in an issue being raised
     const [_, structogram] = createBasicStructogram();
 
     const definitions: [string, () => void][] = [
-        ["input", () => structogram.defineInputData("a", numberType)],
-        ["auxiliary", () => structogram.defineAuxData("a", stringType)],
-        ["output", () => structogram.defineOutputData("a", booleanType)]
+        ["input", () => structogram.declareInputData("a", numberType)],
+        ["auxiliary", () => structogram.declareAuxData("a", stringType)],
+        ["output", () => structogram.declareOutputData("a", booleanType)]
     ];
 
     for(const [def1, def2] of cartesian(definitions, definitions)) {
@@ -548,7 +571,7 @@ test("duplicate data key in specification should result in an issue being raised
 test("invalid input should result in an issue being raised", assertion => {
     const [_, structogram] = createBasicStructogram();
 
-    structogram.defineInputData("a", numberType);
+    structogram.declareInputData("a", numberType);
 
     assertion.truthy(structogram.preRun(["true"]).length > 0, `input being the wrong type should raise an issue`);
     assertion.truthy(structogram.preRun(["1","3"]).length > 0, `too many inputs should raise an issue`);
@@ -559,7 +582,7 @@ test("invalid input should result in an issue being raised", assertion => {
 test("assignment blocks should work as expected with fields", assertion => {
     const [_, structogram] = createBasicStructogram();
 
-    structogram.defineAuxData("a", SinglyLinkedListNodeTemplate.getType([numberType]));
+    structogram.declareAuxData("a", SinglyLinkedListNodeTemplate.getType([numberType]));
 
     const assignmentBlock1 = new AssignmentBlock(structogram);
     assignmentBlock1.keyOption.setKey("a");

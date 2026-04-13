@@ -213,9 +213,9 @@ class SpecificationChangeAction extends BuilderAction {
             }
         }
 
-        loader(this.oldInput, (key, type) => this.structogram.defineInputData(key, parseType(type)));
-        loader(this.oldAux, (key, type) => this.structogram.defineAuxData(key, parseType(type)));
-        loader(this.oldOutput, (key, type) => this.structogram.defineOutputData(key, parseType(type)));
+        loader(this.oldInput, (key, type) => this.structogram.declareInputData(key, parseType(type)));
+        loader(this.oldAux, (key, type) => this.structogram.declareAuxData(key, parseType(type)));
+        loader(this.oldOutput, (key, type) => this.structogram.declareOutputData(key, parseType(type)));
 
         return new SpecificationChangeAction(this.structogram, this.oldInput, this.oldAux, this.oldOutput, this.newInput, this.newAux, this.newOutput);
     }
@@ -920,16 +920,16 @@ class SpecificationSettingHandler {
         const auxDataEntries = this.auxDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
         const outputDataEntries = this.outDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
         
-        const oldInput = this.structogramBuilder.structogram.inputData.map(entry => [entry[0]!, entry[1]!.getIdentifier()]);
-        const oldAux = this.structogramBuilder.structogram.auxData.map(entry => [entry[0]!, entry[1]!.getIdentifier()]);
-        const oldOutput = this.structogramBuilder.structogram.outputData.map(entry => [entry[0]!, entry[1]!.getIdentifier()]);
+        const oldInput = this.structogramBuilder.structogram.inputData.map(entry => [entry[0]!, entry[1]!.id]);
+        const oldAux = this.structogramBuilder.structogram.auxData.map(entry => [entry[0]!, entry[1]!.id]);
+        const oldOutput = this.structogramBuilder.structogram.outputData.map(entry => [entry[0]!, entry[1]!.id]);
 
         this.structogramBuilder.structogram.clearData();
 
         const inputEntries = this.parseEntryElems(inputDataEntries);
         for(const [key, type, elem] of inputEntries) {
             try {
-                this.structogramBuilder.structogram.defineInputData(key, parseType(type));
+                this.structogramBuilder.structogram.declareInputData(key, parseType(type));
                 elem.classList.remove(...errorBorder);
             } catch(error) {
                 if(error instanceof TypeParseError) {
@@ -941,7 +941,7 @@ class SpecificationSettingHandler {
         const auxEntries = this.parseEntryElems(auxDataEntries);
         for(const [key, type, elem] of auxEntries) {
             try {
-                this.structogramBuilder.structogram.defineAuxData(key, parseType(type));
+                this.structogramBuilder.structogram.declareAuxData(key, parseType(type));
                 elem.classList.remove(...errorBorder);
             } catch(error) {
                 if(error instanceof TypeParseError) {
@@ -953,7 +953,7 @@ class SpecificationSettingHandler {
         const outputEntries = this.parseEntryElems(outputDataEntries);
         for(const [key, type, elem] of outputEntries) {
             try {
-                this.structogramBuilder.structogram.defineOutputData(key, parseType(type));
+                this.structogramBuilder.structogram.declareOutputData(key, parseType(type));
                 elem.classList.remove(...errorBorder);
             } catch(error) {
                 if(error instanceof TypeParseError) {
@@ -1003,7 +1003,7 @@ class SpecificationSettingHandler {
         const textfield = entryElem.querySelector(`.t-key-textfield`) as HTMLFormElement;
         textfield.value = key;
         const typeSelectorField = entryElem.querySelector(`.t-type-selector`) as HTMLSelectElement;
-        typeSelectorField.value = Translator.getDictionary().translateType(type.getIdentifier());
+        typeSelectorField.value = Translator.getDictionary().translateType(type.id);
         const removeButton = entryElem.querySelector(`.t-del-button`) as HTMLButtonElement;
         entriesElem.appendChild(entryElem);
         removeButton.addEventListener("click", () => {
@@ -1113,13 +1113,13 @@ class StructogramSpecificator {
         this.builder = builder;
         this.reset();
         builder.structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-in", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+            this.addEntryTo("spec-in", `${key}: ${Translator.getDictionary().translateType(type.id)}`);
         });
         builder.structogram.emitter.addListener(Structogram.auxSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-aux", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+            this.addEntryTo("spec-aux", `${key}: ${Translator.getDictionary().translateType(type.id)}`);
         });
         builder.structogram.emitter.addListener(Structogram.outputSpecificationEvent, (key, type) => {
-            this.addEntryTo("spec-out", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+            this.addEntryTo("spec-out", `${key}: ${Translator.getDictionary().translateType(type.id)}`);
         });
         builder.structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
             setTemplateText(this.specificationElem, "spec-in", "");
@@ -1137,15 +1137,15 @@ class StructogramSpecificator {
     private reset() {
         let inEntries = [];
         for(const [key, type]of this.builder.structogram.inputData) {
-            inEntries.push(`${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+            inEntries.push(`${key}: ${Translator.getDictionary().translateType(type.id)}`);
         }
         let auxEntries = [];
         for(const [key, type]of this.builder.structogram.auxData) {
-            auxEntries.push(`${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+            auxEntries.push(`${key}: ${Translator.getDictionary().translateType(type.id)}`);
         }
         let outEntries = [];
         for(const [key, type]of this.builder.structogram.outputData) {
-            outEntries.push(`${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+            outEntries.push(`${key}: ${Translator.getDictionary().translateType(type.id)}`);
         }
         setTemplateText(this.specificationElem, "spec-in", inEntries.join(", "));
         setTemplateText(this.specificationElem, "spec-aux", auxEntries.join(", "));

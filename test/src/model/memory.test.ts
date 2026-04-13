@@ -65,7 +65,7 @@ test("Memory should not allow creating variables with illegal keys", assertion =
     assertion.throws(() => mem.createVariable("true", numberType), Error, "creating a variable with key \"true\" throws an Error");
     assertion.throws(() => mem.createVariable("false", stringType), Error, "creating a variable with key \"false\" throws an Error");
     assertion.throws(() => mem.createVariable("undefined", stringType), Error, "creating a variable with key \"undefined\" throws an Error");
-    assertion.throws(() => mem.createVariable("\"key\"", stringType), Error, "creating a variable with non-alphanumerical character throws an Error");
+    assertion.throws(() => mem.createVariable("\"key\"", stringType), Error, "creating a variable with characters that are not numbers, underscore or in the english alphabet throws an Error");
     assertion.throws(() => mem.createVariable("123", booleanType), Error, "creating a variable with a key that is a number throws an Error");
     assertion.throws(() => mem.createVariable("123test", numberType), Error, "creating a variable starting with a number throws an Error");
     assertion.throws(() => mem.createVariable("", stringType), Error, "creating a variable with an empty key throws an Error");
@@ -74,23 +74,29 @@ test("Memory should not allow creating variables with illegal keys", assertion =
 test("Memory should emit the expected events", assertion => {
     let variableAddedEventEmitted = false;
     let variableChangedEventEmitted = false;
+    let variableAccessedEventEmitted = false;
 
     const mem = new Memory();
 
-    mem.emitter.addListener(Memory.variableAddedEvent, () => {
+    mem.emitter.addListener(Memory.variableDeclaredEvent, () => {
         variableAddedEventEmitted = true;
     });
     mem.emitter.addListener(Memory.variableChangedEvent, () => {
         variableChangedEventEmitted = true;
     });
+    mem.emitter.addListener(Memory.variableAccessedEvent, () => {
+        variableAccessedEventEmitted = true;
+    });
 
     assertion.falsy(variableAddedEventEmitted, "memory.variable.added event should not be fired during object creation");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during object creation");
+    assertion.falsy(variableAccessedEventEmitted, "memory.variable.accessed event should not be fired during object creation");
 
     mem.createVariable("a", numberType);
 
     assertion.truthy(variableAddedEventEmitted, "memory.variable.added event should be fired during variable creation");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during variable creation");
+    assertion.falsy(variableAccessedEventEmitted, "memory.variable.accessed event should not be fired during variable creation");
 
     variableAddedEventEmitted = false;
 
@@ -98,6 +104,7 @@ test("Memory should emit the expected events", assertion => {
 
     assertion.falsy(variableAddedEventEmitted, "memory.variable.added event should not be fired during variable changing");
     assertion.truthy(variableChangedEventEmitted, "memory.variable.changed event should be fired during variable changing");
+    assertion.falsy(variableAccessedEventEmitted, "memory.variable.accessed event should not be fired during variable changing");
 
     variableChangedEventEmitted = false;
 
@@ -105,6 +112,7 @@ test("Memory should emit the expected events", assertion => {
 
     assertion.falsy(variableAddedEventEmitted, "memory.variable.added event should not be fired during getting a variable");
     assertion.falsy(variableChangedEventEmitted, "memory.variable.changed event should not be fired during getting a variable");
+    assertion.truthy(variableAccessedEventEmitted, "memory.variable.accessed event should be fired during getting a variable");
 });
 
 test("Memory should be 'strongly-typed' and should not allow a variable to change types", assertion => {
@@ -112,10 +120,10 @@ test("Memory should be 'strongly-typed' and should not allow a variable to chang
     const types: ValueType[] = [numberType, stringType, booleanType]
     const values: Value[] = [n(3), str("hello"), b(true)]
 
-    for(const [type, value] of cartesian(types, values).filter(([t, v]) => !v.getType().matches(t))) {
+    for(const [type, value] of cartesian(types, values).filter(([t, v]) => !v.type.matches(t))) {
         mem.clear();
         mem.createVariable("a", type);
-        assertion.throws(() => mem.setVariable("a", value), Error, `setting a variable of type ${type.getIdentifier()} to a value of type ${value.getType().getIdentifier()} should throw an error`);
+        assertion.throws(() => mem.setVariable("a", value), Error, `setting a variable of type ${type.id} to a value of type ${value.type.id} should throw an error`);
     }
 });
 

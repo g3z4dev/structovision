@@ -87,7 +87,7 @@ export class StructogramRunner extends StructogramRenderer {
 
     private addInputEntry(key: string, type: ValueType) {
         const entry = parseIntoHTML(inputDataEntryTemplate);
-        setTemplateText(entry, "key", `${key}: ${Translator.getDictionary().translateType(type.getIdentifier())}`);
+        setTemplateText(entry, "key", `${key}: ${Translator.getDictionary().translateType(type.id)}`);
         entry.querySelector("input[type=\"text\"]")!.addEventListener("change", () => {
             this.viewModel.saveCache();
         })
@@ -169,7 +169,7 @@ export class StructogramRunner extends StructogramRenderer {
 
     public start() {
         this.runMode = "run";
-        if(!this._step() && !this.structogram.isRunning()) {
+        if(!this._step() && !this.structogram.running) {
             this.restart();
         }
     }
@@ -177,7 +177,7 @@ export class StructogramRunner extends StructogramRenderer {
     public step() {
         if(this.runMode != "run") {
             this.runMode = "onestep";
-            if(!this._step() && !this.structogram.isRunning()) {
+            if(!this._step() && !this.structogram.running) {
                 this.restart();
             }
         }
@@ -185,7 +185,7 @@ export class StructogramRunner extends StructogramRenderer {
 
     private _step(): boolean {
         this.timeElapsed = 0;
-        if(!this.structogram.isRunning()) {
+        if(!this.structogram.running) {
             if(!this.prepared) {
                 if(!this.prepareRunning()) {
                     return false;
@@ -482,7 +482,7 @@ class MemoryView extends ProgramView {
         super(document.querySelector("#memory-view")!, runner);
         this.reset();
         const memory = this.runner.structogram.memory;
-        memory.emitter.addListener(Memory.variableAddedEvent, (entry: MemoryEntry) => {
+        memory.emitter.addListener(Memory.variableDeclaredEvent, (entry: MemoryEntry) => {
             this.valueIDToMemoryKey[entry.value.id] = entry.key;   
             this.addEntry(entry);
         });
@@ -544,7 +544,7 @@ class LogicView extends ProgramView implements AnimatedView {
     private addOperator(operator: Operator | string) {
         const elem = this.operatorTemplateElem.cloneNode(true) as HTMLElement;
         if(operator instanceof Operator) {
-            setTemplateText(elem, "representation", operator.getRepresentingChar());
+            setTemplateText(elem, "representation", operator.token);
         } else {
             setTemplateText(elem, "representation", operator);
         }
@@ -554,7 +554,7 @@ class LogicView extends ProgramView implements AnimatedView {
     private addOperand(operand: ResolvableOperand | string) {
         const elem = this.operandTemplateElem.cloneNode(true) as HTMLElement;
         if(operand instanceof ResolvableOperand) {
-            setTemplateText(elem, "representation", operand.getRepresentation());
+            setTemplateText(elem, "representation", operand.representation);
             setTemplateText(elem, "value", operand.resolve().asString());
         } else {
             setTemplateText(elem, "representation", "");
@@ -568,7 +568,7 @@ class LogicView extends ProgramView implements AnimatedView {
         this.reset();
         let arrayDepth = 0;
         Statement.emitter.on(Statement.evaluationStart, (statement: Statement<any>, statementTokens: (ResolvableOperand | Operator | Bracket)[]) =>{
-            if(statement.getReturnType().baseIdentifier == "array") {
+            if(statement.returnType.baseIdentifier == "array") {
                 arrayDepth++;
                 this.addOperator("{");
             } else {
@@ -583,7 +583,7 @@ class LogicView extends ProgramView implements AnimatedView {
         });
         
         Statement.emitter.on(Statement.evaluationEnd, (statement: Statement<any>, result: Value) =>{
-            if(statement.getReturnType().baseIdentifier == "array") {
+            if(statement.returnType.baseIdentifier == "array") {
                 arrayDepth--;
                 this.addOperator("}");
             } else {
@@ -662,13 +662,13 @@ abstract class ObjectRenderer {
         }, {} as Record<string, Value>);
         this.reloadObjects();
         this.memory.emitter.on(Memory.variableChangedEvent, (key: string, _prevValue: Value, value: Value) => {
-            if(value.getType().baseIdentifier == objectBaseIdentifier) {
+            if(value.type.baseIdentifier == objectBaseIdentifier) {
                 const prevValue = this.allObjectsByMemoryKey[key]!;
                 this.allObjectsByMemoryKey[key] = value;
-                if(value.getType().isDefined()) {
+                if(value.type.isDefined()) {
                     this.allObjectsByID[value.id] = value;
                     this.idToMemoryKey[value.id] = key;
-                } else if(prevValue.getType().isDefined()){
+                } else if(prevValue.type.isDefined()){
                     delete this.allObjectsByID[prevValue.id];
                     delete this.idToMemoryKey[key];
                 }
@@ -676,23 +676,23 @@ abstract class ObjectRenderer {
             }
         });
         UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, _key: string, value: Value) => {
-            if(value.getType().baseIdentifier == objectBaseIdentifier) {
+            if(value.type.baseIdentifier == objectBaseIdentifier) {
                 this.allObjectsByID[value.id] = value;
             }
-            if(object.getType().baseIdentifier == objectBaseIdentifier) {
+            if(object.type.baseIdentifier == objectBaseIdentifier) {
                 this.objectReloadQueued = true;
             }
         });
         UtilityArray.emitter.addListener(UtilityArray.elementChanged, (object: UtilityObject, _idx: number, value: Value) => {
-            if(value.getType().baseIdentifier == objectBaseIdentifier) {
+            if(value.type.baseIdentifier == objectBaseIdentifier) {
                 this.allObjectsByID[value.id] = value;
             }
-            if(object.getType().baseIdentifier == objectBaseIdentifier) {
+            if(object.type.baseIdentifier == objectBaseIdentifier) {
                 this.objectReloadQueued = true;
             }
         });
         UtilityArray.emitter.addListener(UtilityArray.elementSwapped, (object: UtilityObject) => {
-            if(object.getType().baseIdentifier == objectBaseIdentifier) {
+            if(object.type.baseIdentifier == objectBaseIdentifier) {
                 this.objectReloadQueued = true;
             }
         });
@@ -859,11 +859,11 @@ class S1LRenderer extends ObjectRenderer {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
-            if(node.getType().isUndefined()) continue;
+            if(node.type.isUndefined()) continue;
             if(childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
             let child = node.get("next");
-            while(child.getType().isDefined() && child instanceof UtilityObject) {
+            while(child.type.isDefined() && child instanceof UtilityObject) {
                 if(rootNodeSet.has(child.id)) {
                     rootNodeSet.delete(child.id);
                     childNodeSet.add(child.id);
@@ -880,7 +880,7 @@ class S1LRenderer extends ObjectRenderer {
         for(const ir of independentRoots) {
             const nodes: UtilityObject[] = [];
             let n: Value = ir;
-            while(n.getType().isDefined() && n instanceof UtilityObject) {
+            while(n.type.isDefined() && n instanceof UtilityObject) {
                 nodes.push(n);
                 n = n.get("next");
             }
@@ -973,11 +973,11 @@ class S2LRenderer extends ObjectRenderer {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
-            if(node.getType().isUndefined()) continue;
-            if(node.get("prev").getType().isDefined() || childNodeSet.has(node.id)) continue;
+            if(node.type.isUndefined()) continue;
+            if(node.get("prev").type.isDefined() || childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
             let child = node.get("next");
-            while(child.getType().isDefined() && child instanceof UtilityObject) {
+            while(child.type.isDefined() && child instanceof UtilityObject) {
                 if(rootNodeSet.has(child.id)) {
                     rootNodeSet.delete(child.id);
                     childNodeSet.add(child.id);
@@ -994,7 +994,7 @@ class S2LRenderer extends ObjectRenderer {
         for(const ir of independentRoots) {
             let n: Value = ir;
             const nodes: UtilityObject[] = [];
-            while(n.getType().isDefined() && n instanceof UtilityObject) {
+            while(n.type.isDefined() && n instanceof UtilityObject) {
                 nodes.push(n);
                 n = n.get("next");
             }
@@ -1097,8 +1097,8 @@ class BTNRenderer extends ObjectRenderer {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
-            if(node.getType().isUndefined()) continue;
-            if(node.get("parent").getType().isDefined() || childNodeSet.has(node.id)) continue;
+            if(node.type.isUndefined()) continue;
+            if(node.get("parent").type.isDefined() || childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
             let children = [node.get("left"), node.get("right")];
             while(children.length > 0) {
@@ -1136,12 +1136,12 @@ class BTNRenderer extends ObjectRenderer {
                 } else if (child != "0") {
                     const left = child.get("left");
                     const right = child.get("right");
-                    if(left.getType().isUndefined()) {
+                    if(left.type.isUndefined()) {
                         children.push("0");
                     } else if(left instanceof UtilityObject) {
                         children.push(left);
                     }
-                    if(right.getType().isUndefined()) {
+                    if(right.type.isUndefined()) {
                         children.push("0");
                     } else if(right instanceof UtilityObject) {
                         children.push(right);

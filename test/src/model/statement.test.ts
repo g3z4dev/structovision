@@ -43,7 +43,7 @@ test("statements with extra spaces should still be parsed correctly", (assertion
     testAnyStatement(assertion, "                   5          *            3                ", n(15));
 });
 
-test("numeric statements with just one operator should work correctly", (assertion) => {
+test("statements with just one operator should work correctly", (assertion) => {
     testNumericStatement(assertion, "3+4", 7);
     testNumericStatement(assertion, "3+4+5", 12);
     testNumericStatement(assertion, "10-4", 6);
@@ -65,44 +65,12 @@ test("numeric statements with just one operator should work correctly", (asserti
     testNumericStatement(assertion, "-5", -5);
     testNumericStatement(assertion, "len\"alma\"", 4);
     testNumericStatement(assertion, "3.3+4.5", 7.8);
-});
-
-test("numeric statements should respect precedence", (assertion) => {
-    testNumericStatement(assertion, "3 + 4 - 5", 2);
-    testNumericStatement(assertion, "3 * 4 / 2", 6);
-    testNumericStatement(assertion, "21 + 4 * 5", 41);
-    testNumericStatement(assertion, "29 - 4 / 5", 28.2);
-    testNumericStatement(assertion, "29 - 2 * 2 * 15 / 3 + 1", 10);
-    testNumericStatement(assertion, "2 ^ 2 ^ 3 - 5 * 4", 236);
-    testNumericStatement(assertion, "2*log log 256", 6);
-    testNumericStatement(assertion, "4+-5", -1);
-    testNumericStatement(assertion, "4--5", 9);
-});
-
-test("numeric statements should respect brackets", (assertion) => {
-    testNumericStatement(assertion, "3*(5-4)", 3);
-    testNumericStatement(assertion, "sqrt(2*12*3*2)/(3*4)", 1);
-    testNumericStatement(assertion, "((3+2)/(3-2)+(12-6)/(4-1)+(2+3)/(5/5))/((15-9)*(2^2)/(2*6))", 6);
-    testNumericStatement(assertion, "(10-(9-(8-(7-(6-(5-(4-(3-(2-(1))))))))))", 5);
-});
-
-test("numeric statements should be to handle edge cases", (assertion) => {
-    testNumericStatement(assertion, "4------------5", 9);
-    testNumericStatement(assertion, "1+2+3+4+5+6+7+8+9+10+11+12+13+14+15+16+17+18+19+20", 210);
-    testNumericStatement(assertion, "-1^3", -1);
-    testNumericStatement(assertion, "2 ^ 2 ^ 2 ^ 2", 65536);
-});
-
-test("string statements with just one operator should work correctly", (assertion) => {
     testStringStatement(assertion, "\"alma\"&\"fa\"", "almafa");
     testStringStatement(assertion, "\"alma\"&\"fa\"&\" alatt\"", "almafa alatt");
     testStringStatement(assertion, "str(3)&\" alma\"", "3 alma");
     testStringStatement(assertion, "str(3)&\" alma \"&str(5)", "3 alma 5");
     testStringStatement(assertion, "str(true)&\" facts\"", "true facts");
     testStringStatement(assertion, "\"this statement is \"&str(false)&\" but what if it's \"&str(true)", "this statement is false but what if it's true");
-});
-
-test("boolean statements with just one operator should work correctly", (assertion) => {
     testBooleanStatement(assertion, "true and false", false);
     testBooleanStatement(assertion, "true and true and true", true);
     testBooleanStatement(assertion, "true or false", true);
@@ -141,12 +109,35 @@ test("boolean statements with just one operator should work correctly", (asserti
         testBooleanStatement(assertion, `${a} > ${b}`, a > b);
         testBooleanStatement(assertion, `${a} >= ${b}`, a >= b);
     }
-});
-
-test("any statements with just one operator should work correctly", assertion => {
     testAnyStatement(assertion, "3+4", n(7));
     testAnyStatement(assertion, "\"alma\"&\"fa\"", str("almafa"));
     testAnyStatement(assertion, "true and false", b(false));
+});
+
+test("statements should respect precedence", (assertion) => {
+    testNumericStatement(assertion, "3 + 4 - 5", 2);
+    testNumericStatement(assertion, "3 * 4 / 2", 6);
+    testNumericStatement(assertion, "21 + 4 * 5", 41);
+    testNumericStatement(assertion, "29 - 4 / 5", 28.2);
+    testNumericStatement(assertion, "29 - 2 * 2 * 15 / 3 + 1", 10);
+    testNumericStatement(assertion, "2 ^ 2 ^ 3 - 5 * 4", 236);
+    testNumericStatement(assertion, "2*log log 256", 6);
+    testNumericStatement(assertion, "4+-5", -1);
+    testNumericStatement(assertion, "4--5", 9);
+});
+
+test("statements should respect brackets", (assertion) => {
+    testNumericStatement(assertion, "3*(5-4)", 3);
+    testNumericStatement(assertion, "sqrt(2*12*3*2)/(3*4)", 1);
+    testNumericStatement(assertion, "((3+2)/(3-2)+(12-6)/(4-1)+(2+3)/(5/5))/((15-9)*(2^2)/(2*6))", 6);
+    testNumericStatement(assertion, "(10-(9-(8-(7-(6-(5-(4-(3-(2-(1))))))))))", 5);
+});
+
+test("statements should be to handle edge cases", (assertion) => {
+    testNumericStatement(assertion, "4------------5", 9);
+    testNumericStatement(assertion, "1+2+3+4+5+6+7+8+9+10+11+12+13+14+15+16+17+18+19+20", 210);
+    testNumericStatement(assertion, "-1^3", -1);
+    testNumericStatement(assertion, "2 ^ 2 ^ 2 ^ 2", 65536);
 });
 
 test("complex statements with numeric, string and boolean components should work correctly", assertion => {
@@ -164,35 +155,29 @@ test("complex statements with numeric, string and boolean components should work
     testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(9))", b(false));
 });
 
-test("numeric statements with variables should work as intended", assertion => {
+test("statements with variables should work as intended", assertion => {
     const mem = new Memory();
     mem.createVariable("a", numberType);
     mem.createVariable("b", numberType);
     mem.setVariable("a", n(7));
     mem.setVariable("b", n(5));
     testNumericStatement(assertion, "a+b", 12, mem);
-});
 
-test("string statements with variables should work as intended", assertion => {
-    const mem = new Memory();
+    mem.clear();
     mem.createVariable("a", stringType);
     mem.createVariable("b", stringType);
     mem.setVariable("a", str("hello"));
     mem.setVariable("b", str("world"));
     testStringStatement(assertion, "a&b", "helloworld", mem);
-});
 
-test("boolean statements with variables should work as intended", assertion => {
-    const mem = new Memory();
+    mem.clear();
     mem.createVariable("a", booleanType);
     mem.createVariable("b", booleanType);
     mem.setVariable("a", b(true));
     mem.setVariable("b", b(false));
     testBooleanStatement(assertion, "a or b", true, mem);
-});
 
-test("any statements with variables should work as intended", assertion => {
-    const mem = new Memory();
+    mem.clear()
     mem.createVariable("a", numberType);
     mem.createVariable("b", stringType);
     mem.createVariable("c", booleanType);
@@ -204,9 +189,9 @@ test("any statements with variables should work as intended", assertion => {
     testAnyStatement(assertion, "c", b(false), mem);
 });
 
-test("statements with invalid tokens should throw an error", assertion => {
+test("statements with invalid inputs should throw an error", assertion => {
     assertion.throws(() => NumericStatement.parse("3+3:4", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if given an invalid token");
-    assertion.throws(() => NumericStatement.parse("3+3,4", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if the result is ambigious");
+    assertion.throws(() => NumericStatement.parse("3+3,4", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements with a comma should throw an error if the result is ambigious");
     assertion.throws(() => NumericStatement.parse("/3", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if an infix operator is used as a prefix operator");
     assertion.throws(() => NumericStatement.parse("true!false", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if an prefix operator is used as an infix operator");
     assertion.throws(() => BooleanStatement.parse("truee or false", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if given a typo");
@@ -216,7 +201,7 @@ test("statements with invalid tokens should throw an error", assertion => {
     assertion.throws(() => AnyStatement.parse("////123/asd,,,asd-----,,,****-.-.-...::.,,saeawedsdxcdfdf", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it makes no sense with special characters");
 });
 
-test("statements with result types should throw an error", assertion => {
+test("statements with wrong result types should throw an error", assertion => {
     const values = ["\"hello world\"", "'!'", "1", "false", "{1,2,3,4}", "s1l(4)"];
     const parsers = [
         StringStatement.parse,
@@ -283,7 +268,7 @@ test("statements should be able to access fields of objects", (assertion) => {
     testAnyStatement(assertion, "btn(false).right", ud());
 });
 
-test("statements should be able to construct nested types", (assertion) => {
+test("statements should be able to construct nested objects", (assertion) => {
     testAnyStatement(assertion, "s1l(s1l(3))", s1l(s1l(n(3))));
     testAnyStatement(assertion, 's2l(s2l(\'a\'))', s2l(s2l(c("a"))));
     testAnyStatement(assertion, "btn(btn(false))", btn(btn(b(false))));

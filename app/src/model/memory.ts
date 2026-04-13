@@ -24,10 +24,23 @@ export class Memory {
         "undefined"
     ];
 
-    public static readonly variableAddedEvent: string = "memory.variable.added";
+    /**
+     * Fired when a variable is declared.
+     * Its arguments are: entry: entry: ReadOnlyMemoryEntry
+     */
+    public static readonly variableDeclaredEvent: string = "memory.variable.declared";
+
+    /**
+     * Fired when a variable is changed.
+     * Its arguments are: entry: key: string, prevValue: Value, value: Value
+     */
     public static readonly variableChangedEvent: string = "memory.variable.changed";
+
+    /**
+     * Fired when a variable is accessed.
+     * Its arguments are: entry: key: string
+     */
     public static readonly variableAccessedEvent: string = "memory.variable.accessed";
-    public static readonly objectAddedEvent: string = "memory.object.added";
 
     constructor() {
         this.variables = {};
@@ -72,7 +85,7 @@ export class Memory {
         }
         const entry = new MemoryEntry(key, value, constant);
         this.variables[key] = entry;
-        this.emitter.emit(Memory.variableAddedEvent, entry);
+        this.emitter.emit(Memory.variableDeclaredEvent, new ReadOnlyMemoryEntry(entry));
     }
 
     public setVariable(key: string, value: Value) {
@@ -159,11 +172,11 @@ export class MemoryEntry {
     }
 
     public set value(value: Value) {
-        if(this.constant && this._value.getType().baseIdentifier != "undefined") {
+        if(this.constant && this._value.type.baseIdentifier != "undefined") {
             throw new Error("Constant variable cannot be modified!");
         }
-        if(!this.type.matches(value.getType())) {
-            throw new Error(`Value must be of type [${this.type.baseIdentifier}] but is [${value.getType().baseIdentifier}]!`);
+        if(!this.type.matches(value.type)) {
+            throw new Error(`Value must be of type [${this.type.baseIdentifier}] but is [${value.type.baseIdentifier}]!`);
         }
         this._value = value;
     }

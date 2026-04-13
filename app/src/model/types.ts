@@ -8,7 +8,7 @@ export interface ClassIdentifiable {
 
 export interface Value {
     get id(): string;
-    getType(): ValueType;
+    get type(): ValueType;
     equals(t: Value): boolean;
     asString(): string;
     clone(): Value;
@@ -23,8 +23,12 @@ export type _Value = Primitive | UtilityObject | UtilityArray | undefined;
 type ValueTypeFunction = (typeParameter: ValueType[]) => ValueType;
 
 export class ValueType {
-    public baseIdentifier: string;
+    public readonly baseIdentifier: string;
     public readonly orderable: boolean;
+
+    public get id() {
+        return this.baseIdentifier;
+    }
 
     constructor(identifier: string, orderable: boolean = false) {
         this.baseIdentifier = identifier;
@@ -32,11 +36,7 @@ export class ValueType {
     }
 
     public matches(type: ValueType) {
-        return this.getIdentifier() == type.getIdentifier() || type.baseIdentifier == "undefined";
-    }
-
-    public getIdentifier() {
-        return this.baseIdentifier;
+        return this.id == type.id || type.baseIdentifier == "undefined";
     }
 
     public hasFields() {
@@ -87,32 +87,21 @@ export class ObjectType extends ValueType {
         return true;
     }
 
-    public override getIdentifier(): string {
-        return `${this.baseIdentifier}<${this.typeParameter[0]!.getIdentifier()}>`
+    public override get id(): string {
+        return `${this.baseIdentifier}<${this.typeParameter[0]!.id}>`
     }
 }
 
 export class ArrayType extends ValueType {
     public readonly elementType: ValueType;
 
-    constructor(elementType: ValueType, orderable: boolean = false) {
-        super("array", orderable);
+    constructor(elementType: ValueType) {
+        super("array");
         this.elementType = elementType;
     }
 
-    public override getIdentifier(): string {
-        return `${this.baseIdentifier}<${this.elementType.getIdentifier()}>`;
-    }
-}
-
-export class StringType extends ArrayType {
-    constructor() {
-        super(charType, true);
-        this.baseIdentifier = "string";
-    }
-
-    public override getIdentifier(): string {
-        return "string";
+    public override get id(): string {
+        return `${this.baseIdentifier}<${this.elementType.id}>`;
     }
 }
 
@@ -140,16 +129,6 @@ export class UndefinedType extends ValueType {
     }
 }
 
-export class AnyOrderableType extends ValueType {
-    constructor() {
-        super("any");
-    }
-
-    public override matches(type: ValueType): boolean {
-        return type.getIdentifier() == "undefined" || type.orderable;
-    }
-}
-
 /**
  * Represents a special type called Tokens, used for accessing fields of objects.
  * Unlike other objects it cannot be obtained as a result of operators, it can only exist in literal form.
@@ -169,7 +148,7 @@ export const charType = new ValueType("char", true);
 export const booleanType = new ValueType("boolean");
 export const anyType = new AnyType();
 export const undefinedType = new UndefinedType();
-export const stringType = new StringType();
+export const stringType = new ValueType("string", true);
 
 // Field definitions
 
@@ -234,10 +213,6 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
         this.type = type;
     }
 
-    public getType(): ValueType {
-        return this.type;
-    }
-
     public static number(value: number) {
         return new SimpleValue(value, numberType);
     }
@@ -299,7 +274,7 @@ export class UtilityObjectTemplate {
     }
 
     public construct(args: Value[]) {
-        return new UtilityObject(this.fields, args, this.getType(args.map(v => v.getType())));
+        return new UtilityObject(this.fields, args, this.getType(args.map(v => v.type)));
     }
 
     public static Builder(id: string): UtilityObjectTemplateBuilder {
@@ -328,13 +303,22 @@ export class UtilityObjectTemplate {
     }
 }
 
-export class UtilityArray implements ClassIdentifiable, Value {
+export class UtilityArray implements Value {
     protected elements: Value[];
     protected elementType: ValueType;
     protected static idSeq = 0;
     public readonly id: string = `array${UtilityArray.idSeq++}`;
     public static readonly emitter = new EventEmitter2();
+    /**
+     * It fires when an element of the array is changed.
+     * Its arguments are: array: UtilityArray, idx: number, value: Value
+     */
     public static readonly elementChanged = "utilityarray.element.changed";
+
+    /**
+     * It fires when an element of the array is swapped.
+     * Its arguments are: array: UtilityArray, idx1: number, idx2: number
+     */
     public static readonly elementSwapped = "utilityarray.element.swapped";
 
     constructor(values: Value[], elementType: ValueType) {
@@ -346,7 +330,7 @@ export class UtilityArray implements ClassIdentifiable, Value {
     private static ensureValuesAreHomogenous(values: Value[]) {
         for(let i = 0; i < values.length; i++) {
             for(let j = i + 1; j < values.length; j++) {
-                if(!values[i]!.getType().matches(values[j]!.getType())) throw new Error("Array cannot be heterogenous!");
+                if(!values[i]!.type.matches(values[j]!.type)) throw new Error("Array cannot be heterogenous!");
             }
         }
     }
@@ -377,12 +361,8 @@ export class UtilityArray implements ClassIdentifiable, Value {
         return this.elements.length;
     }
 
-    public getType() {
+    public get type(): ValueType {
         return new ArrayType(this.elementType);
-    }
-
-    public getClassIdentifier(): string {
-        return "array";
     }
 
     public equals(t: Value): boolean {
@@ -414,7 +394,7 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
 
     private static ensureValuesAreChar(values: Value[]) {
         for(const value of values) {
-            if(!charType.matches(value.getType())) return new Error("Values of string must be chars!");
+            if(!charType.matches(value.type)) return new Error("Values of string must be chars!");
         }
     }
     
@@ -422,7 +402,7 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
         return this.getString() > other.getString();
     }
 
-    public getType(): ArrayType {
+    public override get type(): ValueType {
         return stringType;
     }
 
@@ -438,16 +418,12 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
         return new UtilityString(this.elements.concat(other.elements));
     }
 
-    public getClassIdentifier(): string {
-        return "string"
-    }
-
     public clone(): UtilityArray {
         return new UtilityString(this.elements.map(e => e.clone()));
     }
 }
 
-export class UtilityObject implements ClassIdentifiable, Value {
+export class UtilityObject implements Value {
     protected static idSeq = 0;
     public readonly id: string = `object${UtilityObject.idSeq++}`;
     public fieldData: Record<string, Value> = {};
@@ -456,8 +432,13 @@ export class UtilityObject implements ClassIdentifiable, Value {
      */
     private readonly fields;
     private readonly args;
-    private type: ObjectType;
+    public readonly type: ObjectType;
     public static readonly emitter = new EventEmitter2();
+
+    /**
+     * It fires when the field of an object changes.
+     * Its arguments are: object: UtilityObject, name: string, value: Value
+     */
     public static readonly fieldChanged = "utilityobject.field.changed";
 
     constructor(fields: Field[], args: Value[], type: ObjectType) {
@@ -482,17 +463,9 @@ export class UtilityObject implements ClassIdentifiable, Value {
 
     public set(name: string, value: Value) {
         if(!(name in this.fieldData)) throw new Error("Field does not exist!");
-        if(!this.getType().getFieldType(name).matches(value.getType())) throw new Error("Type mismatch!");
+        if(!this.type.getFieldType(name).matches(value.type)) throw new Error("Type mismatch!");
         this.fieldData[name] = value;
         UtilityObject.emitter.emit(UtilityObject.fieldChanged, this, name, value);
-    }
-
-    public getType(): ObjectType {
-        return this.type;
-    }
-
-    public getClassIdentifier(): string {
-        return this.id;
     }
 
     public equals(t: Value): boolean {

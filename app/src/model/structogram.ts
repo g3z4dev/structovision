@@ -35,19 +35,19 @@ export class Structogram {
 
     /**
      * Emitted when an input is specified.
-     * Has 2 string arguments. The first one is the name and the second one is the type.
+     * Its arguments are: key: string, type: ValueType
      */
     public static readonly inputSpecificationEvent = "structogram.specification.input";
 
     /**
      * Emitted when an auxiliary is specified.
-     * Has 2 string arguments. The first one is the name and the second one is the type.
+     * Its arguments are: key: string, type: ValueType
      */
     public static readonly auxSpecificationEvent = "structogram.specification.aux";
 
     /**
      * Emitted when an output is specified.
-     * Has 2 string arguments. The first one is the name and the second one is the type.
+     * Its arguments are: key: string, type: ValueType
      */
     public static readonly outputSpecificationEvent = "structogram.specification.output";
     
@@ -58,7 +58,7 @@ export class Structogram {
     
     /**
      * Emitted when the issues change.
-     * Has 2 StructogramIssue[] arguments. The first one is the previous issues and the second one are the current ones.
+     * Its argument are: lastIssues: StructogramIssues[], currentIssues: StructogramIssues[]
      */
     public static readonly issuesChangedEvent = "structogram.issues.changes";
 
@@ -67,7 +67,7 @@ export class Structogram {
     private _startingBlock: StructogramBlock | undefined;
     private _currentBlock: StructogramBlock | undefined;
     private readonly idMap: Record<string, StructogramBlock> = {};
-    private running = false;
+    private _running = false;
     private bracketBlockStack: BracketBlock[] = [];
     private ready = false;
     private _inData: Record<string, ValueType> = {};
@@ -104,6 +104,14 @@ export class Structogram {
         return this._indexResolver;
     }
 
+    public get running() {
+        return this._running;
+    }
+
+    private set running(value: boolean) {
+        this._running = value;
+    }
+
     private set issues(issues: StructogramIssue[]) {
         const lastIssues = this.issues;
         this.currentIssues = issues;
@@ -123,17 +131,17 @@ export class Structogram {
         this.emitter.emit(Structogram.specificationClearEvent);
     }
 
-    public defineInputData(key: string, type: ValueType) {
+    public declareInputData(key: string, type: ValueType) {
         this._inData[key] = type;
         this.emitter.emit(Structogram.inputSpecificationEvent, key, type);
     }
 
-    public defineAuxData(key: string, type: ValueType) {
+    public declareAuxData(key: string, type: ValueType) {
         this._auxData[key] = type;
         this.emitter.emit(Structogram.auxSpecificationEvent, key, type);
     }
 
-    public defineOutputData(key: string, type: ValueType) {
+    public declareOutputData(key: string, type: ValueType) {
         this._outData[key] = type;
         this.emitter.emit(Structogram.outputSpecificationEvent, key, type);
     }
@@ -160,7 +168,7 @@ export class Structogram {
             usedKeys.add(key);
             try {
                 const statement = AnyStatement.parse(input[i]!, this.memory, this.indexResolver);
-                if(!type.matches(statement.getReturnType())) {
+                if(!type.matches(statement.returnType)) {
                     issues.push(new StructogramIssue("specification", "Wrong type returned by statement given to input data!", "error_specification_input_type"));
                 } else {
                     this.memory.createVariable(key, type, true);
@@ -247,12 +255,8 @@ export class Structogram {
         return results;
     }
 
-    public isRunning() {
-        return this.running;
-    }
-
     public addBlock(block: StructogramBlock, supressEvent: boolean = false) {
-        if(this.isRunning()) throw new Error("Cannot add block while structogram is running!");
+        if(this.running) throw new Error("Cannot add block while structogram is running!");
         this.idMap[block.id] = block;
         let child = block.next;
         while(child) {
@@ -266,7 +270,7 @@ export class Structogram {
     }
 
     public removeBlock(block: StructogramBlock, supressEvent: boolean = false) {
-        if(this.isRunning()) throw new Error("Cannot remove block while structogram is running!");
+        if(this.running) throw new Error("Cannot remove block while structogram is running!");
         delete this.idMap[block.id];
         for(const [_key, subBlock] of block.getOrderedSubBlocks()) {
             if(subBlock) {
@@ -282,6 +286,9 @@ export class Structogram {
         block.emitter.removeAllListeners(StructogramBlock.childrenChanged);
     }
 
+    /**
+     * @returns every block without a parent
+     */
     public getIndependentRootBlocks(): StructogramBlock[] {
         return Object.values(this.idMap).filter(b => !b.parent && this.startingBlock != b && !b.superBlock);
     }
@@ -293,7 +300,7 @@ export class Structogram {
     }
 
     public set startingBlock(block: StructogramBlock | undefined) {
-        if(this.isRunning()) throw new Error("Cannot change starting block while structogram is running!");
+        if(this.running) throw new Error("Cannot change starting block while structogram is running!");
         if(block?.superBlock) {
             throw new Error("Cannot set subblock as starting block!");
         }
@@ -312,13 +319,13 @@ export class Structogram {
     public getData() {
         return {
             "input": this.inputData.map(data => {
-                return {"key": data[0], "type": data[1].getIdentifier()}
+                return {"key": data[0], "type": data[1].id}
             }),
             "auxiliary": this.auxData.map(data => {
-                return {"key": data[0], "type": data[1].getIdentifier()}
+                return {"key": data[0], "type": data[1].id}
             }),
             "output": this.outputData.map(data => {
-                return {"key": data[0], "type": data[1].getIdentifier()}
+                return {"key": data[0], "type": data[1].id}
             }),
             "startingBlock": this.startingBlock?.getData(),
             "startingIndex": this.startingIndex
@@ -337,9 +344,9 @@ export class Structogram {
             for(const entry of entries) loader(entry["key"], parseType(entry["type"]));
         }
 
-        loadWith(input, (key, type) => this.defineInputData(key, type));
-        loadWith(aux, (key, type) => this.defineAuxData(key, type));
-        loadWith(output, (key, type) => this.defineOutputData(key, type));
+        loadWith(input, (key, type) => this.declareInputData(key, type));
+        loadWith(aux, (key, type) => this.declareAuxData(key, type));
+        loadWith(output, (key, type) => this.declareOutputData(key, type));
         if("startingBlock" in data) this.startingBlock = StructogramBlock.BlockDataFactory.constructFromData(data["startingBlock"], this);
         if("startingIndex" in data) this.startingIndex = data["startingIndex"];
     }
@@ -797,7 +804,7 @@ export class AssignmentBlock extends SequenceBlock {
             issues.push(new StructogramIssue(this.id, `Variable with key [${memoryKey}] is not defined!`, "error_undefined_variable"));
         } else if(!verifyFieldsExist()) {
             issues.push(new StructogramIssue(this.id, `[${this.key}] does not exist!`, "erro_no_field"));
-        } else if(!getObjectOrFieldType().matches(this.statement?.getReturnType() ?? undefinedType)) {
+        } else if(!getObjectOrFieldType().matches(this.statement?.returnType ?? undefinedType)) {
             issues.push(new StructogramIssue(this.id, `Block violates the type restrictions of the variable with key [${this.key}]!`, "error_type"));
         } else if(keyTokens.length == 1 && this._associatedStructogram.memory.isConstant(this.key)) {
             issues.push(new StructogramIssue(this.id, `Block tries to assign [${this.key}] which is a constant variable!`, "error_constant"));

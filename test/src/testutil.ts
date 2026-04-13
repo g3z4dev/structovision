@@ -26,7 +26,7 @@ export function charArray(chars: string[]) {
 }
 
 export function array(values: Value[]) {
-    return new UtilityArray(values, values[0]!.getType());
+    return new UtilityArray(values, values[0]!.type);
 }
 
 export function s1l(value: Value) {

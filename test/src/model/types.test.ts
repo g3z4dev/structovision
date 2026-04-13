@@ -19,10 +19,10 @@ test("type should match themselves but not other types", assertion => {
             const type1 = types[i]!;
             const type2 = types[j]!;
             if(i == j) {
-                assertion.truthy(type1.matches(type1), `${type1.getIdentifier()} should match itself`); 
+                assertion.truthy(type1.matches(type1), `${type1.id} should match itself`); 
             } else {
-                assertion.falsy(type1.matches(type2), `${type1.getIdentifier()} should not match ${type2.getIdentifier()}`); 
-                assertion.falsy(type2.matches(type1), `${type2.getIdentifier()} should not match ${type1.getIdentifier()}`);
+                assertion.falsy(type1.matches(type2), `${type1.id} should not match ${type2.id}`); 
+                assertion.falsy(type2.matches(type1), `${type2.id} should not match ${type1.id}`);
             }
         } 
     }
@@ -43,8 +43,8 @@ test("undefined type should match any type", assertion => {
     ];
     for(let i = 0; i < types.length; i++) {
         const type = types[i]!;
-        assertion.truthy(type.matches(undefinedType), `${type.getIdentifier()} should match undefined type`); 
-        assertion.truthy(undefinedType.matches(type), `undefined type should match ${type.getIdentifier()}`); 
+        assertion.truthy(type.matches(undefinedType), `${type.id} should match undefined type`); 
+        assertion.truthy(undefinedType.matches(type), `undefined type should match ${type.id}`); 
     }
 });
 
@@ -62,7 +62,7 @@ test("values should have the correct type", assertion => {
         [array([s1l(c("z"))]), new ArrayType(SinglyLinkedListNodeTemplate.getType([charType]))],
     ];
     for(const [value, type] of valuesAndExpectedTypes) {
-        assertion.truthy(value.getType().matches(type), `${type.getIdentifier()} should match the type of the object it represents`); 
+        assertion.truthy(value.type.matches(type), `${type.id} should match the type of the object it represents`); 
     }
 });
 
@@ -93,9 +93,9 @@ test("values should be shallow cloned", assertion => {
     ];
     for(const value of values) {
         const clone = value.clone();
-        assertion.truthy(value.getType().matches(clone.getType()), `a clone of a ${value.getType().getIdentifier()} should be the same type of value`)
-        assertion.truthy(value.id != clone.id, `a clone of a ${value.getType().getIdentifier()} should be a different instance`)
-        jsonEqual(assertion, value, clone, `a clone of a ${value.getType().getIdentifier()} should be logically equal to the original`)
+        assertion.truthy(value.type.matches(clone.type), `a clone of a ${value.type.id} should be the same type of value`)
+        assertion.truthy(value.id != clone.id, `a clone of a ${value.type.id} should be a different instance`)
+        jsonEqual(assertion, value, clone, `a clone of a ${value.type.id} should be logically equal to the original`)
     }
 });
 
@@ -104,7 +104,7 @@ test("values should be deep cloned", assertion => {
     let clone = strVal.clone();
     let condition = true;
     for(let i = 0; i < strVal.length; i++) {
-        condition = condition && (strVal.indexGet(i).id != clone.indexGet(i).id);
+        condition = condition && (strVal.indexGet(i).id != clone.indexGet(i).id) && strVal.indexGet(i).asString() == clone.indexGet(i).asString();
     }
     assertion.truthy(condition, "a clone of a string should deeply clone its elements");
 
