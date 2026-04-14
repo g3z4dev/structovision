@@ -145,6 +145,7 @@ export class StructogramRunner extends StructogramRenderer {
             for(const issue of issues) {
                 this.runIssueWindow.addEntry(issue.id + ": " + Translator.getDictionary().translate(issue.issueID));
             }
+            this.restart();
             this.runIssueWindow.show();
             return false;
         }
@@ -283,14 +284,14 @@ class TimeControl {
 
     private setupButtons() {
         this.startButton.addEventListener("click", () => {
-            this.runner.start();
             this.startButton.classList.add("hidden");
             this.pauseButton.classList.remove("hidden");
+            this.runner.start();
         });
         this.pauseButton.addEventListener("click", () => {
-            this.runner.pause();
             this.startButton.classList.remove("hidden");
             this.pauseButton.classList.add("hidden");
+            this.runner.pause();
         });
         this.runner.emitter.on(StructogramRunner.runFinished, () => {
             this.startButton.classList.remove("hidden");
@@ -624,7 +625,7 @@ abstract class ObjectRenderer {
     protected objectBaseIdentifier: string;
     protected allObjectsByMemoryKey: Record<string, Value>;
     protected allObjectsByID: Record<string, Value>;
-    protected idToMemoryKey: Record<string, string>;
+    protected idToMemoryKey: Record<string, Set<string>>;
     protected memory: Memory;
     protected selectors: string[];
     private _height = 0;
@@ -664,7 +665,7 @@ abstract class ObjectRenderer {
         this.idToMemoryKey = {};
         this.allObjectsByMemoryKey = memory.getAllValuesWithBaseIdentifier(objectBaseIdentifier).reduce((acc, cur) => {
             acc[cur.key] = cur.value;
-            this.idToMemoryKey[cur.value.id] = cur.key;
+            this.idToMemoryKey[cur.value.id] = new Set([cur.key]);
             return acc;
         }, {} as Record<string, Value>);
         this.allObjectsByID = Object.values(this.allObjectsByMemoryKey).reduce((acc, cur) => {
@@ -673,17 +674,23 @@ abstract class ObjectRenderer {
         }, {} as Record<string, Value>);
         this.reloadObjects();
         this.memory.emitter.on(Memory.variableChangedEvent, (key: string, _prevValue: Value, value: Value) => {
+            const prevValue = this.allObjectsByMemoryKey[key];
             if(value.type.baseIdentifier == objectBaseIdentifier) {
-                const prevValue = this.allObjectsByMemoryKey[key]!;
                 this.allObjectsByMemoryKey[key] = value;
                 if(value.type.isDefined()) {
                     this.allObjectsByID[value.id] = value;
-                    this.idToMemoryKey[value.id] = key;
-                } else if(prevValue.type.isDefined()){
-                    delete this.allObjectsByID[prevValue.id];
-                    delete this.idToMemoryKey[key];
+                    if(value.id in this.idToMemoryKey) {
+                        this.idToMemoryKey[value.id]!.add(key);
+                    } else {
+                        this.idToMemoryKey[value.id] = new Set([key]);
+                    }
                 }
                 this.objectReloadQueued = true;
+            }
+            if(prevValue) {
+                if(prevValue.id in this.idToMemoryKey) {
+                    this.idToMemoryKey[prevValue.id]!.delete(key);
+                }
             }
         });
         UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, _key: string, value: Value) => {
@@ -722,6 +729,12 @@ abstract class ObjectRenderer {
             this.objectReloadQueued = false;
         }
     }
+
+    public reset() {
+        this.allObjectsByID = {};
+        this.allObjectsByMemoryKey = {};
+        this.idToMemoryKey = {};
+    }
 }
 
 
@@ -747,8 +760,27 @@ abstract class NodeRenderData {
     private _targetY;
     public w;
     public h;
-    public content: string;
-    public representation: string | undefined;
+    private _content: string;
+
+    public get content() {
+        return this._content;
+    }
+
+    public set content(value: string) {
+        this._content = value;
+        this.w = Math.max(NodeRenderData.getNodeWidthWithContent(this.objectCanvas, this.content), NodeRenderData.getNodeWidthWithContent(this.objectCanvas, this.representation ?? ""));
+    }
+
+    private _representation: string | undefined;
+
+    public get representation() {
+        return this._representation;
+    }
+    public set representation(value: string | undefined) {
+        this._representation = value;
+        this.w = Math.max(NodeRenderData.getNodeWidthWithContent(this.objectCanvas, this.content), NodeRenderData.getNodeWidthWithContent(this.objectCanvas, this.representation ?? ""));
+    }
+
     protected static textPadding = 4;
 
     public static getNodeWidthWithContent(canvas: HTMLCanvasElement, content: string) {
@@ -756,14 +788,14 @@ abstract class NodeRenderData {
     }
 
     constructor(content: string, representation: string | undefined, objectCanvas: HTMLCanvasElement, x: number, y:number, h: number) {
-        this.content = content;
-        this.representation = representation;
+        this._content = content;
+        this._representation = representation;
         this.objectCanvas = objectCanvas;
         this.originX = x;
         this.originY = y;
         this._targetX = x;
         this._targetY = y;
-        this.w = NodeRenderData.getNodeWidthWithContent(objectCanvas, content);
+        this.w = Math.max(NodeRenderData.getNodeWidthWithContent(objectCanvas, content), NodeRenderData.getNodeWidthWithContent(objectCanvas, representation ?? ""));
         this.h = h;
     }
 
@@ -904,10 +936,10 @@ class S1LRenderer extends ObjectRenderer {
                     data.targetX = xOffset;
                     data.targetY = yOffset;
                     data.content = node.get("key").asString();
-                    data.representation = this.idToMemoryKey[node.id];
+                    data.representation = [...this.idToMemoryKey[node.id] ?? []][0];
                     newRegistry[node.id] = data;
                 } else {
-                    newRegistry[node.id] = new S1LRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                    newRegistry[node.id] = new S1LRenderData(node.get("key").asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
                     newRegistry[node.id]!.originY += this.nodeHeight;
                 }
                 xOffset += newRegistry[node.id]!.w + this.nodeXSpacing;
@@ -918,6 +950,8 @@ class S1LRenderer extends ObjectRenderer {
         for(const node of allNodes) {
             if(node.get("next") instanceof UtilityObject) {
                 newRegistry[node.id]!.next = newRegistry[node.get("next").id];
+            } else {
+                newRegistry[node.id]!.next = undefined;
             }
         }
 
@@ -1019,10 +1053,10 @@ class S2LRenderer extends ObjectRenderer {
                     data.targetX = xOffset;
                     data.targetY = yOffset;
                     data.content = node.get("key").asString();
-                    data.representation = this.idToMemoryKey[node.id];
+                    data.representation = [...this.idToMemoryKey[node.id] ?? []][0];
                     newRegistry[node.id] = data;
                 } else {
-                    newRegistry[node.id] = new S2LRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                    newRegistry[node.id] = new S2LRenderData(node.get("key").asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
                     newRegistry[node.id]!.originY += this.nodeHeight;
                 }
                 xOffset += (newRegistry[node.id]!.w + this.nodeXSpacing);
@@ -1036,10 +1070,14 @@ class S2LRenderer extends ObjectRenderer {
             const prev = node.get("prev")!;
             if(prev instanceof UtilityObject) {
                 data.prev = newRegistry[prev.id];
+            } else {
+                newRegistry[node.id]!.prev = undefined;
             }
             const next = node.get("next")!;
             if(next instanceof UtilityObject) {
                 data.next = newRegistry[next.id];
+            } else {
+                newRegistry[node.id]!.next = undefined;
             }
         }
 
@@ -1193,10 +1231,10 @@ class BTNRenderer extends ObjectRenderer {
                             data.targetX = xOffset;
                             data.targetY = yOffset;
                             data.content = node.get("key").asString();
-                            data.representation = this.idToMemoryKey[node.id];
+                            data.representation = [...this.idToMemoryKey[node.id] ?? []][0];
                             newRegistry[node.id] = data;
                         } else {
-                            newRegistry[node.id] = new BTNRenderData(node.get("key").asString(), this.idToMemoryKey[node.id], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                            newRegistry[node.id] = new BTNRenderData(node.get("key").asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
                         }
                     }
                     xOffset += step + maxNodeWidth;
@@ -1213,10 +1251,15 @@ class BTNRenderer extends ObjectRenderer {
             const left = node.get("left")!;
             if(left instanceof UtilityObject) {
                 data.left = newRegistry[left.id];
+            } else {
+                newRegistry[node.id]!.left = undefined;
             }
+
             const right = node.get("right")!;
             if(right instanceof UtilityObject) {
                 data.right = newRegistry[right.id];
+            } else {
+                newRegistry[node.id]!.right = undefined;
             }
         }
 
@@ -1375,6 +1418,7 @@ class ObjectView extends ProgramView implements AnimatedView {
         this.objectCanvas.height = this.objectCanvas.clientHeight;
         for(const renderer of this.renderers) {
             renderer.updateSelectors(this.selectors);
+            renderer.reset();
             renderer.reloadObjects();
         }
     }

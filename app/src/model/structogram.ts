@@ -962,6 +962,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
             }
         }
 
+        this.activeStep = "";
         this.state = "ready";
 
         return [];
@@ -1060,6 +1061,7 @@ export class MultiBranchingBlock extends BracketBlock {
         this.branchIndex = 0;
         this.foundBranch = false;
         this.finished = false;
+        this.activeStep = ""
 
         return [];
     }
@@ -1097,6 +1099,11 @@ export abstract class LoopBlock extends BracketBlock {
 
     public override skipToNext(): boolean {
         return false;
+    }
+
+    public parseAndCheckForIssues(): StructogramIssue[] {
+        this.finished = false;
+        return [];
     }
 }
 
@@ -1154,6 +1161,11 @@ export class CountingLoopBlock extends LoopBlock {
     }
 
     public override parseAndCheckForIssues(): StructogramIssue[] {
+        super.parseAndCheckForIssues();
+        this.started = false;
+        this.checkedCondition = false;
+        this.activeStep = "";
+
         const issues = [];
         try {
             this.from = this.fromOption.tryResolveStatement();
@@ -1203,6 +1215,8 @@ export abstract class ConditionalLoopBlock extends LoopBlock {
     }
 
     public override parseAndCheckForIssues(): StructogramIssue[] {
+        super.parseAndCheckForIssues();
+
         try {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {

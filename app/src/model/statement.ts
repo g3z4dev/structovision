@@ -82,7 +82,7 @@ export abstract class Operator {
 }
 
 class BinaryOperator extends Operator {
-    private operation: (a: Value, b: Value) => Value;
+    protected operation: (a: Value, b: Value) => Value;
 
     public constructor(precedence: number, token: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value, b: Value) => Value, rightToLeft: boolean = false) {
         super(precedence, 2, "infix", token, condition, returnType, rightToLeft);
@@ -111,6 +111,19 @@ class BinaryOperator extends Operator {
         }
         if(this.hasUndefinedOperand(operands)) return SimpleValue.undefined();
 
+        const a = operands[0]!;
+        const b = operands[1]!;
+        
+        return this.operation(a, b);
+    }
+}
+
+class EqualityOperator extends BinaryOperator {
+    public override apply(operands: Value[], indexResolver: IndexResolver): Value {
+        if(operands.length != 2) {
+            throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
+        }
+        
         const a = operands[0]!;
         const b = operands[1]!;
         
@@ -275,8 +288,8 @@ registerOperator(new UnaryOperator(7, "len", types => types[0]!.isUndefined() ||
 registerOperator(new BinaryOperator(1, "and", BinaryOperator.matchesSomePairsFn([[booleanType, booleanType]]), booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) && ((b as SimpleValue).value as boolean))));
 registerOperator(new BinaryOperator(0, "or", BinaryOperator.matchesSomePairsFn([[booleanType, booleanType]]), booleanType, (a, b) => SimpleValue.boolean(((a as SimpleValue).value as boolean) || ((b as SimpleValue).value as boolean))));
 registerOperator(new UnaryOperator(7, "!", UnaryOperator.matchesSomeFn([booleanType]), booleanType, a => SimpleValue.boolean((!(a as SimpleValue).value as boolean))));
-registerOperator(new BinaryOperator(2, "=", BinaryOperator.matchesSomePairsFn([[anyType, anyType]]), booleanType, (a, b) => SimpleValue.boolean(a.equals(b))));
-registerOperator(new BinaryOperator(2, "!=", BinaryOperator.matchesSomePairsFn([[anyType, anyType]]), booleanType, (a, b) => SimpleValue.boolean(!a.equals(b))));
+registerOperator(new EqualityOperator(2, "=", BinaryOperator.matchesSomePairsFn([[anyType, anyType]]), booleanType, (a, b) => SimpleValue.boolean(a.equals(b))));
+registerOperator(new EqualityOperator(2, "!=", BinaryOperator.matchesSomePairsFn([[anyType, anyType]]), booleanType, (a, b) => SimpleValue.boolean(!a.equals(b))));
 registerOperator(new BinaryOperator(3, "<", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && !(a as unknown as Ordered<T>).greaterThan(b))));
 registerOperator(new BinaryOperator(3, "<=", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(a.equals(b) || !(a as unknown as Ordered<T>).greaterThan(b))));
 registerOperator(new BinaryOperator(3, ">", BinaryOperator.matchesSomePairsFn([[numberType, numberType], [charType, charType], [stringType, stringType]]), booleanType, <T extends Value> (a: T, b: T) => SimpleValue.boolean(!a.equals(b) && (a as unknown as Ordered<T>).greaterThan(b))));
@@ -319,6 +332,7 @@ registerOperator(new FunctionOperator("is1l", 2,
     },
     undefinedType,
     (operands) => {
+        if(!(operands[0] instanceof UtilityObject)) return;
         const c = (operands[0] as UtilityObject);
         const d = (operands[1] as Value);
         const e = c.get("next");
@@ -334,6 +348,7 @@ registerOperator(new FunctionOperator("is2l", 2,
     },
     undefinedType,
     (operands) => {
+        if(!(operands[0] instanceof UtilityObject)) return;
         const c = (operands[0] as UtilityObject);
         const d = (operands[1] as Value);
         const e = c.get("next");
@@ -353,6 +368,7 @@ registerOperator(new FunctionOperator("ileft", 2,
     },
     undefinedType,
     (operands) => {
+        if(!(operands[0] instanceof UtilityObject)) return;
         const p = (operands[0] as UtilityObject);
         const c = (operands[1] as UtilityObject);
         const l = p.get("left")!;
@@ -369,6 +385,7 @@ registerOperator(new FunctionOperator("iright", 2,
     },
     undefinedType,
     (operands) => {
+        if(!(operands[0] instanceof UtilityObject)) return;
         const p = (operands[0] as UtilityObject);
         const c = (operands[1] as UtilityObject);
         const r = p.get("right")!;
