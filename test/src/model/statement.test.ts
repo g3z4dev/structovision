@@ -340,7 +340,7 @@ test("statements with function operators should work as expected", (assertion) =
 });
 
 test("statements with any undefined operands should result in being undefined", (assertion) => {
-    testAnyStatement(assertion, "len(\"alma\"&\"fa\")+-sqrt(sqrt(len(\"this is \"&str(undefined=5-1)&\" no?\")))", ud());
-    testAnyStatement(assertion, "str(len(\"\"&str(true)))&\"=\"&str(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))&\" is \"&str(len(\"\"&undefined)=sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", ud());
+    testAnyStatement(assertion, "len(\"alma\"&undefined)+-sqrt(sqrt(len(\"this is \"&str(5=5-1)&\" no?\")))", ud());
+    testAnyStatement(assertion, "str(len(\"\"&str(undefined)))&\"=\"&str(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))&\" is \"&str(len(\"\"&\"alma\")=sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", ud());
     testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(undefined))", ud());
 });
