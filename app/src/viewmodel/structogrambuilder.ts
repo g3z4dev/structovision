@@ -277,7 +277,12 @@ class ActionTimeLine {
 
 export class StructogramBuilder extends StructogramRenderer {
     public readonly emitter = new EventEmitter2();
-    public static readonly currentBlockChanged = "structogrambuilder.currentblock.changed";
+
+    /**
+     * It fires when the selectedBlock changes.
+     * It has no arguments.
+     */
+    public static readonly selectedBlockChanged = "structogrambuilder.selectedBlock.changed";
 
     private newButton = document.querySelector("#new-button") as HTMLButtonElement;
     private settingsButton = document.querySelector("#settings-button") as HTMLButtonElement;
@@ -288,16 +293,16 @@ export class StructogramBuilder extends StructogramRenderer {
     private newNoButton = this.newWindow.querySelector("#new-confirm-no") as HTMLButtonElement;
     public readonly structogramSpecificator = new StructogramSpecificator(this);
     private movingBlock: MovingBlock | undefined;
-    private _currentBlock: StructogramBlock | undefined;
+    private _selectedBlock: StructogramBlock | undefined;
     private blockClipboard: string = "";
     public readonly timeLine = new ActionTimeLine();
     public readonly toolbar = new BlockToolbar(this.structogram);
     public readonly structogramSettings = new StructogramSettings(this);
     public readonly structogramGeneralSettings;
 
-    public set currentBlock(block: StructogramBlock | undefined) {
-        if(this._currentBlock) {
-            const node = document.querySelector(`#${this.idPrefix}-${this._currentBlock.id}`);
+    public set selectedBlock(block: StructogramBlock | undefined) {
+        if(this._selectedBlock) {
+            const node = document.querySelector(`#${this.idPrefix}-${this._selectedBlock.id}`);
             node?.classList.remove(...selectedClass);
             node?.classList.add(...unselectedClass);
         } else {
@@ -305,9 +310,9 @@ export class StructogramBuilder extends StructogramRenderer {
             speci?.classList.remove("bg-cyan-100");
             speci?.classList.add("bg-white", "hover:bg-cyan-50");
         }
-        this._currentBlock = block;
-        if(this._currentBlock) {
-            const node = document.querySelector(`#${this.idPrefix}-${this._currentBlock.id}`);
+        this._selectedBlock = block;
+        if(this._selectedBlock) {
+            const node = document.querySelector(`#${this.idPrefix}-${this._selectedBlock.id}`);
             node?.classList.remove(...unselectedClass);
             node?.classList.add(...selectedClass);
         } else {
@@ -315,11 +320,11 @@ export class StructogramBuilder extends StructogramRenderer {
             speci?.classList.remove("bg-white", "hover:bg-cyan-50");
             speci?.classList.add("bg-cyan-100");
         }
-        this.emitter.emit(StructogramBuilder.currentBlockChanged);
+        this.emitter.emit(StructogramBuilder.selectedBlockChanged);
     }
 
-    public get currentBlock() {
-        return this._currentBlock;
+    public get selectedBlock() {
+        return this._selectedBlock;
     }
 
     /**
@@ -457,8 +462,8 @@ export class StructogramBuilder extends StructogramRenderer {
                     this.renderTarget.removeChild(this.movingBlock.associatedElement);
                     this.timeLine.didAction(new RemoveSegmentAction(this.renderTarget, this.movingBlock.associatedElement));
                 }
-                if(this.currentBlock == this.movingBlock.block) {
-                    this.currentBlock = undefined;
+                if(this.selectedBlock == this.movingBlock.block) {
+                    this.selectedBlock = undefined;
                 }
                 this.movingBlock = undefined;
             }
@@ -502,20 +507,20 @@ export class StructogramBuilder extends StructogramRenderer {
             if(pressed) return;
             if(event.ctrlKey && event.key != "Control") {
                 pressed = true;
-                if(this.currentBlock && event.key == "c") {
-                    this.blockClipboard = this.currentBlock.getData();
-                } else if(this.currentBlock && event.key == "x") {
-                    this.blockClipboard = this.currentBlock.getData()
+                if(this.selectedBlock && event.key == "c") {
+                    this.blockClipboard = this.selectedBlock.getData();
+                } else if(this.selectedBlock && event.key == "x") {
+                    this.blockClipboard = this.selectedBlock.getData()
                     this.timeLine.start();
-                    this.disconnectBlock(this.currentBlock);
-                    this.structogram.removeBlock(this.currentBlock);
-                    this.timeLine.didAction(new DeleteBlockAction(this.currentBlock));
-                    const associatedElem = this.renderTarget.querySelector(`#${this.currentBlock.id}-segment`);
+                    this.disconnectBlock(this.selectedBlock);
+                    this.structogram.removeBlock(this.selectedBlock);
+                    this.timeLine.didAction(new DeleteBlockAction(this.selectedBlock));
+                    const associatedElem = this.renderTarget.querySelector(`#${this.selectedBlock.id}-segment`);
                     if(associatedElem) {
                         this.renderTarget.removeChild(associatedElem);
                         this.timeLine.didAction(new RemoveSegmentAction(this.renderTarget, associatedElem));
                     }
-                    this.currentBlock = undefined;
+                    this.selectedBlock = undefined;
                 } else if(this.blockClipboard != "" && event.key == "v") {
                     this.timeLine.start();
                     const block = StructogramBlock.BlockDataFactory.constructFromData(this.blockClipboard, this.structogram);
@@ -570,7 +575,7 @@ export class StructogramBuilder extends StructogramRenderer {
         super.onBlockAdded(block, parent, elem);
         elem.addEventListener("mousedown", event => {
             if(event.button == 0) {
-                this.currentBlock = block;
+                this.selectedBlock = block;
                 this.movingBlock = new MovingBlock(block, event.clientX, event.clientY);
                 const associatedElem = this.renderTarget.querySelector(`#${block.id}-segment`);
                 if(associatedElem) {
@@ -579,7 +584,7 @@ export class StructogramBuilder extends StructogramRenderer {
                 event.stopPropagation();
             }
         })
-        if(this.currentBlock == block) {
+        if(this.selectedBlock == block) {
             elem.classList.remove(...unselectedClass);
             elem.classList.add(...selectedClass);
         }
@@ -792,6 +797,10 @@ class BlockToolbar {
 }
 
 abstract class OptionHandler {  
+    /**
+     * It fires when a block option changes.
+     * Its arguments are: option: BlockOption, oldValue: string[], newValue: string[]
+     */
     public static readonly changed = "optionhandler.changed";
     public readonly emitter: EventEmitter2 = new EventEmitter2();
     private optionResourceManager: ResourceManager;
@@ -896,7 +905,13 @@ class KeyOptionHandler extends OptionHandler {
 }
 
 class SpecificationSettingHandler {
-    public static readonly specificationChanged = "specification.changed"
+    
+    /**
+     * It fires when the specification is changed by the user.
+     * Its arguments are: oldInput: [string, string][], oldAux: [string, string][], oldOutput: [string, string][], newInput: [string, string][], newAux: [string, string][], newOutput: [string, string][]
+     */
+    public static readonly specificationChanged = "specification.changed";
+
     public readonly emitter = new EventEmitter2();
     private readonly dataSettingsTemplateElem = parseIntoHTML(dataSettingsTemplate);
     private readonly structogramBuilder: StructogramBuilder;
@@ -1031,7 +1046,16 @@ class SpecificationSettingHandler {
 }
 
 class StructogramSettings {
+    /**
+     * It fires when a block option is changed by the user.
+     * Its arguments are: option: BlockOption, oldValues: string[], newValues: string[]
+     */
     public static readonly blockOptionChanged = "settings.blockoption.change"
+
+    /**
+     * It fires when the specification is changed by the user.
+     * Its arguments are: oldInput: [string, string][], oldAux: [string, string][], oldOutput: [string, string][], newInput: [string, string][], newAux: [string, string][], newOutput: [string, string][]
+     */
     public static readonly specificationChanged = "settings.specification.change"
     public readonly emitter: EventEmitter2 = new EventEmitter2();
     private structogramSettingsElem = document.querySelector("#structogram-settings")!;
@@ -1071,17 +1095,17 @@ class StructogramSettings {
     }
 
     private addCurrentBlockHandler() {
-        this.builder.emitter.addListener(StructogramBuilder.currentBlockChanged, () => {
+        this.builder.emitter.addListener(StructogramBuilder.selectedBlockChanged, () => {
             this.generateHTML();
         });
     }
 
     public generateHTML() {
         this.structogramSettingsElem.textContent = "";
-        if(this.builder.currentBlock) {
-            for(const option of this.builder.currentBlock.getOptions()) {
-                if(option.getClassIdentifier() in this.optionHandlers) {
-                    const node = this.optionHandlers[option.getClassIdentifier()]!.getHTMLNodeFor(option, this.builder.currentBlock);
+        if(this.builder.selectedBlock) {
+            for(const option of this.builder.selectedBlock.options) {
+                if(option.classIdentifier in this.optionHandlers) {
+                    const node = this.optionHandlers[option.classIdentifier]!.getHTMLNodeFor(option, this.builder.selectedBlock);
                     if(node) this.structogramSettingsElem.appendChild(node);
                 }
             }
@@ -1127,7 +1151,7 @@ class StructogramSpecificator {
             setTemplateText(this.specificationElem, "spec-out", "");
         });
         this.specificationElem.addEventListener("click", () => {
-            builder.currentBlock = undefined;
+            builder.selectedBlock = undefined;
         });
         Translator.emitter.addListener(Translator.languageChanged, () => {
             this.reset()

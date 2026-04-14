@@ -227,7 +227,7 @@ export class StructogramRenderer {
                     const y = 0;
                     setPosition(header, x, y);
                     setSize(header, newWidth, baseBlockHeight);
-                    renderer.setupTextFor(header, currentBlock.getOptions(), newWidth, baseBlockHeight, i);
+                    renderer.setupTextFor(header, currentBlock.options, newWidth, baseBlockHeight, i);
                 }
                 const subBlock = subBlocks[subBlockKeys[i]!];
                 if(subBlock) {
@@ -253,7 +253,7 @@ export class StructogramRenderer {
             const visualHeight = calcVisualHeight();
             setPosition(elem, xOffset, yOffset);
             setSize(elem, width, visualHeight);
-            this.setupTextFor(elem, currentBlock.getOptions(), width, visualHeight);
+            this.setupTextFor(elem, currentBlock.options, width, visualHeight);
             prevBlock = currentBlock;
             currentBlock = currentBlock?.next;
             yOffset += blockHeight;
@@ -269,8 +269,8 @@ export class StructogramRenderer {
      * @param elem the HTML element it was resolved into
      */
     protected onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement) {
-        elem.id = this.idPrefix + "-" + block.getID();
-        if(this.structogram.issues.map(i => i.id).includes(block.getID())) {
+        elem.id = this.idPrefix + "-" + block.id;
+        if(this.structogram.issues.map(i => i.id).includes(block.id)) {
             elem.classList.add("fill-red-100");
             elem.classList.remove("fill-white");
         }

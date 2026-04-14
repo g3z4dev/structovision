@@ -5,7 +5,7 @@ import { numberType, SimpleValue, parseType, undefinedType, UtilityArray, type C
 
 
 export interface Identifiable {
-    getID(): string;
+    get id(): string;
 }
 
 export class StructogramIssue {
@@ -15,9 +15,9 @@ export class StructogramIssue {
     /**
      * @param _message Unused parameter used for documentation purposes
      */
-    constructor(id: string, _message: string, translationKey: string) {
+    constructor(id: string, _message: string, issueID: string) {
         this.id = id;
-        this.issueID = translationKey;
+        this.issueID = issueID;
     }
 }
 
@@ -399,7 +399,7 @@ export abstract class BlockOption implements ClassIdentifiable {
         this.description = description;
     }
 
-    public abstract getClassIdentifier(): string;
+    public abstract get classIdentifier(): string;
     public abstract getRawValues(): string[];
     public abstract setRawValues(data: string[]): void;
 }
@@ -411,7 +411,7 @@ export class BooleanStatementListOption extends BlockOption {
         super(structogram, name, description);
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "booleanstatementlistoption";
     }
 
@@ -471,7 +471,7 @@ export class NumericStatementOption extends StatementOption<number> {
         return this.structogram.createNumericStatement(this.statement);
     }
 
-    public getClassIdentifier(): string {
+    public get classIdentifier(): string {
         return "numericstatementoption";
     }
 }
@@ -481,7 +481,7 @@ export class StringStatementOption extends StatementOption<string> {
         return this.structogram.createStringStatement(this.statement);
     }
 
-    public getClassIdentifier(): string {
+    public get classIdentifier(): string {
         return "stringstatementoption";
     }
 }
@@ -491,7 +491,7 @@ export class BooleanStatementOption extends StatementOption<boolean> {
         return this.structogram.createBooleanStatement(this.statement);
     }
 
-    public getClassIdentifier(): string {
+    public get classIdentifier(): string {
         return "booleanstatementoption";
     }
 }
@@ -501,7 +501,7 @@ export class AnyStatementOption extends StatementOption<Value> {
         return this.structogram.createAnyStatement(this.statement);
     }
 
-    public getClassIdentifier(): string {
+    public get classIdentifier(): string {
         return "anystatementoption";
     }
 }
@@ -526,15 +526,13 @@ export class KeyOption extends BlockOption {
         this.value = data[0]!;
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "keyoption";
     }
     
 }
 
 export abstract class StructogramBlock implements ClassIdentifiable, Identifiable {
-    public static readonly childrenChanged = "structogramblock.childrenChanged";
-    public static readonly activeStepChanged = "structogramblock.activeStepChanged";
     protected static idSeq = 0;
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
     protected _associatedStructogram: Structogram;
@@ -544,6 +542,17 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     protected abstract subBlocks: Record<string, StructogramBlock | undefined>;
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
+    /**
+     * It fires when the children or subblocks of a structogramblock changes.
+     * Its arguments are: block: StructogramBlock
+     */
+    public static readonly childrenChanged = "structogramblock.childrenChanged";
+
+    /**
+     * It fires when the active step of the block changes.
+     * Its arguments are: step: string
+     */
+    public static readonly activeStepChanged = "structogramblock.activeStepChanged";
     protected _activeStep: string = "ready";
 
     public get associatedStructogram() {
@@ -585,10 +594,6 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
 
     protected set parent(parent: StructogramBlock | undefined) {
         this._parent = parent;
-    }
-
-    public getID() {
-        return this.id;
     }
 
     public get superBlock() {
@@ -641,18 +646,18 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     }
 
     public abstract run(): StructogramBlock | undefined;
-    public abstract getOptions(): BlockOption[];
-    public abstract getClassIdentifier(): string;
+    public abstract get options(): BlockOption[];
+    public abstract get classIdentifier(): string;
     public abstract parseAndCheckForIssues(): StructogramIssue[];
 
     public getData(): any {
         return {
-            "type": this.getClassIdentifier(),
+            "type": this.classIdentifier,
             "next": this.next?.getData(),
             "subBlocks": Object.entries(this.subBlocks).map(entry => {
                 return {"key": entry[0], "block": entry[1]?.getData()};
             }),
-            "options": this.getOptions().map(option => {
+            "options": this.options.map(option => {
                 return {"name": option.name, "value": option.getRawValues()};
             })
         };
@@ -673,7 +678,7 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
         public static constructFromData(data: any, structogram: Structogram): StructogramBlock {
             const block = this.typeToFactory[data["type"]]!(structogram);
             const optionsData = data["options"];
-            for(const option of block.getOptions()) {
+            for(const option of block.options) {
                 for(const optionData of optionsData) {
                     if(option.name == optionData["name"]) {
                         option.setRawValues(optionData["value"]);
@@ -745,11 +750,11 @@ export class AssignmentBlock extends SequenceBlock {
         return this.next;
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "assignmentblock";
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.keyOption, this.statementOption];
     }
 
@@ -827,11 +832,11 @@ export class ControlBlock extends SequenceBlock {
         return this.next;
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "controlblock";
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.statementOption];
     }
 
@@ -864,11 +869,11 @@ export class PrintBlock extends SequenceBlock {
         return this.next;
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "printblock";
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.statementOption];
     }
 
@@ -900,7 +905,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         "true": undefined,
         "false": undefined
     };
-    public state: TrueFalseBranchingBlockStates = "ready";
+    private state: TrueFalseBranchingBlockStates = "ready";
     public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition", "the condition");
 
     constructor(structogram: Structogram) {
@@ -940,11 +945,11 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         this.subBlocks["false"] = block;
     }
 
-    public override getClassIdentifier() {
+    public override get classIdentifier() {
         return "truefalsebranchingblock";
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.conditionOption];
     }
 
@@ -983,7 +988,7 @@ export class MultiBranchingBlock extends BracketBlock {
         for(let i = 0; i < statementCount; i++) {
             if(!("branch"+i in this.subBlocks)) {
                 this.subBlocks["branch"+i] = undefined;
-                this.emitter.emit(StructogramBlock.childrenChanged);
+                this.emitter.emit(StructogramBlock.childrenChanged, this);
             }
         }
     }
@@ -995,7 +1000,7 @@ export class MultiBranchingBlock extends BracketBlock {
             for(let i = statementCount; i < branchCount; i++) {
                 if("branch"+i in this.subBlocks) {
                     delete this.subBlocks["branch"+i];
-                    this.emitter.emit(StructogramBlock.childrenChanged);
+                    this.emitter.emit(StructogramBlock.childrenChanged, this);
                 }
             }
         }
@@ -1035,11 +1040,11 @@ export class MultiBranchingBlock extends BracketBlock {
         return super.getOrderedSubBlocks().sort((e1, e2) => e1[0]!.localeCompare(e2[0]!));
     }
 
-    public override getClassIdentifier() {
+    public override get classIdentifier() {
         return "multibranchingblock";
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.conditionListOption];
     }
 
@@ -1140,11 +1145,11 @@ export class CountingLoopBlock extends LoopBlock {
         return this.next;
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.variableKeyOption, this.fromOption, this.toOption, this.stepOption];
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "countingloopblock";
     }
 
@@ -1193,7 +1198,7 @@ export abstract class ConditionalLoopBlock extends LoopBlock {
         super(structogram);
     }
 
-    public override getOptions(): BlockOption[] {
+    public override get options(): BlockOption[] {
         return [this.conditionOption];
     }
 
@@ -1222,7 +1227,7 @@ export class FrontTestingLoopBlock extends ConditionalLoopBlock {
         return this.next;
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "fronttestingloopblock";
     }
 }
@@ -1245,7 +1250,7 @@ export class BackTestingLoopBlock extends ConditionalLoopBlock {
         return this.next;
     }
 
-    public override getClassIdentifier(): string {
+    public override get classIdentifier(): string {
         return "backtestingloopblock";
     }
 }

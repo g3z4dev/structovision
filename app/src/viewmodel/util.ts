@@ -129,7 +129,7 @@ export class ResourceManager {
 
     public getHTMLForObject(object: ClassIdentifiable | undefined) {
         if(object) {
-            return this.getHTMLFor(object.getClassIdentifier());
+            return this.getHTMLFor(object.classIdentifier);
         }
         return this.getHTMLFor("undefined");
     }

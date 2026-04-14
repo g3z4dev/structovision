@@ -3,7 +3,7 @@ import EventEmitter2 from "eventemitter2";
 export type Primitive = number | boolean | string;
 
 export interface ClassIdentifiable {
-    getClassIdentifier(): string;
+    get classIdentifier(): string;
 }
 
 export interface Value {
@@ -260,7 +260,7 @@ export class UtilityObjectTemplate {
     private readonly id: string;
     private fields: Field[];
 
-    private constructor(id: string, fields: Field[]) {
+    protected constructor(id: string, fields: Field[]) {
         this.id = id;
         this.fields = fields;
     }

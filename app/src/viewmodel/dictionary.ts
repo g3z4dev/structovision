@@ -3,13 +3,13 @@ import EventEmitter2 from "eventemitter2";
 export abstract class Dictionary {
     protected abstract get typeFromTo(): Record<string, string>;
     protected abstract get textDictionary(): Record<string, string>;
-
     protected get typeToFrom() {
         return Object.entries(this.typeFromTo).reduce((acc, cur) => {
             acc[cur[1]!] = cur[0]!
             return acc;
         }, {} as Record<string, string>);
     }
+
 
     public translateType(type: string): string {
         Object.entries(this.typeFromTo).forEach(entry => type = type.replace(entry[0]!, entry[1]!));
@@ -29,8 +29,6 @@ export abstract class Dictionary {
     public translate(key: string): string {
         return this.textDictionary[key] ?? key;
     }
-
-    public abstract getFlag(): string;
 }
 
 export class EnglishDictionary extends Dictionary {
@@ -104,10 +102,6 @@ export class EnglishDictionary extends Dictionary {
         "error_duplicate_key": "Duplicate key was used for variable definition!",
         "error_operator_location": "Operator was used at the wrong location!",
         "structogram-else": "else"
-    }
-
-    public override getFlag(): string {
-        return "en_flag.png"
     }
 }
 
@@ -183,10 +177,6 @@ export class HungarianDictionary extends Dictionary {
         "error_operator_location": "Rossz helyen használt operátor!",
         "structogram-else": "különben"
     }
-
-    public override getFlag(): string {
-        return "hu_flag.png"
-    }
 }
 
 export type Language = "hu" | "en";
@@ -199,8 +189,14 @@ export class Translator {
     private static _language: Language = "hu";
     private static languageButtons = document.querySelectorAll(".t-language-button") as NodeListOf<HTMLButtonElement>;
     public static readonly emitter = new EventEmitter2();
+
+    /**
+     * It fires when the language changes.
+     * It has no arguments.
+     */
     public static readonly languageChanged = "translator.language.changed";
-    public static listenerFN: () => void;
+    
+    private static listenerFN: () => void;
 
     public static set language(language: Language) {
         this._language = language;
@@ -260,4 +256,6 @@ export class Translator {
             Translator.language = localStorage["language"]!;
         }
     }
+
+    private constructor() {}
 }

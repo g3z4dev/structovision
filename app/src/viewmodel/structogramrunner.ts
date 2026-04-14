@@ -27,6 +27,11 @@ export class StructogramRunner extends StructogramRenderer {
     public readonly timeControl = new TimeControl(this);
     public readonly programViewManager = new ProgramViewManager(this);
     private runMode: RunMode = "paused";
+
+    /**
+     * It fires when the running of the structogram is finished.
+     * It has no arguments.
+     */
     public static readonly runFinished = "structogramrunner.finished";
 
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
@@ -155,6 +160,7 @@ export class StructogramRunner extends StructogramRenderer {
             this.runResultsWindow.addEntry(key + " = " + value.asString());
         }
         this.runResultsWindow.show();
+        this.runMode = "paused";
         this.emitter.emit(StructogramRunner.runFinished);
     }
 
@@ -306,14 +312,14 @@ class TimeControl {
 }
 
 class ProgramViewSettings {
-    public readonly viewManager: ProgramViewManager;
-    public readonly settingWindow = document.querySelector("#view-settings") as HTMLElement;
-    public readonly settingsButton = document.querySelector("#view-settings-button") as HTMLButtonElement;
-    public readonly settingsDoneButton = document.querySelector("#view-settings-done") as HTMLButtonElement;
-    public readonly outputVisibleInput = this.settingWindow.querySelector("#view-settings-logs-visible") as HTMLInputElement;
-    public readonly memoryVisibleInput = this.settingWindow.querySelector("#view-settings-memory-visible") as HTMLInputElement;
-    public readonly logicVisibleInput = this.settingWindow.querySelector("#view-settings-logic-visible") as HTMLInputElement;
-    public readonly objectsVisibleInput = this.settingWindow.querySelector("#view-settings-objects-visible") as HTMLInputElement;
+    private readonly viewManager: ProgramViewManager;
+    private readonly settingWindow = document.querySelector("#view-settings") as HTMLElement;
+    private readonly settingsButton = document.querySelector("#view-settings-button") as HTMLButtonElement;
+    private readonly settingsDoneButton = document.querySelector("#view-settings-done") as HTMLButtonElement;
+    private readonly outputVisibleInput = this.settingWindow.querySelector("#view-settings-logs-visible") as HTMLInputElement;
+    private readonly memoryVisibleInput = this.settingWindow.querySelector("#view-settings-memory-visible") as HTMLInputElement;
+    private readonly logicVisibleInput = this.settingWindow.querySelector("#view-settings-logic-visible") as HTMLInputElement;
+    private readonly objectsVisibleInput = this.settingWindow.querySelector("#view-settings-objects-visible") as HTMLInputElement;
 
     constructor(viewModel: ViewModel, viewManager: ProgramViewManager) {
         this.viewManager = viewManager;
@@ -371,7 +377,7 @@ class ProgramViewManager {
     public readonly memoryView: MemoryView;
     public readonly logicView: LogicView;
     public readonly objectView: ObjectView;
-    public readonly settings: ProgramViewSettings;
+    private readonly settings: ProgramViewSettings;
 
     constructor(runner: StructogramRunner) {
         this.outputView = new OutputView(runner);
@@ -634,6 +640,11 @@ abstract class ObjectRenderer {
         }
     };
     public static readonly emitter = new EventEmitter2();
+
+    /**
+     * It fires when the height of the renderer changes.
+     * It has no arguments.
+     */
     public static readonly heightChanged = "objectrenderer.heightchange";
 
     public get height() {
@@ -1304,8 +1315,8 @@ class ArrayRenderer extends ObjectRenderer {
 
 class ObjectView extends ProgramView implements AnimatedView {
     private objectCanvas: HTMLCanvasElement;
-    public readonly selectorsField: HTMLInputElement;
     private renderers: ObjectRenderer[];
+    public readonly selectorsField: HTMLInputElement;
     public get selectors(): string[] {
         return this.selectorsField.value.split(",");
     }
