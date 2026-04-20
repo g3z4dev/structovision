@@ -21,6 +21,7 @@ export class StructogramRunner extends StructogramRenderer {
     private _activeBlockStep: string | undefined;
     private prepared: boolean = false;
     private readonly inputDataElem = document.querySelector("#input-data") as HTMLElement;
+    private previousInput = {};
     private readonly runIssueWindow = new ListWindow("issues", "issues-ok");
     private readonly runResultsWindow = new ListWindow("results", "results-ok");
     public readonly emitter = new EventEmitter2();
@@ -93,21 +94,26 @@ export class StructogramRunner extends StructogramRenderer {
     private addInputEntry(key: string, type: ValueType) {
         const entry = parseIntoHTML(inputDataEntryTemplate);
         setTemplateText(entry, "key", `${key}: ${Translator.getDictionary().translateType(type.id)}`);
-        entry.querySelector("input[type=\"text\"]")!.addEventListener("change", () => {
+        const textField = entry.querySelector("input[type=\"text\"]") as HTMLInputElement;
+        textField.addEventListener("change", () => {
             this.viewModel.saveCache();
         })
+        textField.dataset["variableKey"] = key;
         this.inputDataElem.appendChild(entry);
         this.inputDataElem.classList.remove("hidden");
     }
 
-    private getInputs(): string[] {
-        return [...this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>].map(n => n.value);
+    private getInputs(): Record<string, string> {
+        return [...this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLInputElement>].reduce((acc, cur) => {
+            acc[cur.dataset["variableKey"]!] = cur.value;
+            return acc;
+        }, {} as Record<string, string>);
     }
 
-    private setInputs(inputs: string[]) {
+    private setInputs(inputs: Record<string, string>) {
         const fields = this.inputDataElem.querySelectorAll(".t-data") as NodeListOf<HTMLFormElement>;
-        for(let i = 0; i < inputs.length; i++) {
-            fields[i]!.value = inputs[i]!;
+        for(const field of fields) {
+            field!.value = inputs[field.dataset["variableKey"]!] ?? "";
         }
     }
 
@@ -119,7 +125,7 @@ export class StructogramRunner extends StructogramRenderer {
     }
 
     public loadData(data: any) {
-        this.setInputs(data["inputs"] ?? []);
+        this.setInputs(data["inputs"] ?? {});
         this.programViewManager.loadData(data["program_view_data"] ?? {});
     }
 
@@ -130,8 +136,11 @@ export class StructogramRunner extends StructogramRenderer {
         }
         structogram.emitter.addListener(Structogram.inputSpecificationEvent, (key, type) => {
             this.addInputEntry(key, type);
+            this.setInputs(this.previousInput);
+            this.viewModel.saveCache();
         });
         structogram.emitter.addListener(Structogram.specificationClearEvent, () => {
+            this.previousInput = this.getInputs();
             this.inputDataElem.textContent = "";
         });
         this.programViewManager.objectView.selectorsField.addEventListener("change", () => {
@@ -140,7 +149,6 @@ export class StructogramRunner extends StructogramRenderer {
     }
 
     private prepareRunning(): boolean {
-        this.programViewManager.reset();
         const issues = this.structogram.preRun(this.getInputs());
         if(issues.length > 0) {
             for(const issue of issues) {
@@ -150,6 +158,7 @@ export class StructogramRunner extends StructogramRenderer {
             this.runIssueWindow.show();
             return false;
         }
+        this.programViewManager.reset();
         this.prepared = true;
         return true;
     }
@@ -623,9 +632,9 @@ function getTextWidth(canvas: HTMLCanvasElement, text: string) {
 abstract class ObjectRenderer {
     protected objectCanvas: HTMLCanvasElement;
     protected objectBaseIdentifier: string;
-    protected allObjectsByMemoryKey: Record<string, Value>;
-    protected allObjectsByID: Record<string, Value>;
-    protected idToMemoryKey: Record<string, Set<string>>;
+    protected allObjectsByMemoryKey: Record<string, Value> = {};
+    protected allObjectsByID: Record<string, Value> = {};
+    protected idToMemoryKey: Record<string, Set<string>> = {};
     protected memory: Memory;
     protected selectors: string[];
     private _height = 0;
@@ -670,20 +679,15 @@ abstract class ObjectRenderer {
         this.objectBaseIdentifier = objectBaseIdentifier;
         this.selectors = selectors;
         this.memory = memory;
-        this.idToMemoryKey = {};
-        this.allObjectsByMemoryKey = memory.getAllValuesWithBaseIdentifier(objectBaseIdentifier).reduce((acc, cur) => {
-            acc[cur.key] = cur.value;
-            this.idToMemoryKey[cur.value.id] = new Set([cur.key]);
-            return acc;
-        }, {} as Record<string, Value>);
-        this.allObjectsByID = Object.values(this.allObjectsByMemoryKey).reduce((acc, cur) => {
-            acc[cur.id] = cur;
-            return acc;
-        }, {} as Record<string, Value>);
+        this.reset();
         this.reloadObjects();
+        this.setupListeners();
+    }
+
+    private setupListeners() {
         this.memory.emitter.on(Memory.variableChangedEvent, (key: string, _prevValue: Value, value: Value) => {
             const prevValue = this.allObjectsByMemoryKey[key];
-            if(value.type.baseIdentifier == objectBaseIdentifier) {
+            if(value.type.baseIdentifier == this.objectBaseIdentifier) {
                 this.allObjectsByMemoryKey[key] = value;
                 if(value.type.isDefined()) {
                     this.allObjectsByID[value.id] = value;
@@ -702,23 +706,23 @@ abstract class ObjectRenderer {
             }
         });
         UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, _key: string, value: Value) => {
-            if(value.type.baseIdentifier == objectBaseIdentifier) {
+            if(value.type.baseIdentifier == this.objectBaseIdentifier) {
                 this.allObjectsByID[value.id] = value;
             }
-            if(object.type.baseIdentifier == objectBaseIdentifier) {
+            if(object.type.baseIdentifier == this.objectBaseIdentifier) {
                 this.objectReloadQueued = true;
             }
         });
         UtilityArray.emitter.addListener(UtilityArray.elementChanged, (object: UtilityObject, _idx: number, value: Value) => {
-            if(value.type.baseIdentifier == objectBaseIdentifier) {
+            if(value.type.baseIdentifier == this.objectBaseIdentifier) {
                 this.allObjectsByID[value.id] = value;
             }
-            if(object.type.baseIdentifier == objectBaseIdentifier) {
+            if(object.type.baseIdentifier == this.objectBaseIdentifier) {
                 this.objectReloadQueued = true;
             }
         });
         UtilityArray.emitter.addListener(UtilityArray.elementSwapped, (object: UtilityObject) => {
-            if(object.type.baseIdentifier == objectBaseIdentifier) {
+            if(object.type.baseIdentifier == this.objectBaseIdentifier) {
                 this.objectReloadQueued = true;
             }
         });
@@ -739,9 +743,16 @@ abstract class ObjectRenderer {
     }
 
     public reset() {
-        this.allObjectsByID = {};
-        this.allObjectsByMemoryKey = {};
         this.idToMemoryKey = {};
+        this.allObjectsByMemoryKey = this.memory.getAllValuesWithBaseIdentifier(this.objectBaseIdentifier).reduce((acc, cur) => {
+            acc[cur.key] = cur.value;
+            this.idToMemoryKey[cur.value.id] = new Set([cur.key]);
+            return acc;
+        }, {} as Record<string, Value>);
+        this.allObjectsByID = Object.values(this.allObjectsByMemoryKey).reduce((acc, cur) => {
+            acc[cur.id] = cur;
+            return acc;
+        }, {} as Record<string, Value>);
     }
 }
 
@@ -905,7 +916,7 @@ class S1LRenderer extends ObjectRenderer {
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override reloadObjects() {
+    private findIndependentRoots() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of this.selectedObjects as UtilityObject[]) {
@@ -923,8 +934,10 @@ class S1LRenderer extends ObjectRenderer {
                 child = child.get("next");
             }
         }
-        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
-        const allNodes: UtilityObject[] = [];
+        return [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
+    }
+
+    private createOrUpdateNodes(independentRoots: UtilityObject[]) {
         let yOffset = this.y;
         const newRegistry: Record<string, S1LRenderData> = {};
         for(const ir of independentRoots) {
@@ -937,7 +950,6 @@ class S1LRenderer extends ObjectRenderer {
 
             let xOffset = 0;
             for(const node of nodes) {
-                allNodes.push(node);
                 if(node.id in this.nodeRegistry) {
                     const data = this.nodeRegistry[node.id]!;
                     data.targetX = xOffset;
@@ -953,21 +965,34 @@ class S1LRenderer extends ObjectRenderer {
             }
             yOffset += this.nodeHeight + this.nodeYSpacing;
         }
-
-        for(const node of allNodes) {
-            if(node.get("next") instanceof UtilityObject) {
-                newRegistry[node.id]!.next = newRegistry[node.get("next").id];
-            } else {
-                newRegistry[node.id]!.next = undefined;
-            }
-        }
+        this.nodeRegistry = newRegistry;
 
         if(yOffset > this.y) {
             this.height = (yOffset-this.y)+this.nodeHeight;
         } else {
             this.height = 0;
         }
-        this.nodeRegistry = newRegistry;
+    }
+
+    private updateLinks() {
+        const allNodes = Object.entries(this.nodeRegistry);
+        for(const [id, data] of allNodes) {
+            const node = this.allObjectsByID[id]!;
+            if(node instanceof UtilityObject) {
+                const next = node.get("next")!;
+                if(next instanceof UtilityObject) {
+                    data.next = this.nodeRegistry[next.id];
+                } else {
+                    data.next = undefined;
+                }
+            }
+        }
+    }
+
+    public override reloadObjects() {
+        const independentRoots: UtilityObject[] = this.findIndependentRoots();
+        this.createOrUpdateNodes(independentRoots);
+        this.updateLinks();
     }
 }
 
@@ -1020,7 +1045,7 @@ class S2LRenderer extends ObjectRenderer {
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override reloadObjects() {
+    private findIndependentRoots() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of this.selectedObjects as UtilityObject[]) {
@@ -1038,7 +1063,10 @@ class S2LRenderer extends ObjectRenderer {
                 child = child.get("next");
             }
         }
-        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
+        return [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
+    }
+
+    private createOrUpdateNodes(independentRoots: UtilityObject[]) {
         let yOffset = this.y;
         const newRegistry: Record<string, S2LRenderData> = {};
         const allNodes: UtilityObject[] = [];
@@ -1071,28 +1099,39 @@ class S2LRenderer extends ObjectRenderer {
             yOffset += this.nodeHeight + this.nodeYSpacing;
         }
 
-        for(const node of allNodes) {
-            const data = newRegistry[node.id]!;
-            const prev = node.get("prev")!;
-            if(prev instanceof UtilityObject) {
-                data.prev = newRegistry[prev.id];
-            } else {
-                newRegistry[node.id]!.prev = undefined;
-            }
-            const next = node.get("next")!;
-            if(next instanceof UtilityObject) {
-                data.next = newRegistry[next.id];
-            } else {
-                newRegistry[node.id]!.next = undefined;
-            }
-        }
-
         if(yOffset > this.y) {
             this.height = (yOffset-this.y)+this.nodeHeight;
         } else {
             this.height = 0;
         }
         this.nodeRegistry = newRegistry;
+    }
+
+    private updateLinks() {
+        const allNodes = Object.entries(this.nodeRegistry);
+        for(const [id, data] of allNodes) {
+            const node = this.allObjectsByID[id]!;
+            if(node instanceof UtilityObject) {
+                const prev = node.get("prev")!;
+                if(prev instanceof UtilityObject) {
+                    data.prev = this.nodeRegistry[prev.id];
+                } else {
+                    data.prev = undefined;
+                }
+                const next = node.get("next")!;
+                if(next instanceof UtilityObject) {
+                    data.next = this.nodeRegistry[next.id];
+                } else {
+                    data.next = undefined;
+                }
+            }
+        }
+    }
+
+    public override reloadObjects() {
+        const independentRoots: UtilityObject[] = this.findIndependentRoots();
+        this.createOrUpdateNodes(independentRoots);
+        this.updateLinks();
     }
 }
 
@@ -1147,7 +1186,7 @@ class BTNRenderer extends ObjectRenderer {
         this.nodes.forEach(r => r.render(progress));
     }
 
-    public override reloadObjects() {
+    private findIndependentRoots() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
         for(const node of this.selectedObjects as UtilityObject[]) {
@@ -1168,7 +1207,10 @@ class BTNRenderer extends ObjectRenderer {
                 }
             }
         }
-        const independentRoots: UtilityObject[] = [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
+        return [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
+    }
+
+    private createOrUpdateNodes(independentRoots: UtilityObject[]) {
         let yOffset = this.y;
         const newRegistry: Record<string, BTNRenderData> = {};
         const allNodes: UtilityObject[] = [];
@@ -1274,6 +1316,33 @@ class BTNRenderer extends ObjectRenderer {
             this.height = 0;
         }
         this.nodeRegistry = newRegistry;
+    }
+
+    private updateLinks() {
+        const allNodes = Object.entries(this.nodeRegistry);
+        for(const [id, data] of allNodes) {
+            const node = this.allObjectsByID[id]!;
+            if(node instanceof UtilityObject) {
+                const left = node.get("left")!;
+                if(left instanceof UtilityObject) {
+                    data.left = this.nodeRegistry[left.id];
+                } else {
+                    data.left = undefined;
+                }
+                const right = node.get("right")!;
+                if(right instanceof UtilityObject) {
+                    data.right = this.nodeRegistry[right.id];
+                } else {
+                    data.right = undefined;
+                }
+            }
+        }
+    }
+
+    public override reloadObjects() {
+        const independentRoots: UtilityObject[] = this.findIndependentRoots();
+        this.createOrUpdateNodes(independentRoots);
+        this.updateLinks();
     }
 }
 

@@ -179,6 +179,7 @@ export class HungarianDictionary extends Dictionary {
     }
 }
 
+const supportedLanguages = ["hu", "en"];
 export type Language = "hu" | "en";
 const langToTranslation: Record<string, Dictionary> = {
     "en": new EnglishDictionary(),
@@ -250,8 +251,12 @@ export class Translator {
             Translator.translateElementsIn(document);
         });
         if(!localStorage["language"]) {
-            localStorage["language"] = navigator.language;
-            Translator.language = navigator.language as Language;
+            let lang = navigator.language.split("-")[0]!;
+            if(!supportedLanguages.includes(lang)) {
+                lang = "en";
+            }
+            localStorage["language"] = lang;
+            Translator.language = lang as Language;
         } else {
             Translator.language = localStorage["language"]!;
         }

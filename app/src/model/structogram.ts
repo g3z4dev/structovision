@@ -154,20 +154,20 @@ export class Structogram {
         this._currentBlock = currentBlock;
     }
 
-    private createVariables(input: string[]): StructogramIssue[] {
+    private createVariables(input: Record<string, string>): StructogramIssue[] {
         const issues = [];
-        if(input.length != this.inputData.length) {
+        if(Object.entries(input).length != this.inputData.length) {
             return [new StructogramIssue("specification", "Missing inputs!", "error_specification_input_missing")]
         }
         const usedKeys = new Set<string>();
-        for(let i = 0; i < input.length; i++) {
+        for(let i = 0; i < this.inputData.length; i++) {
             const [key, type] = this.inputData[i]!;
             if(usedKeys.has(key)) {
                 return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!", "error_specification_duplicate")]
             }
             usedKeys.add(key);
             try {
-                const statement = AnyStatement.parse(input[i]!, this.memory, this.indexResolver);
+                const statement = AnyStatement.parse(input[key]!, this.memory, this.indexResolver);
                 if(!type.matches(statement.returnType)) {
                     issues.push(new StructogramIssue("specification", "Wrong type returned by statement given to input data!", "error_specification_input_type"));
                 } else {
@@ -211,7 +211,7 @@ export class Structogram {
         return issues;
     }
 
-    public preRun(input: string[] = []): StructogramIssue[] {
+    public preRun(input: Record<string, string> = {}): StructogramIssue[] {
         this.memory.clear();
         const issues = this.createVariables(input);
         issues.push(...Object.values(this.idMap).map(block => block.parseAndCheckForIssues()).flat());

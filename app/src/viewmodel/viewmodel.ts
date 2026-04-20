@@ -17,6 +17,7 @@ export class ViewModel {
 
     private set structogramWidth(width: number) {
         this._structogramWidth = Math.max(Math.min(width, 8096), 128);
+        this.widthInput.value = this._structogramWidth.toString();
         this.structogramBuilder.updateHTML();
         this.structogramRunner.updateHTML();
         this.saveCache();
@@ -24,6 +25,7 @@ export class ViewModel {
 
     public readonly structogramBuilder;
     public readonly structogramRunner;
+    public readonly widthInput;
     private readonly switchToBuilderButton = document.querySelector("#switch-to-builder-button") as HTMLButtonElement;
     private readonly switchToRunnerButton = document.querySelector("#switch-to-runner-button") as HTMLButtonElement;
     protected issues: StructogramIssue[] = [];
@@ -68,6 +70,7 @@ export class ViewModel {
                 this.mode = "runner";
             }
         });
+        this.widthInput = document.querySelector("#structogram-width") as HTMLInputElement;
         Translator.setupTranslation();
         this.loadCache();
         this.setupPersistenceButtons();
@@ -83,7 +86,7 @@ export class ViewModel {
 
     private loadData(data: any) {
         this.structogram.loadData(data["structogram"]);
-        this.structogramWidth = data["structogram_width"];
+        this.structogramWidth = data["structogram_width"] ?? 1024;
         this.structogramRunner.loadData(data["rundata"]);
     }
 
@@ -98,11 +101,9 @@ export class ViewModel {
     }
     
     private setupStructogramWidthHandling() {
-        const widthInput = document.querySelector("#structogram-width") as HTMLInputElement;
-        widthInput.value = this.structogramWidth.toString();
-        widthInput.addEventListener("change", () => {
-            this.structogramWidth = Number(widthInput.value);
-            widthInput.value = this.structogramWidth.toString();
+        this.widthInput.value = this.structogramWidth.toString();
+        this.widthInput.addEventListener("change", () => {
+            this.structogramWidth = Number(this.widthInput.value);
         });
     }
 
@@ -137,6 +138,7 @@ export class ViewModel {
                         try {
                             const data = JSON.parse(readerEvent.target.result as string);
                             this.loadData(data);
+                            this.saveCache();
                         } catch (error) {
                             alert("Structogram failed to load! Invalid format!");
                             this.structogram.reset();
@@ -159,6 +161,7 @@ export class ViewModel {
                 this.loadData(JSON.parse(data));
             } catch (error) {
                 alert("Cache failed to load!");
+                console.log(error);
                 this.structogram.reset();
             }
         }
