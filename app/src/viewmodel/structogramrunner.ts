@@ -140,6 +140,7 @@ export class StructogramRunner extends StructogramRenderer {
     }
 
     private prepareRunning(): boolean {
+        this.programViewManager.reset();
         const issues = this.structogram.preRun(this.getInputs());
         if(issues.length > 0) {
             for(const issue of issues) {
@@ -149,7 +150,6 @@ export class StructogramRunner extends StructogramRenderer {
             this.runIssueWindow.show();
             return false;
         }
-        this.programViewManager.reset();
         this.prepared = true;
         return true;
     }
@@ -657,6 +657,14 @@ abstract class ObjectRenderer {
         ObjectRenderer.emitter.emit(ObjectRenderer.heightChanged);
     }
 
+    protected get selectedObjects(): Value[] {
+        return this.selectedObjectsWithKey.map(e => e[1]!) as Value[];
+    } 
+    
+    protected get selectedObjectsWithKey(): [string, Value][] {
+        return Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!)) as [string, Value][];
+    }
+
     constructor(objectCanvas: HTMLCanvasElement, objectBaseIdentifier: string, selectors: string[], memory: Memory) {
         this.objectCanvas = objectCanvas;
         this.objectBaseIdentifier = objectBaseIdentifier;
@@ -890,7 +898,6 @@ class S1LRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "s1l", selectors, memory);
-        this.reloadObjects();
     }
 
     public override render(progress: number): void {
@@ -901,7 +908,7 @@ class S1LRenderer extends ObjectRenderer {
     public override reloadObjects() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
-        for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
+        for(const node of this.selectedObjects as UtilityObject[]) {
             if(node.type.isUndefined()) continue;
             if(childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
@@ -1006,7 +1013,6 @@ class S2LRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "s2l", selectors, memory);
-        this.reloadObjects();
     }
 
     public override render(progress: number): void {
@@ -1017,7 +1023,7 @@ class S2LRenderer extends ObjectRenderer {
     public override reloadObjects() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
-        for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
+        for(const node of this.selectedObjects as UtilityObject[]) {
             if(node.type.isUndefined()) continue;
             if(node.get("prev").type.isDefined() || childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
@@ -1134,7 +1140,6 @@ class BTNRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "btn", selectors, memory);
-        this.reloadObjects();
     }
 
     public override render(progress: number): void {
@@ -1145,7 +1150,7 @@ class BTNRenderer extends ObjectRenderer {
     public override reloadObjects() {
         const rootNodeSet = new Set<string>();
         const childNodeSet = new Set<string>();
-        for(const node of Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityObject).map(e => e[1]!) as UtilityObject[]) {
+        for(const node of this.selectedObjects as UtilityObject[]) {
             if(node.type.isUndefined()) continue;
             if(node.get("parent").type.isDefined() || childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
@@ -1306,7 +1311,6 @@ class ArrayRenderer extends ObjectRenderer {
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "array", selectors, memory);
-        this.reloadObjects();
     }
 
     public override render(progress: number): void {
@@ -1315,7 +1319,7 @@ class ArrayRenderer extends ObjectRenderer {
     }
 
     public override reloadObjects() {
-        const arraysWithKey: [string,UtilityArray][] = Object.entries(this.allObjectsByMemoryKey).filter(e => this.selectors.includes(e[0]!) && e[1] instanceof UtilityArray).map(e => [e[0]!, e[1]!]) as [string, UtilityArray][];
+        const arraysWithKey: [string,UtilityArray][] = this.selectedObjectsWithKey as [string, UtilityArray][];
         let yOffset = this.y;
         const newRegistry: Record<string, ArrayElementRenderData> = {};
         for(const [key, array] of arraysWithKey) {
