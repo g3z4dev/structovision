@@ -38,7 +38,7 @@ export class Memory {
 
     /**
      * Fired when a variable is accessed.
-     * Its arguments are: entry: key: string
+     * Its arguments are: key: string, value: Value
      */
     public static readonly variableAccessedEvent: string = "memory.variable.accessed";
 
@@ -100,7 +100,7 @@ export class Memory {
 
     public getVariable(key: string): Value {
         if(key in this.variables) {
-            this.emitter.emit(Memory.variableAccessedEvent, key);
+            this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
             return this.variables[key]!.value;
         }
         
@@ -117,7 +117,7 @@ export class Memory {
 
     public getType(key: string): ValueType {
         if(key in this.variables) {
-            this.emitter.emit(Memory.variableAccessedEvent, key);
+            this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
             return this.variables[key]!.type;
         }
         
@@ -130,7 +130,7 @@ export class Memory {
 
     public isConstant(key: string): boolean {
         if(key in this.variables) {
-            this.emitter.emit(Memory.variableAccessedEvent, key);
+            this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
             return this.variables[key]!.constant;
         }
         

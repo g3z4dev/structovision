@@ -413,6 +413,7 @@ class ProgramViewManager {
         this.outputView.clearEffects();
         this.memoryView.clearEffects();
         this.logicView.clearEffects();
+        this.objectView.clearEffects();
     }
 
     public reset() {
@@ -629,7 +630,8 @@ function getTextWidth(canvas: HTMLCanvasElement, text: string) {
     return canvas.getContext("2d")!.measureText(text).width;
 }
 
-abstract class ObjectRenderer {
+abstract class ObjectRenderer<T extends NodeRenderData> {
+    protected nodeRegistry: Record<string, T> = {};
     protected objectCanvas: HTMLCanvasElement;
     protected objectBaseIdentifier: string;
     protected allObjectsByMemoryKey: Record<string, Value> = {};
@@ -649,6 +651,10 @@ abstract class ObjectRenderer {
             this.reloadObjects();
         }
     };
+    protected get nodes() {
+        return Object.values(this.nodeRegistry);
+    }
+
     public static readonly emitter = new EventEmitter2();
 
     /**
@@ -682,6 +688,7 @@ abstract class ObjectRenderer {
         this.reset();
         this.reloadObjects();
         this.setupListeners();
+        this.setupEffectHandling();
     }
 
     private setupListeners() {
@@ -754,6 +761,81 @@ abstract class ObjectRenderer {
             return acc;
         }, {} as Record<string, Value>);
     }
+
+    protected setupEffectHandling() {
+        UtilityObject.emitter.addListener(UtilityObject.fieldAccessed, (object: UtilityObject, _fieldName: string, fieldValue: Value) => {
+            if(object.type.baseIdentifier == this.objectBaseIdentifier) {
+                if(fieldValue.id in this.nodeRegistry) {
+                    this.nodeRegistry[fieldValue.id]!.highlighted = true;
+                }
+                if(object.id in this.nodeRegistry) {
+                    this.nodeRegistry[object.id]!.highlighted = true;
+                }
+            }
+        });
+        UtilityObject.emitter.addListener(UtilityObject.fieldChanged, (object: UtilityObject, _fieldName: string, fieldValue: Value) => {
+            if(object.type.baseIdentifier == this.objectBaseIdentifier) {
+                if(fieldValue.id in this.nodeRegistry) {
+                    this.nodeRegistry[fieldValue.id]!.highlighted = true;
+                }
+                if(object.id in this.nodeRegistry) {
+                    this.nodeRegistry[object.id]!.highlighted = true;
+                }
+            }
+        });
+        UtilityArray.emitter.addListener(UtilityArray.elementAccessed, (array: UtilityArray, _idx: number, elementValue: Value) => {
+            if(array.type.baseIdentifier == this.objectBaseIdentifier) {
+                if(elementValue.id in this.nodeRegistry) {
+                    this.nodeRegistry[elementValue.id]!.highlighted = true;
+                }
+                if(array.id in this.nodeRegistry) {
+                    this.nodeRegistry[array.id]!.highlighted = true;
+                }
+            }
+        });
+        UtilityArray.emitter.addListener(UtilityArray.elementChanged, (array: UtilityArray, _idx: number, elementValue: Value) => {
+            if(array.type.baseIdentifier == this.objectBaseIdentifier) {
+                if(elementValue.id in this.nodeRegistry) {
+                    this.nodeRegistry[elementValue.id]!.highlighted = true;
+                }
+                if(array.id in this.nodeRegistry) {
+                    this.nodeRegistry[array.id]!.highlighted = true;
+                }
+            }
+        });
+        UtilityArray.emitter.addListener(UtilityArray.elementSwapped, (array: UtilityArray, idx1: number, idx2: number) => {
+            if(array.type.baseIdentifier == this.objectBaseIdentifier) {
+                const elem1 = array.indexGet(idx1, true);
+                const elem2 = array.indexGet(idx2, true);
+                if(elem1.id in this.nodeRegistry) {
+                    this.nodeRegistry[elem1.id]!.highlighted = true;
+                }
+                if(elem2.id in this.nodeRegistry) {
+                    this.nodeRegistry[elem2.id]!.highlighted = true;
+                }
+                if(array.id in this.nodeRegistry) {
+                    this.nodeRegistry[array.id]!.highlighted = true;
+                }
+            }
+        });
+        this.memory.emitter.addListener(Memory.variableAccessedEvent, (_key: string, value: Value) => {
+            if(value.type.baseIdentifier == this.objectBaseIdentifier && value.id in this.nodeRegistry) {
+                this.nodeRegistry[value.id]!.highlighted = true;
+            }
+        });
+        this.memory.emitter.addListener(Memory.variableChangedEvent, (_key: string, _prevValue: Value, value: Value) => {
+            if(value.type.baseIdentifier == this.objectBaseIdentifier && value.id in this.nodeRegistry) {
+                this.nodeRegistry[value.id]!.highlighted = true;
+            }
+        });
+    }
+
+    public clearEffects() {
+        for(const node of this.nodes) {
+            node.highlighted = false;
+            node.finishAnimations();
+        }
+    }
 }
 
 
@@ -780,6 +862,8 @@ abstract class NodeRenderData {
     public w;
     public h;
     private _content: string;
+    public highlighted = false;
+    protected readonly hightlightStyle: string = "LightBlue";
 
     public get content() {
         return this._content;
@@ -816,6 +900,7 @@ abstract class NodeRenderData {
         this._targetY = y;
         this.w = Math.max(NodeRenderData.getNodeWidthWithContent(objectCanvas, content), NodeRenderData.getNodeWidthWithContent(objectCanvas, representation ?? ""));
         this.h = h;
+        this.highlighted = true;
     }
 
     public set targetX(targetX: number) {
@@ -844,6 +929,11 @@ abstract class NodeRenderData {
             this.originY = this.targetY;
         }
         return lerp(this.originY, this.targetY, t);
+    }
+
+    public finishAnimations() {
+        this.originX = this.targetX;
+        this.originY = this.targetY;
     }
 
     protected drawOnlyContent(ctx: CanvasRenderingContext2D, x: number, y: number) {
@@ -883,7 +973,7 @@ class S1LRenderData extends NodeRenderData {
 
     public render(progress: number) {
         const ctx = this.objectCanvas.getContext("2d")!;
-        ctx.fillStyle = "white";
+        ctx.fillStyle = this.highlighted ? this.hightlightStyle : "white";
         const x = this.getX(progress);
         const y = this.getY(progress);
         ctx.fillRect(x, y, this.w, this.h);
@@ -897,15 +987,10 @@ class S1LRenderData extends NodeRenderData {
     }
 }
 
-class S1LRenderer extends ObjectRenderer {
-    private nodeRegistry: Record<string, S1LRenderData> = {};
+class S1LRenderer extends ObjectRenderer<S1LRenderData> {
     private readonly nodeHeight  = 20;
     private readonly nodeXSpacing = 20;
     private readonly nodeYSpacing = 20;
-
-    private get nodes() {
-        return Object.values(this.nodeRegistry);
-    }
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "s1l", selectors, memory);
@@ -923,7 +1008,7 @@ class S1LRenderer extends ObjectRenderer {
             if(node.type.isUndefined()) continue;
             if(childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
-            let child = node.get("next");
+            let child = node.get("next", true);
             while(child.type.isDefined() && child instanceof UtilityObject) {
                 if(rootNodeSet.has(child.id)) {
                     rootNodeSet.delete(child.id);
@@ -931,7 +1016,7 @@ class S1LRenderer extends ObjectRenderer {
                     continue;
                 }
                 childNodeSet.add(child.id);
-                child = child.get("next");
+                child = child.get("next", true);
             }
         }
         return [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
@@ -945,7 +1030,7 @@ class S1LRenderer extends ObjectRenderer {
             let n: Value = ir;
             while(n.type.isDefined() && n instanceof UtilityObject) {
                 nodes.push(n);
-                n = n.get("next");
+                n = n.get("next", true);
             }
 
             let xOffset = 0;
@@ -954,11 +1039,11 @@ class S1LRenderer extends ObjectRenderer {
                     const data = this.nodeRegistry[node.id]!;
                     data.targetX = xOffset;
                     data.targetY = yOffset;
-                    data.content = node.get("key").asString();
+                    data.content = node.get("key", true).asString();
                     data.representation = [...this.idToMemoryKey[node.id] ?? []][0];
                     newRegistry[node.id] = data;
                 } else {
-                    newRegistry[node.id] = new S1LRenderData(node.get("key").asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                    newRegistry[node.id] = new S1LRenderData(node.get("key", true).asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
                     newRegistry[node.id]!.originY += this.nodeHeight;
                 }
                 xOffset += newRegistry[node.id]!.w + this.nodeXSpacing;
@@ -979,7 +1064,7 @@ class S1LRenderer extends ObjectRenderer {
         for(const [id, data] of allNodes) {
             const node = this.allObjectsByID[id]!;
             if(node instanceof UtilityObject) {
-                const next = node.get("next")!;
+                const next = node.get("next", true)!;
                 if(next instanceof UtilityObject) {
                     data.next = this.nodeRegistry[next.id];
                 } else {
@@ -1006,7 +1091,7 @@ class S2LRenderData extends NodeRenderData {
 
     public render(progress: number) {
         const ctx = this.objectCanvas.getContext("2d")!;
-        ctx.fillStyle = "white";
+        ctx.fillStyle = this.highlighted ? this.hightlightStyle : "white";
         const x = this.getX(progress);
         const y = this.getY(progress);
         ctx.fillRect(x, y, this.w, this.h);
@@ -1026,15 +1111,10 @@ class S2LRenderData extends NodeRenderData {
     }
 }
 
-class S2LRenderer extends ObjectRenderer {
-    private nodeRegistry: Record<string, S2LRenderData> = {};
+class S2LRenderer extends ObjectRenderer<S2LRenderData> {
     private readonly nodeHeight = 20;
     private readonly nodeXSpacing = 20;
     private readonly nodeYSpacing = 20;
-
-    private get nodes() {
-        return Object.values(this.nodeRegistry);
-    }
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "s2l", selectors, memory);
@@ -1050,9 +1130,9 @@ class S2LRenderer extends ObjectRenderer {
         const childNodeSet = new Set<string>();
         for(const node of this.selectedObjects as UtilityObject[]) {
             if(node.type.isUndefined()) continue;
-            if(node.get("prev").type.isDefined() || childNodeSet.has(node.id)) continue;
+            if(node.get("prev", true).type.isDefined() || childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
-            let child = node.get("next");
+            let child = node.get("next", true);
             while(child.type.isDefined() && child instanceof UtilityObject) {
                 if(rootNodeSet.has(child.id)) {
                     rootNodeSet.delete(child.id);
@@ -1060,7 +1140,7 @@ class S2LRenderer extends ObjectRenderer {
                     continue;
                 }
                 childNodeSet.add(child.id);
-                child = child.get("next");
+                child = child.get("next", true);
             }
         }
         return [...rootNodeSet].map(id => this.allObjectsByID[id]!) as UtilityObject[];
@@ -1075,7 +1155,7 @@ class S2LRenderer extends ObjectRenderer {
             const nodes: UtilityObject[] = [];
             while(n.type.isDefined() && n instanceof UtilityObject) {
                 nodes.push(n);
-                n = n.get("next");
+                n = n.get("next", true);
             }
 
             let xOffset = 0;
@@ -1086,11 +1166,11 @@ class S2LRenderer extends ObjectRenderer {
                     const data = this.nodeRegistry[node.id]!;
                     data.targetX = xOffset;
                     data.targetY = yOffset;
-                    data.content = node.get("key").asString();
+                    data.content = node.get("key", true).asString();
                     data.representation = [...this.idToMemoryKey[node.id] ?? []][0];
                     newRegistry[node.id] = data;
                 } else {
-                    newRegistry[node.id] = new S2LRenderData(node.get("key").asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                    newRegistry[node.id] = new S2LRenderData(node.get("key", true).asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
                     newRegistry[node.id]!.originY += this.nodeHeight;
                 }
                 xOffset += (newRegistry[node.id]!.w + this.nodeXSpacing);
@@ -1112,13 +1192,13 @@ class S2LRenderer extends ObjectRenderer {
         for(const [id, data] of allNodes) {
             const node = this.allObjectsByID[id]!;
             if(node instanceof UtilityObject) {
-                const prev = node.get("prev")!;
+                const prev = node.get("prev", true)!;
                 if(prev instanceof UtilityObject) {
                     data.prev = this.nodeRegistry[prev.id];
                 } else {
                     data.prev = undefined;
                 }
-                const next = node.get("next")!;
+                const next = node.get("next", true)!;
                 if(next instanceof UtilityObject) {
                     data.next = this.nodeRegistry[next.id];
                 } else {
@@ -1145,7 +1225,7 @@ class BTNRenderData extends NodeRenderData {
 
     public render(progress: number) {
         const ctx = this.objectCanvas.getContext("2d")!;
-        ctx.fillStyle = "white";
+        ctx.fillStyle = this.highlighted ? this.hightlightStyle : "white";
         const x = this.getX(progress);
         const y = this.getY(progress);
         ctx.fillRect(x, y, this.w, this.h);
@@ -1167,15 +1247,10 @@ class BTNRenderData extends NodeRenderData {
 
 type TreeIndicator = "#" | "0";
 
-class BTNRenderer extends ObjectRenderer {
-    private nodeRegistry: Record<string, BTNRenderData> = {};
+class BTNRenderer extends ObjectRenderer<BTNRenderData> {
     private readonly nodeHeight = 20;
     private readonly nodeXSpacing = 20;
     private readonly nodeYSpacing = 20;
-
-    private get nodes() {
-        return Object.values(this.nodeRegistry);
-    }
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "btn", selectors, memory);
@@ -1191,9 +1266,9 @@ class BTNRenderer extends ObjectRenderer {
         const childNodeSet = new Set<string>();
         for(const node of this.selectedObjects as UtilityObject[]) {
             if(node.type.isUndefined()) continue;
-            if(node.get("parent").type.isDefined() || childNodeSet.has(node.id)) continue;
+            if(node.get("parent", true).type.isDefined() || childNodeSet.has(node.id)) continue;
             rootNodeSet.add(node.id);
-            let children = [node.get("left"), node.get("right")];
+            let children = [node.get("left", true), node.get("right", true)];
             while(children.length > 0) {
                 const child = children.shift();
                 if(child instanceof UtilityObject) {
@@ -1203,7 +1278,7 @@ class BTNRenderer extends ObjectRenderer {
                         continue;
                     }
                     childNodeSet.add(child.id);
-                    children.push(child.get("left"), child.get("right"));
+                    children.push(child.get("left", true), child.get("right", true));
                 }
             }
         }
@@ -1230,8 +1305,8 @@ class BTNRenderer extends ObjectRenderer {
                     children.push("#");
                     continue;
                 } else if (child != "0") {
-                    const left = child.get("left");
-                    const right = child.get("right");
+                    const left = child.get("left", true);
+                    const right = child.get("right", true);
                     if(left.type.isUndefined()) {
                         children.push("0");
                     } else if(left instanceof UtilityObject) {
@@ -1256,7 +1331,7 @@ class BTNRenderer extends ObjectRenderer {
             }
 
             let xOffset = 0;
-            let maxNodeWidth = Math.max(...levels.flat().filter(n => n instanceof UtilityObject).map(n => NodeRenderData.getNodeWidthWithContent(this.objectCanvas, n.get("key").asString())));
+            let maxNodeWidth = Math.max(...levels.flat().filter(n => n instanceof UtilityObject).map(n => NodeRenderData.getNodeWidthWithContent(this.objectCanvas, n.get("key", true).asString())));
 
             const treeHeight = levels.length;
             const treeWidth = calcTreeWidth(treeHeight, maxNodeWidth, this.nodeXSpacing);
@@ -1277,11 +1352,11 @@ class BTNRenderer extends ObjectRenderer {
                             const data = this.nodeRegistry[node.id]!;
                             data.targetX = xOffset;
                             data.targetY = yOffset;
-                            data.content = node.get("key").asString();
+                            data.content = node.get("key", true).asString();
                             data.representation = [...this.idToMemoryKey[node.id] ?? []][0];
                             newRegistry[node.id] = data;
                         } else {
-                            newRegistry[node.id] = new BTNRenderData(node.get("key").asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
+                            newRegistry[node.id] = new BTNRenderData(node.get("key", true).asString(), [...this.idToMemoryKey[node.id] ?? []][0], this.objectCanvas, xOffset, yOffset, this.nodeHeight);
                         }
                     }
                     xOffset += step + maxNodeWidth;
@@ -1295,14 +1370,14 @@ class BTNRenderer extends ObjectRenderer {
 
         for(const node of allNodes) {
             const data = newRegistry[node.id]!;
-            const left = node.get("left")!;
+            const left = node.get("left", true)!;
             if(left instanceof UtilityObject) {
                 data.left = newRegistry[left.id];
             } else {
                 newRegistry[node.id]!.left = undefined;
             }
 
-            const right = node.get("right")!;
+            const right = node.get("right", true)!;
             if(right instanceof UtilityObject) {
                 data.right = newRegistry[right.id];
             } else {
@@ -1323,13 +1398,13 @@ class BTNRenderer extends ObjectRenderer {
         for(const [id, data] of allNodes) {
             const node = this.allObjectsByID[id]!;
             if(node instanceof UtilityObject) {
-                const left = node.get("left")!;
+                const left = node.get("left", true)!;
                 if(left instanceof UtilityObject) {
                     data.left = this.nodeRegistry[left.id];
                 } else {
                     data.left = undefined;
                 }
-                const right = node.get("right")!;
+                const right = node.get("right", true)!;
                 if(right instanceof UtilityObject) {
                     data.right = this.nodeRegistry[right.id];
                 } else {
@@ -1354,7 +1429,7 @@ class ArrayElementRenderData extends NodeRenderData {
 
     public render(progress: number) {
         const ctx = this.objectCanvas.getContext("2d")!;
-        ctx.fillStyle = "white";
+        ctx.fillStyle = this.highlighted ? this.hightlightStyle : "white";
         const x = this.getX(progress);
         const y = this.getY(progress);
         ctx.fillRect(x, y, this.w, this.h);
@@ -1369,14 +1444,9 @@ class ArrayElementRenderData extends NodeRenderData {
     }
 }
 
-class ArrayRenderer extends ObjectRenderer {
-    private nodeRegistry: Record<string, ArrayElementRenderData> = {};
+class ArrayRenderer extends ObjectRenderer<ArrayElementRenderData> {
     private readonly nodeWidth = 20;
     private readonly nodeHeight = 20;
-
-    private get nodes() {
-        return Object.values(this.nodeRegistry);
-    }
 
     constructor(objectCanvas: HTMLCanvasElement, selectors: string[], memory: Memory) {
         super(objectCanvas, "array", selectors, memory);
@@ -1405,7 +1475,7 @@ class ArrayRenderer extends ObjectRenderer {
             }
             xOffset += newRegistry[headerID].w;
             for(let i = 0; i < array.length; i++) {
-                const element = array.indexGet(i);
+                const element = array.indexGet(i, true);
                 const elementID = element.id;
                 if(elementID in this.nodeRegistry) {
                     const data = this.nodeRegistry[elementID]!;
@@ -1431,7 +1501,7 @@ class ArrayRenderer extends ObjectRenderer {
 
 class ObjectView extends ProgramView implements AnimatedView {
     private objectCanvas: HTMLCanvasElement;
-    private renderers: ObjectRenderer[];
+    private renderers: ObjectRenderer<NodeRenderData>[];
     public readonly selectorsField: HTMLInputElement;
     public get selectors(): string[] {
         return this.selectorsField.value.split(",");
@@ -1474,7 +1544,9 @@ class ObjectView extends ProgramView implements AnimatedView {
     }
 
     public clearEffects(): void {
-        this.reset();
+        for(const renderer of this.renderers) {
+            renderer.clearEffects();
+        }
     }
 
     public render(progress: number): void {

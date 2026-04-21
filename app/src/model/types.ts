@@ -309,6 +309,7 @@ export class UtilityArray implements Value {
     protected static idSeq = 0;
     public readonly id: string = `array${UtilityArray.idSeq++}`;
     public static readonly emitter = new EventEmitter2();
+
     /**
      * It fires when an element of the array is changed.
      * Its arguments are: array: UtilityArray, idx: number, value: Value
@@ -320,6 +321,12 @@ export class UtilityArray implements Value {
      * Its arguments are: array: UtilityArray, idx1: number, idx2: number
      */
     public static readonly elementSwapped = "utilityarray.element.swapped";
+
+    /**
+     * It fires when an element of the array is accessed.
+     * Its arguments are: array: UtilityArray, idx: number, value: Value
+     */
+    public static readonly elementAccessed = "utilityarray.element.accessed";
 
     constructor(values: Value[], elementType: ValueType) {
         UtilityArray.ensureValuesAreHomogenous(values)
@@ -335,7 +342,10 @@ export class UtilityArray implements Value {
         }
     }
 
-    public indexGet(idx: number): Value {
+    public indexGet(idx: number, supressEvent: boolean = false): Value {
+        if(!supressEvent) {
+            UtilityArray.emitter.emit(UtilityArray.elementAccessed, this, idx, this.elements[idx] ?? SimpleValue.undefined());
+        }
         return this.elements[idx] ?? SimpleValue.undefined();
     }
 
@@ -436,10 +446,16 @@ export class UtilityObject implements Value {
     public static readonly emitter = new EventEmitter2();
 
     /**
-     * It fires when the field of an object changes.
+     * It fires when the field of an object is changed.
      * Its arguments are: object: UtilityObject, name: string, value: Value
      */
     public static readonly fieldChanged = "utilityobject.field.changed";
+
+    /**
+     * It fires when the field of an object is accessed.
+     * Its arguments are: object: UtilityObject, name: string, value: Value
+     */
+    public static readonly fieldAccessed = "utilityobject.field.accessed";
 
     constructor(fields: Field[], args: Value[], type: ObjectType) {
         let fieldIdx = 0;
@@ -456,8 +472,11 @@ export class UtilityObject implements Value {
         this.type = type;
     }
 
-    public get(name: string): Value {
+    public get(name: string, supressEvent: boolean = false): Value {
         if(!(name in this.fieldData)) throw new Error("Field does not exist!");
+        if(!supressEvent) {
+            UtilityObject.emitter.emit(UtilityObject.fieldAccessed, this, name, this.fieldData[name]);
+        }
         return this.fieldData[name]!;
     }
 
