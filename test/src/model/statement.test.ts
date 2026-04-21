@@ -344,3 +344,24 @@ test("statements with any undefined operands should result in being undefined", 
     testAnyStatement(assertion, "str(len(\"\"&str(undefined)))&\"=\"&str(sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))&\" is \"&str(len(\"\"&\"alma\")=sqrt(len(\"this is \"&str(4=5-1)&\" no?\")))", ud());
     testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(undefined))", ud());
 });
+
+test("statements should be able to work with IndexResolvers", (assertion) => {
+    testNumericStatement(assertion, "{1,2,3}[0]", 1, placeholderMemory, new IndexResolver(0));
+    testCharStatement(assertion, "{'a','b','c'}[1]", "a", placeholderMemory, new IndexResolver(1));
+    testNumericStatement(assertion, "{1,2,3}[12]", 3, placeholderMemory, new IndexResolver(10));
+    testNumericStatement(assertion, "{1,2,3}[-8]", 3, placeholderMemory, new IndexResolver(-10));
+    
+    const mem = new Memory();
+    mem.createVariable("a", new ArrayType(numberType));
+    mem.setVariable("a", array([n(1), n(2), n(3), n(4)]));
+    testAnyStatement(assertion, "swap(a,10,12)", ud(), mem, new IndexResolver(10));
+    jsonEqual(assertion, mem.getVariable("a"), array([n(3), n(2), n(1), n(4)]), "the swap function should work with an indexresolver as expected");
+});
+
+test("statements with arrays containing function operator calls should work as intended", (assertion) => {
+    const mem = new Memory();
+    mem.createVariable("a", new ArrayType(numberType));
+    mem.setVariable("a", array([n(1), n(2), n(3), n(4)]));
+    testAnyStatement(assertion, "{swap(a,0,1),swap(a,2,3)}", ud(), mem);
+    jsonEqual(assertion, mem.getVariable("a"), array([n(2), n(1), n(4), n(3)]), "a function operator should work as expected within arrays");
+});

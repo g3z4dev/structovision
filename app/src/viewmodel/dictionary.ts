@@ -101,7 +101,8 @@ export class EnglishDictionary extends Dictionary {
         "error_forbidden_key": "Forbidden key was used for variable definition!",
         "error_duplicate_key": "Duplicate key was used for variable definition!",
         "error_operator_location": "Operator was used at the wrong location!",
-        "structogram-else": "else"
+        "error_array_bracket": "Wrong order of array bracket or/and normal brackets!",
+        "structogram_else": "else"
     }
 }
 
@@ -175,7 +176,8 @@ export class HungarianDictionary extends Dictionary {
         "error_forbidden_key": "Tiltott kulcs használat a változó definíciójában!",
         "error_duplicate_key": "Foglalt kulcs használat a változó definíciójában!",
         "error_operator_location": "Rossz helyen használt operátor!",
-        "structogram-else": "különben"
+        "error_array_bracket": "Rossz sorrendben használt tömb zárójelek és/vagy normál zárójelek!",
+        "structogram_else": "különben"
     }
 }
 

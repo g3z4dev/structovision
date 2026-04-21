@@ -736,13 +736,13 @@ export class AssignmentBlock extends SequenceBlock {
             for(let i = 1; i < keyTokens.length-1; i++) {
                 const token = keyTokens[i];
                 if(object instanceof UtilityArray) {
-                    object.indexGet(Number(token));
+                    object = object.indexGet(this.associatedStructogram.indexResolver.resolve(Number(token)));
                 } else {
                     object = (object as UtilityObject).get(keyTokens[i]!);
                 }
             }
             if(object instanceof UtilityArray) {
-                object.indexSet(Number(keyTokens.at(-1)!), this.statement!.evaluate());
+                object.indexSet(this.associatedStructogram.indexResolver.resolve(Number(keyTokens.at(-1)!)), this.statement!.evaluate());
             } else {
                 (object as UtilityObject).set(keyTokens.at(-1)!, this.statement!.evaluate());
             }

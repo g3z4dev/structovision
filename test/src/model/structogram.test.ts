@@ -2,7 +2,7 @@ import {test} from "zora";
 import ee2 from "eventemitter2"
 import {Structogram, AssignmentBlock, PrintBlock, TrueFalseBranchingBlock, MultiBranchingBlock, CountingLoopBlock, FrontTestingLoopBlock, BackTestingLoopBlock, ControlBlock} from "@structovision/app/model/structogram";
 import { cartesian, jsonEqual, n, str } from "../testutil.ts";
-import { booleanType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityObject } from "@structovision/app/model/types";
+import { ArrayType, booleanType, numberType, SimpleValue, SinglyLinkedListNodeTemplate, stringType, UtilityObject } from "@structovision/app/model/types";
 
 function createBasicStructogram(): [ee2.EventEmitter2, Structogram] {
     const emitter = new ee2.EventEmitter2();
@@ -10,7 +10,7 @@ function createBasicStructogram(): [ee2.EventEmitter2, Structogram] {
     return [emitter, structogram];
 }
 
-function runStructogram(structogram: Structogram, input: string[] = []) {
+function runStructogram(structogram: Structogram, input: Record<string, string> = {}) {
     console.log(structogram.preRun(input))
     structogram.runStep();
     while(structogram.running) {
@@ -23,7 +23,7 @@ test("input data declaration should create entry in memory", assertion => {
 
     structogram.declareInputData("a", numberType);
     
-    structogram.preRun(["12"]);
+    structogram.preRun({"a": "12"});
 
     assertion.truthy(structogram.memory.hasVariable("a"), "the memory should have a variable with key [a] defined");
     jsonEqual(assertion, structogram.memory.getVariable("a"), n(12), "the memory variable [a] should have a value of 12");
@@ -36,7 +36,7 @@ test("auxilary data declaration should create entry in memory", assertion => {
 
     structogram.declareAuxData("a", numberType);
     
-    structogram.preRun([]);
+    structogram.preRun();
 
     assertion.truthy(structogram.memory.hasVariable("a"), "the memory should have a variable with key [a] defined");
 });
@@ -46,7 +46,7 @@ test("output data declaration should create entry in memory", assertion => {
 
     structogram.declareOutputData("a", numberType);
     
-    structogram.preRun([]);
+    structogram.preRun();
 
     assertion.truthy(structogram.memory.hasVariable("a"), "the memory should have a variable with key [a] defined");
 });
@@ -75,7 +75,7 @@ test("control blocks should work as expected", assertion => {
     controlBlock.statementOption.setStatement("swap(text, 0, 7)");
     structogram.startingBlock = controlBlock;
 
-    runStructogram(structogram, ["\"körtés pite\""]);
+    runStructogram(structogram, {"text": "\"körtés pite\""});
 
     jsonEqual(assertion, structogram.memory.getVariable("text"), str("pörtés kite"), "a stuctrogram should be able to handle control blocks")
 });
@@ -93,7 +93,7 @@ test("print blocks should work as expected", assertion => {
     printBlock.statementOption.setStatement("text");
     structogram.startingBlock = printBlock;
 
-    runStructogram(structogram, ["\"hello world\""]);
+    runStructogram(structogram, {"text": "\"hello world\""});
 
     assertion.eq(printedText, "hello world", "a stuctrogram should able to print a value")
 });
@@ -406,7 +406,7 @@ test("assignment block should raise issues when expected", assertion => {
     structogram.declareInputData("a", numberType);
     block.statementOption.setStatement("1");
 
-    assertion.truthy(structogram.preRun(["1"]).length > 0, "assignment block should raise an issue on the assignment of a constant variable");
+    assertion.truthy(structogram.preRun({"a": "1"}).length > 0, "assignment block should raise an issue on the assignment of a constant variable");
 });
 
 test("print block should raise issues when expected", assertion => {
@@ -481,7 +481,7 @@ test("countingloop block should raise issues when expected", assertion => {
 
     structogram.declareInputData("i", numberType)
 
-    assertion.truthy(structogram.preRun(["1"]).length > 0, "countingloop block should raise an issue on the usage of a constant variable");
+    assertion.truthy(structogram.preRun({"i": "1"}).length > 0, "countingloop block should raise an issue on the usage of a constant variable");
     
     structogram.clearData();
     structogram.declareAuxData("i", stringType);
@@ -561,8 +561,8 @@ test("duplicate data key in specification should result in an issue being raised
 
         if(def1[0] == def2[0]) continue;
 
-        const inputs = [];
-        if(def1[0] == "input" || def2[0] == "input") inputs.push("3");
+        const inputs: Record<string, string> = {};
+        if(def1[0] == "input" || def2[0] == "input") inputs["a"] = "3";
 
         assertion.truthy(structogram.preRun(inputs).length > 0, `duplicate data keys in ${def1[0]} and ${def2[0]} should raise an issue`);
     }
@@ -573,10 +573,10 @@ test("invalid input should result in an issue being raised", assertion => {
 
     structogram.declareInputData("a", numberType);
 
-    assertion.truthy(structogram.preRun(["true"]).length > 0, `input being the wrong type should raise an issue`);
-    assertion.truthy(structogram.preRun(["1","3"]).length > 0, `too many inputs should raise an issue`);
-    assertion.truthy(structogram.preRun([]).length > 0, `missing input should raise an issue`);
-    assertion.truthy(structogram.preRun(["invalid"]).length > 0, `invalid input should raise an issue`);
+    assertion.truthy(structogram.preRun({"a": "true"}).length > 0, `input being the wrong type should raise an issue`);
+    assertion.truthy(structogram.preRun({"a": "1", "b": "3"}).length > 0, `too many inputs should raise an issue`);
+    assertion.truthy(structogram.preRun({}).length > 0, `missing input should raise an issue`);
+    assertion.truthy(structogram.preRun({"a": "invalid"}).length > 0, `invalid input should raise an issue`);
 });
 
 test("assignment blocks should work as expected with fields", assertion => {
@@ -596,4 +596,44 @@ test("assignment blocks should work as expected with fields", assertion => {
     runStructogram(structogram);
 
     jsonEqual(assertion, (structogram.memory.getVariable("a") as UtilityObject).get("next"), SinglyLinkedListNodeTemplate.construct([SimpleValue.number(4)]), "a stuctrogram should be able to assign a field's value")
+});
+
+test("assignment blocks should work as expected with indicies", assertion => {
+    const [_, structogram] = createBasicStructogram();
+
+    structogram.declareInputData("a", new ArrayType(numberType));
+    structogram.startingIndex = 10;
+
+    const assignmentBlock = new AssignmentBlock(structogram);
+    assignmentBlock.keyOption.setKey("a[10]");
+    assignmentBlock.statementOption.setStatement("3+4+5");
+    structogram.startingBlock = assignmentBlock;
+    
+    runStructogram(structogram, {"a": "{1,2,3}"});
+
+    jsonEqual(assertion, structogram.memory.getVariable("a").indexGet(0), SimpleValue.number(12), "a stuctrogram should be able to assign a value to an element of an array")
+});
+
+test("assignment blocks should work as expected with indicies and object fields", assertion => {
+    const [_, structogram] = createBasicStructogram();
+
+    structogram.declareInputData("a", new ArrayType(SinglyLinkedListNodeTemplate.getType([numberType])));
+    structogram.startingIndex = 10;
+
+    const assignmentBlock = new AssignmentBlock(structogram);
+    assignmentBlock.keyOption.setKey("a[10].key");
+    assignmentBlock.statementOption.setStatement("3+4+5");
+    structogram.startingBlock = assignmentBlock;
+    
+    runStructogram(structogram, {"a": "{s1l(1),s1l(2),s1l(3)}"});
+
+    jsonEqual(assertion, structogram.memory.getVariable("a").indexGet(0).get("key"), SimpleValue.number(12), "a stuctrogram should be able to assign a value to an objects field who is part of an array");
+
+    structogram.clearData();
+    structogram.declareInputData("a", SinglyLinkedListNodeTemplate.getType([new ArrayType(numberType)]));
+    assignmentBlock.keyOption.setKey("a.key[10]");
+
+    runStructogram(structogram, {"a": "s1l({1,2,3})"});
+    
+    jsonEqual(assertion, structogram.memory.getVariable("a").get("key").indexGet(0), SimpleValue.number(12), "a stuctrogram should be able to assign a value to an element of an array who is a part of an object");
 });

@@ -492,8 +492,9 @@ class ArrayLiteralOperand extends ResolvableOperand {
         const tokens = [];
         let currentToken = "";
         let arrayDepth = 0;
+        let bracketDepth = 0;
         for(const c of [...text]) {
-            if(c == "," && arrayDepth == 0) {
+            if(c == "," && arrayDepth == 0 && bracketDepth == 0) {
                 tokens.push(currentToken);
                 currentToken = "";
                 continue;
@@ -501,9 +502,14 @@ class ArrayLiteralOperand extends ResolvableOperand {
                 arrayDepth += 1;
             } else if(c == "}") {
                 arrayDepth -= 1;
+            } else if(c == "(") {
+                bracketDepth += 1;
+            } else if(c == ")") {
+                bracketDepth -= 1;
             }
             currentToken += c;
         }
+        if(arrayDepth > 0 || bracketDepth > 0) throw new StatementParseError("Array brackets and normal brackets are in the wrong order!", "error_array_bracket");
         tokens.push(currentToken);
         return tokens;
     }
