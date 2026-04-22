@@ -1,4 +1,4 @@
-import { BlockOption, MultiBranchingBlock, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
+import { BlockOption, CountingLoopBlock, MultiBranchingBlock, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
 import { applyTransformation, CameraHandler, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
@@ -140,6 +140,20 @@ export class StructogramRenderer {
         }
     }
 
+    private updateStepText(elem: HTMLElement, block: StructogramBlock) {
+        if(block instanceof CountingLoopBlock) {
+            if(block.stepOption.getStatement().trim() == "1") {
+                for(const elem2 of elem.querySelectorAll(".t-step-text") as NodeListOf<HTMLElement>) {
+                    elem2.classList.add("hidden");
+                }
+            } else {
+                for(const elem2 of elem.querySelectorAll(".t-step-text") as NodeListOf<HTMLElement>) {
+                    elem2.classList.remove("hidden");
+                }
+            }
+        }
+    }
+
     /**
      * Sets up the text label for a given strutogramblock in accordance of how it was defined.
      * See developer documentation on how structogramblocks are defined.
@@ -151,8 +165,9 @@ export class StructogramRenderer {
      * @param height the height given to the block
      * @param index the index of the header
      */
-    private setupTextFor(elem: HTMLElement, options: BlockOption[], width: number, height:number, index: number = 0) {
+    private setupTextFor(elem: HTMLElement, block: StructogramBlock, width: number, height:number, index: number = 0) {
         if(!this.structogramSVG) return;
+        const options = block.options;
         this.replaceOptionValues(elem, options, index);
         const textLabel = elem.querySelector(".t-text") as SVGTextElement | undefined;
         if(!textLabel) return;
@@ -170,6 +185,7 @@ export class StructogramRenderer {
         }
         for(const option of options) {
             const listener = () => {
+                this.updateStepText(elem, block);
                 this.replaceOptionValues(elem, options, index);
                 if(textHLocation == "center") {
                     centerX(textLabel, width/2);
@@ -229,7 +245,7 @@ export class StructogramRenderer {
                     const y = 0;
                     setPosition(header, x, y);
                     setSize(header, newWidth, baseBlockHeight);
-                    renderer.setupTextFor(header, currentBlock.options, newWidth, baseBlockHeight, i);
+                    renderer.setupTextFor(header, currentBlock, newWidth, baseBlockHeight, i);
                 }
                 const subBlock = subBlocks[subBlockKeys[i]!];
                 if(subBlock) {
@@ -239,7 +255,8 @@ export class StructogramRenderer {
                     const subBlockHeight = renderer.onUndefinedBlock(elem, new UndefinedBlockContext(undefined, currentBlock, subBlockKeys[i]!, false), newWidth, subBlockXOffset+newWidth*i, subBlockYOffset);
                     if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
                 }
-            }
+            } 
+            this.updateStepText(elem, currentBlock);
             for(let i = 0; i < subBlockCount; i++) {
                 resolveSubBlocks(this, currentBlock, i);
             }
@@ -255,7 +272,7 @@ export class StructogramRenderer {
             const visualHeight = calcVisualHeight();
             setPosition(elem, xOffset, yOffset);
             setSize(elem, width, visualHeight);
-            this.setupTextFor(elem, currentBlock.options, width, visualHeight);
+            this.setupTextFor(elem, currentBlock, width, visualHeight);
             prevBlock = currentBlock;
             currentBlock = currentBlock?.next;
             yOffset += blockHeight;

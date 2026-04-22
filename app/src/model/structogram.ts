@@ -391,6 +391,11 @@ export abstract class BlockOption implements ClassIdentifiable {
     public readonly name: string;
     public readonly description: string;
     public readonly emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
+
+    /**
+     * It fires when the option changes.
+     * It has no arguments.
+     */
     public static readonly optionChangedEvent = "blockoption.optionchanged";
 
     constructor(structogram: Structogram, name: string, description: string) {
