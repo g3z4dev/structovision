@@ -76,6 +76,7 @@ export class ViewModel {
         this.setupPersistenceButtons();
         this.setupStructogramWidthHandling();
         this.structogramBuilder.updateHTML();
+        new HoverHelp();
     }
 
     public begin() {
@@ -183,5 +184,67 @@ export class ViewModel {
         const _delta = timestamp - this.lastTimestamp;
         this.lastTimestamp = timestamp;
         requestAnimationFrame(timestamp => this.runFrame(timestamp, _delta));
+    }
+}
+
+class HoverHelp {
+
+    constructor() {
+        const hoverHelpElem = document.querySelector("#hover-help") as HTMLElement;
+        const hoverHelpMessageElem = hoverHelpElem.querySelector("#hover-help-message") as HTMLElement;
+        
+        function updatePosition(event: MouseEvent) {
+            let left = 0;
+            const xPadding = 20;
+            if(event.clientX > 3 * window.innerWidth / 4) {
+                left = event.clientX - xPadding - hoverHelpElem.clientWidth;
+            } else {
+                left = event.clientX + xPadding;
+            }
+            const top = Math.min(event.clientY, window.innerHeight-hoverHelpElem.clientHeight);
+            hoverHelpElem.style.left = `${left}px`;
+            hoverHelpElem.style.top = `${top}px`;
+        }
+
+        function setupHover(elem: HTMLElement) {
+            elem.addEventListener("mouseenter", event => {
+                const trkey = elem.dataset["helpTrkey"];
+                if(trkey && trkey.length > 0) {
+                    hoverHelpElem.classList.remove("hidden");
+                    hoverHelpMessageElem.textContent = Translator.getDictionary().translate(elem.dataset["helpTrkey"]!);
+                    updatePosition(event);
+                }
+            });
+            elem.addEventListener("mousemove", event => {
+                updatePosition(event);
+            });
+            elem.addEventListener("mouseleave", () => {
+                hoverHelpElem.classList.add("hidden");
+            });
+        }
+
+        function setupHoverForElements(parent: Element) {
+            for(const elem of parent.querySelectorAll(".t-hover-help") as NodeListOf<HTMLElement>) {
+                setupHover(elem);
+            }
+            if(parent.classList.contains("t-hover-help")) {
+                setupHover(parent as HTMLElement);
+            }
+        }
+
+        setupHoverForElements(document.body);
+
+        const observer = new MutationObserver((mutationList, _observer) => {
+            for(const mutation of mutationList) {
+                if(mutation.type == "childList") {
+                    for(const node of mutation.addedNodes) {
+                        if(node instanceof Element) {
+                            setupHoverForElements(node);
+                        }
+                    }
+                }
+            }
+        });
+        observer.observe(document, {"childList": true, "subtree": true});
     }
 }

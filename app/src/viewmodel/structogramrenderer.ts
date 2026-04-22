@@ -76,16 +76,18 @@ export class StructogramRenderer {
         this.idPrefix = idPrefix;
         this.structogram.emitter.addListener(Structogram.issuesChangedEvent, (oldIssues: StructogramIssue[], newIssues: StructogramIssue[]) => {
             for(const issue of oldIssues) {
-                const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`);
+                const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`) as SVGElement;
                 if(block) {
                     block.classList.remove("fill-red-100");
+                    block.dataset["helpTrkey"] = "";
                     block.classList.add("fill-white");
                 }
             }
             for(const issue of newIssues) {
-                const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`);
+                const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`) as SVGElement;
                 if(block) {
                     block.classList.add("fill-red-100");
+                    block.dataset["helpTrkey"] = issue.issueID;
                     block.classList.remove("fill-white");
                 }
             }
@@ -272,6 +274,7 @@ export class StructogramRenderer {
         elem.id = this.idPrefix + "-" + block.id;
         if(this.structogram.issues.map(i => i.id).includes(block.id)) {
             elem.classList.add("fill-red-100");
+            elem.dataset["helpTrkey"] = this.structogram.issues.filter(i => i.id == block.id)[0]!.issueID;
             elem.classList.remove("fill-white");
         }
     }

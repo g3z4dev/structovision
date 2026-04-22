@@ -15,14 +15,16 @@
                 <div class="flex bg-gray-200 border-b border-b-gray-400 h-12">
                     <div class="basis-11/16 flex flex-row" id="toolbar">
                         <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full" 
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="assignment_block_description" 
                         id="toolbar-assignment-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <line x1="20%" y1="33%" x2="80%" y2="33%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                             <line x1="20%" y1="66%" x2="80%" y2="66%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                         </svg>
                         <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="control_block_description" 
                         id="toolbar-control-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <line x1="10%" y1="20%" x2="20%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
@@ -30,21 +32,24 @@
                             <line x1="30%" y1="50%" x2="80%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                         </svg>
                         <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="print_block_description" 
                         id="toolbar-print-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <line x1="30%" y1="10%" x2="60%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                             <line x1="60%" y1="50%" x2="30%" y2="90%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                         </svg>
                         <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="true_false_branching_block_description" 
                         id="toolbar-true-false-branching-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <line x1="0%" y1="50%" x2="10%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                             <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                         </svg>
                         <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="multi_branching_block_description" 
                         id="toolbar-multi-branching-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <line x1="50%" y1="0%" x2="50%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
@@ -52,36 +57,39 @@
                             <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                         </svg>
                         <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="counting_loop_block_description" 
                         id="toolbar-counting-loop-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <line x1="10%" y1="20%" x2="60%" y2="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
                         </svg>
                         <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="front_testing_loop_block_description" 
                         id="toolbar-front-testing-loop-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                         </svg>
                         <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full"
+                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                        data-help-trkey="back_testing_loop_block_description" 
                         id="toolbar-back-testing-loop-block">
                             <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                             <rect width="80%" height="60%" x="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
                         </svg>
                     </div>
                     <div class="basis-5/16 flex flex-row justify-around border-l border-gray-800 p-1 gap-1" id="options">
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="new-button"><img class="aspect-square h-full" src="icons/new.png" alt="new-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="settings-button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="undo-button"><img class="aspect-square h-full" src="icons/timelinearrow.png" alt="undo-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="redo-button"><img class="aspect-square h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/timelinearrow.png" alt="redo-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button t-hover-help" data-help-trkey="language_button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" id="new-button" data-help-trkey="new_button"><img class="aspect-square h-full" src="icons/new.png" alt="new-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" id="settings-button" data-help-trkey="settings_button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" id="undo-button" data-help-trkey="undo_button"><img class="aspect-square h-full" src="icons/timelinearrow.png" alt="undo-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" id="redo-button" data-help-trkey="redo_button"><img class="aspect-square h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/timelinearrow.png" alt="redo-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button t-hover-help" data-help-trkey="save_button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button t-hover-help" data-help-trkey="load_button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
                     </div>
                 </div>
-                <div class="align-middle m-0 bg-white border-b border-b-gray-800 hover:bg-cyan-50" id="specification">
+                <div class="align-middle m-0 bg-white border-b border-b-gray-800 hover:bg-cyan-50 t-hover-help" data-help-trkey="specification" id="specification">
                     <p><span class="t-translatable" data-trkey="specification_in"></span>: <span class="t-spec-in"></span></p>
                     <p><span class="t-translatable" data-trkey="specification_aux"></span>: <span class="t-spec-aux"></span></p>
                     <p><span class="t-translatable" data-trkey="specification_out"></span>: <span class="t-spec-out"></span></p>
@@ -95,7 +103,7 @@
                     </svg>
                 </div>
                 <div class="bg-gray-200 border-t border-t-gray-400 h-12 p-1 flex flex-row">
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="switch-to-runner-button"><img class="h-full aspect-square" src="icons/play.png" alt="play-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="switch_to_runner_button" id="switch-to-runner-button"><img class="h-full aspect-square" src="icons/play.png" alt="play-icon"/></button>
                     <form class="h-full ml-auto bg-blue-600 table-cell items-center p-1">
                         <label for="structogram-width" class="text-white"><span class="t-translatable" data-trkey="structogram-width"></span>:</label>
                         <input type="number" name="structogram-width" class="bg-blue-200" id="structogram-width" min="128" max="8192">
@@ -130,10 +138,10 @@
             <div class="col-span-6 flex flex-col">
                 <div class="w-full bg-gray-200">
                     <div class="flex flex-row gap-1 border-b border-b-gray-400 p-1 h-12" id="options">
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="view-settings-button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
-                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="settings_button" id="view-settings-button"><img class="aspect-square h-full" src="icons/gear.png" alt="gear-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button t-hover-help" data-help-trkey="language_button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-save-button t-hover-help" data-help-trkey="save_button"><img class="aspect-square h-full" src="icons/save.png" alt="save-icon"/></button>
+                        <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-load-button t-hover-help" data-help-trkey="load_button"><img class="aspect-square h-full" src="icons/load.png" alt="load-icon"/></button>
                     </div>
                 </div>
                 <div class="bg-white border border-gray-800 hidden" id="input-data">
@@ -148,14 +156,14 @@
                     </svg>
                 </div>
                 <div class="flex gap-2 p-1 bg-gray-200 border-t border-t-gray-400 h-12">
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="slower-button"><img class="w-full h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/faster.png" alt="slower-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="slower_button" id="slower-button"><img class="w-full h-full transform-[matrix(-1,0,0,1,0,0)]" src="icons/faster.png" alt="slower-icon"/></button>
                     <div class="bg-blue-500 text-white h-full flex items-center"><div id="speed-label" class="bg-blue-600 table-cell align-middle text-center">1.00x</div></div>
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="faster-button"><img class="w-full h-full" src="icons/faster.png" alt="faster-icon"/></button>
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="start-button"><img class="w-full h-full" src="icons/play.png" alt="start-icon"/></button>
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square hidden" id="pause-button"><img class="w-full h-full" src="icons/pause.png" alt="pause-icon"/></button>
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="step-button"><img class="w-full h-full" src="icons/step.png" alt="step-icon"/></button>
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="reset-button"><img class="w-full h-full" src="icons/reset.png" alt="reset-icon"/></button>
-                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square" id="switch-to-builder-button"><img class="w-full h-full" src="icons/editor.png" alt="editor-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="faster_button" id="faster-button"><img class="w-full h-full" src="icons/faster.png" alt="faster-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="start_button" id="start-button"><img class="w-full h-full" src="icons/play.png" alt="start-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square hidden t-hover-help" data-help-trkey="pause_button" id="pause-button"><img class="w-full h-full" src="icons/pause.png" alt="pause-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="step_button" id="step-button"><img class="w-full h-full" src="icons/step.png" alt="step-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="reset_button" id="reset-button"><img class="w-full h-full" src="icons/reset.png" alt="reset-icon"/></button>
+                    <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-hover-help" data-help-trkey="switch_to_builder_button" id="switch-to-builder-button"><img class="w-full h-full" src="icons/editor.png" alt="editor-icon"/></button>
                 </div>
             </div>
             <div class="col-span-6 bg-gray-900 flex flex-col h-full h-max-full overflow-hidden" id="program-views">
@@ -252,7 +260,9 @@
             </div>
         </div>
     </div>
-
+    <div id="hover-help" class="bg-gray-700 text-white fixed z-10 max-w-1/4 text-wrap p-1 rounded-md hidden" style="left: 0; top: 0;">
+        <p id="hover-help-message"> </p>
+    </div>
 
 
     <script src="out/script.js"></script>

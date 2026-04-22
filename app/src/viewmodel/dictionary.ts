@@ -44,6 +44,7 @@ export class EnglishDictionary extends Dictionary {
     }
 
     protected override textDictionary = {
+        "specification": "Specification",
         "specification_in": "In",
         "specification_aux": "Aux",
         "specification_out": "Out",
@@ -102,7 +103,30 @@ export class EnglishDictionary extends Dictionary {
         "error_duplicate_key": "Duplicate key was used for variable definition!",
         "error_operator_location": "Operator was used at the wrong location!",
         "error_array_bracket": "Wrong order of array bracket or/and normal brackets!",
-        "structogram_else": "else"
+        "structogram_else": "else",
+        "assignment_block_description": "Assignment Block: Assigns a value to a variable.",
+        "control_block_description": "Control Block: Executes a statement.",
+        "print_block_description": "Print Block: Prints a string value.",
+        "true_false_branching_block_description": "True-False Branching Block: Branches two ways.",
+        "multi_branching_block_description": "Multi Branching Block: Branches multiple ways.",
+        "counting_loop_block_description": "Counting Loop Block: Loops while counting.",
+        "front_testing_loop_block_description": "Front Testing Loop Block: Loops while a statement is true. Checks statement first.",
+        "back_testing_loop_block_description": "Back Testing Loop Block: Loops while a statement is true. Checks statement last.",
+        "language_button": "Language",
+        "new_button": "New",
+        "settings_button": "Settings",
+        "undo_button": "Undo",
+        "redo_button": "Redo",
+        "save_button": "Save",
+        "load_button": "Load",
+        "switch_to_runner_button": "Switch to runner",
+        "slower_button": "Slower",
+        "faster_button": "Faster",
+        "start_button": "Play",
+        "pause_button": "Pause",
+        "step_button": "Step",
+        "reset_button": "Reset",
+        "switch_to_builder_button": "Switch to builder"
     }
 }
 
@@ -119,6 +143,7 @@ export class HungarianDictionary extends Dictionary {
     }
 
     protected override textDictionary = {
+        "specification": "Specifikáció",
         "specification_in": "Be",
         "specification_aux": "SA",
         "specification_out": "Ki",
@@ -177,7 +202,30 @@ export class HungarianDictionary extends Dictionary {
         "error_duplicate_key": "Foglalt kulcs használat a változó definíciójában!",
         "error_operator_location": "Rossz helyen használt operátor!",
         "error_array_bracket": "Rossz sorrendben használt tömb zárójelek és/vagy normál zárójelek!",
-        "structogram_else": "különben"
+        "structogram_else": "különben",
+        "assignment_block_description": "Értékadóblokk: Értéket ad egy változónak.",
+        "control_block_description": "IrányítóBlock: Végrehajt egy állítást.",
+        "print_block_description": "Kiíróblock: Kiír egy szöveges értéket.",
+        "true_false_branching_block_description": "Kétirányú elágazásblokk: Elágaz kétirányba.",
+        "multi_branching_block_description": "Többirányú elágazásblokk: Elágaz többirányba.",
+        "counting_loop_block_description": "Számláló ciklusblokk: Számlálva ismétel.",
+        "front_testing_loop_block_description": "Előltesztelő ciklusblokk: Ismétel amíg egy állítás igaz. Előre megvizsgálja az állítást.",
+        "back_testing_loop_block_description": "Hátultesztelő ciklusblokk: Ismétel amíg egy állítás igaz. Utólag vizsgálja meg az állítást.",
+        "language_button": "Nyelv",
+        "new_button": "Új",
+        "settings_button": "Beállítások",
+        "undo_button": "Visszavonás",
+        "redo_button": "Újra",
+        "save_button": "Mentés",
+        "load_button": "Betöltés",
+        "switch_to_runner_button": "Futtatási nézetre váltás",
+        "slower_button": "Lassabban",
+        "faster_button": "Gyorsabban",
+        "start_button": "Lejátszás",
+        "pause_button": "Megállítás",
+        "step_button": "Lépés",
+        "reset_button": "Újrakezdés",
+        "switch_to_builder_button": "Építői nézetre váltás"
     }
 }
 
