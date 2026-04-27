@@ -142,7 +142,7 @@ test("Memory should be able to provide a snapshot of its entries", assertion => 
     mem.setVariable("a", n(1));
     mem.setVariable("b", str("hi"));
     mem.setVariable("c", b(true));
-    const entries = mem.getEntries();
+    const entries = mem.entries;
     const expected = [
         ["a", numberType, n(1), false],
         ["b", stringType, str("hi"), true],

@@ -7,23 +7,23 @@ import { array, b, boolArray, btn, c, charArray, jsonEqual, n, numArray, s1l, s2
 const placeholderMemory = new Memory();
 const placeholderIndexResolver = new IndexResolver(0);
 
-function testNumericStatement(assertion: IAssert, statement: string, result: number, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+function testNumericStatement(assertion: IAssert, statement: string, result: number, memory: Memory = placeholderMemory, indexResolver: IndexResolver = placeholderIndexResolver) {
     assertion.equal(NumericStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testCharStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+function testCharStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory, indexResolver: IndexResolver = placeholderIndexResolver) {
     assertion.equal(CharStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testStringStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+function testStringStatement(assertion: IAssert, statement: string, result: string, memory: Memory = placeholderMemory, indexResolver: IndexResolver = placeholderIndexResolver) {
     assertion.equal(StringStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testBooleanStatement(assertion: IAssert, statement: string, result: boolean, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+function testBooleanStatement(assertion: IAssert, statement: string, result: boolean, memory: Memory = placeholderMemory, indexResolver: IndexResolver = placeholderIndexResolver) {
     assertion.equal(BooleanStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result}`);
 }
 
-function testAnyStatement(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory, indexResolver: IndexResolver = new IndexResolver(0)) {
+function testAnyStatement(assertion: IAssert, statement: string, result: Value, memory: Memory = placeholderMemory, indexResolver: IndexResolver = placeholderIndexResolver) {
     jsonEqual(assertion, AnyStatement.parse(statement, memory, indexResolver).evaluate(), result, `${statement} should be ${result.asString()}`);
 }
 
@@ -76,9 +76,9 @@ test("statements with just one operator should work correctly", (assertion) => {
     testBooleanStatement(assertion, "true or false", true);
     testBooleanStatement(assertion, "false or false or false", false);
     const equalPairs: Primitive[][] = [
-        [4,4], 
-        [4,5], 
-        ["\"alma\"", "\"alma\""], 
+        [4,4],
+        [4,5],
+        ["\"alma\"", "\"alma\""],
         ["\"alma\"", "\"fa\""],
         [true, true],
         [true, false],
@@ -94,10 +94,10 @@ test("statements with just one operator should work correctly", (assertion) => {
     }
 
     const comparePairs: Primitive[][] = [
-        [4,4], 
-        [4,5], 
+        [4,4],
+        [4,5],
         [6,3],
-        ["\"alma\"", "\"alma\""], 
+        ["\"alma\"", "\"alma\""],
         ["\"alma\"", "\"fa\""],
         ["\"ik\"", "\"elte\""]
     ];
@@ -199,6 +199,9 @@ test("statements with invalid inputs should throw an error", assertion => {
     assertion.throws(() => BooleanStatement.parse("true false", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if the result is ambigous");
     assertion.throws(() => AnyStatement.parse("ikjjaslkjdklasljrljldjljksdf", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it makes no sense");
     assertion.throws(() => AnyStatement.parse("////123/asd,,,asd-----,,,****-.-.-...::.,,saeawedsdxcdfdf", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it makes no sense with special characters");
+    assertion.throws(() => AnyStatement.parse("(((1+((2+3))+4))", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it's missing a closing bracket");
+    assertion.throws(() => AnyStatement.parse("((1+((2+3))+4)))", placeholderMemory, placeholderIndexResolver), StatementParseError, "Statements should throw an error if it's missing a opening bracket");
+
 });
 
 test("statements with wrong result types should throw an error", assertion => {
@@ -301,18 +304,18 @@ test("statements with function operators should work as expected", (assertion) =
 
     testAnyStatement(assertion, "swap(a,0,1)", ud(), mem);
     jsonEqual(assertion, mem.getVariable("a"), array([n(2), n(1), n(3), n(4)]), "the swap function should work as expected");
-    
+
     testAnyStatement(assertion, "is1l(b,s1l(2))", ud(), mem);
     const expected1 = SinglyLinkedListNodeTemplate.construct([n(1)]);
     expected1.set("next", SinglyLinkedListNodeTemplate.construct([n(2)]));
     jsonEqual(assertion, mem.getVariable("b"), expected1, "the is1l function should work as expected");
-    
+
     testAnyStatement(assertion, "is2l(c,s2l(10))", ud(), mem);
     const expected2 = DoublyLinkedListNodeTemplate.construct([n(2)]);
     const next = DoublyLinkedListNodeTemplate.construct([n(10)])
     expected2.set("next", next);
     next.set("prev", expected2)
-    const circularFilter1 = 
+    const circularFilter1 =
         (key: string, value: any) => {
             if((key == "next" || key == "prev") && value instanceof UtilityObject) return value.get("key");
             return value;
@@ -329,7 +332,7 @@ test("statements with function operators should work as expected", (assertion) =
     left.set("parent", expected3);
     expected3.set("right", right)
     right.set("parent", expected3);
-    const circularFilter = 
+    const circularFilter =
         (key: string, value: any) => {
             if((key == "parent" || key == "left" || key == "right") && value instanceof UtilityObject) return value.get("key");
             return value;
@@ -345,12 +348,14 @@ test("statements with any undefined operands should result in being undefined", 
     testAnyStatement(assertion, "\"alma\"&\"körte\"&\"narancs\">\"barack\"&str(sqrt(undefined))", ud());
 });
 
-test("statements should be able to work with IndexResolvers", (assertion) => {
+test("statements should be able to index arrays", (assertion) => {
     testNumericStatement(assertion, "{1,2,3}[0]", 1, placeholderMemory, new IndexResolver(0));
     testCharStatement(assertion, "{'a','b','c'}[1]", "a", placeholderMemory, new IndexResolver(1));
     testNumericStatement(assertion, "{1,2,3}[12]", 3, placeholderMemory, new IndexResolver(10));
     testNumericStatement(assertion, "{1,2,3}[-8]", 3, placeholderMemory, new IndexResolver(-10));
-    
+});
+
+test("statements with function operators using indicies should work as intended", (assertion) => {
     const mem = new Memory();
     mem.createVariable("a", new ArrayType(numberType));
     mem.setVariable("a", array([n(1), n(2), n(3), n(4)]));

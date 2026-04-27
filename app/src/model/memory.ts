@@ -3,13 +3,12 @@ import { SimpleValue, type _Value, type Value, type ValueType } from "./types";
 
 export type VariableType = "number" | "string" | "boolean";
 
-
 export class VariableCreationError extends Error {
-    public readonly translationKey: string;
+    public readonly errorID: string;
 
-    constructor(m: string, translationKey: string) {
+    constructor(m: string, errorID: string) {
         super(m);
-        this.translationKey = translationKey;
+        this.errorID = errorID;
         Object.setPrototypeOf(this, VariableCreationError.prototype);
     }
 }
@@ -46,7 +45,7 @@ export class Memory {
         this.variables = {};
     }
 
-    private validateKeyName(key: string): boolean {
+    private validateKey(key: string): boolean {
         if(key.length == 0) return false;
 
         function isAlphabethic(c: string) {
@@ -76,18 +75,32 @@ export class Memory {
         return !onlyNumeric;
     }
 
-    public createVariable(key: string, value: ValueType, constant: boolean = false) {
-        if(Memory.forbiddenKeys.includes(key) || !this.validateKeyName(key)) {
-            throw new VariableCreationError(`Using [${key}] as a variable key is forbidden due to unsupported characters or matching literals!`, "error_forbidden_key");
+    /**
+     * Declares a variable with a given key and type.
+     * @param key The key the variable can be accessed with.
+     * @param type The type of the variable.
+     * @param constant Whether or not the variable is constant.
+     * @throws {VariableCreationError} Key must not be forbidden.
+     * @throws {VariableCreationError} Key must not be already defined.
+     */
+    public createVariable(key: string, type: ValueType, constant: boolean = false) {
+        if(Memory.forbiddenKeys.includes(key) || !this.validateKey(key)) {
+            throw new VariableCreationError(`Using [${key}] as a variable key is forbidden!`, "error_forbidden_key");
         }
         if(key in this.variables) {
             throw new VariableCreationError(`Variable with key [${key}] is already defined!`, "error_duplicate_key");
         }
-        const entry = new MemoryEntry(key, value, constant);
+        const entry = new MemoryEntry(key, type, constant);
         this.variables[key] = entry;
         this.emitter.emit(Memory.variableDeclaredEvent, new ReadOnlyMemoryEntry(entry));
     }
 
+    /**
+     * Sets the value of a variable with a given key.
+     * @param key The key of the variable.
+     * @param value The new value of the variable.
+     * @throws {Error} Variable with key must exist.
+     */
     public setVariable(key: string, value: Value) {
         if(key in this.variables) {
             const prevValue = this.variables[key]!.value;
@@ -98,6 +111,11 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
+    /**
+     * @param key The key of the variable.
+     * @returns The value of the variable.
+     * @throws {Error} Variable with key must exist.
+     */
     public getVariable(key: string): Value {
         if(key in this.variables) {
             this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
@@ -107,14 +125,26 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
-    public getEntries(): MemoryEntry[] {
+    /**
+     * A snapshot of all the entries in memory.
+     */
+    public get entries(): MemoryEntry[] {
         return [...Object.values(this.variables)].map(e => new ReadOnlyMemoryEntry(e));
     }
 
+    /**
+     * @param id The base identifier of the value type.
+     * @returns A list of all the entries whose value has the requested base identifier.
+     */
     public getAllValuesWithBaseIdentifier(id: string) {
-        return this.getEntries().filter(value => value.type.baseIdentifier == id);
+        return this.entries.filter(value => value.type.baseIdentifier == id);
     }
 
+    /**
+     * @param key The key of the variable.
+     * @returns The type of the variable.
+     * @throws {Error} Variable with key must exist.
+     */
     public getType(key: string): ValueType {
         if(key in this.variables) {
             this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
@@ -124,10 +154,21 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
+    /**
+     * Checks if a variable of a given key has an entry in the memory.
+     * @param key The key of the variable.
+     * @returns Whether or not the variable exists.
+     */
     public hasVariable(key: string): boolean {
         return key in this.variables;
     }
 
+    /**
+     * Checks if a variable of a given key is constant.
+     * @param key The key of the variable.
+     * @returns Whether or not the variable is constant.
+     * @throws {Error} Variable with key must exist.
+     */
     public isConstant(key: string): boolean {
         if(key in this.variables) {
             this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
@@ -137,10 +178,16 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
+    /**
+     * Changes the value of a variable with a given function.
+     * @param key The key of the variable.
+     * @param fn The function to modify it with.
+     * @throws {Error} Variable with key must exist.
+     */
     public changeVariable(key: string, fn: (v:Value) => Value) {
         if(key in this.variables) {
             const prevValue = this.variables[key]!.value;
-            const value = fn(this.variables[key]!.value)
+            const value = fn(this.variables[key]!.value);
             this.variables[key]!.value = value;
             this.emitter.emit(Memory.variableChangedEvent, key, prevValue, value);
             return;
@@ -149,6 +196,9 @@ export class Memory {
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
+    /**
+     * Removes all the variable entries.
+     */
     public clear(): void {
         this.variables = {};
     }
@@ -189,7 +239,7 @@ export class ReadOnlyMemoryEntry extends MemoryEntry {
         this._value = entry.value;
     }
 
-    // the overridden setter will also override the getter so we need to redefine it
+    // The overridden setter will also override the getter so we need to redefine it.
     public get value() {
         return this._value;
     }

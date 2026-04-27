@@ -1,15 +1,14 @@
 import EventEmitter2 from "eventemitter2";
-import type { VariableType } from "../model/memory";
 import { AssignmentBlock, BackTestingLoopBlock, BooleanStatementListOption, CountingLoopBlock, FrontTestingLoopBlock, KeyOption, MultiBranchingBlock, ControlBlock, StatementOption, Structogram, StructogramBlock, TrueFalseBranchingBlock, type BlockOption, PrintBlock } from "../model/structogram";
-import { baseBlockHeight, errorBorder, selectedClass, unselectedClass } from "./constants";
+import { baseBlockHeight, cannotPlaceOnStyle, canPlaceOnStyle, errorBorder, inactiveStyle, selectedStyle, neutralStyle } from "./constants";
 import { StructogramRenderer, UndefinedBlockContext } from "./structogramrenderer";
-import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
+import { getTemplateText, parseIntoHTML, ResourceManager, setHeight, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import statementOptionTemplate from "../../resources/settings/structogram-options/statementoption.html";
 import booleanStatementListOptionTemplate from "../../resources/settings/structogram-options/booleanstatementlistoption.html";
 import keyOptionTemplate from "../../resources/settings/structogram-options/keyoption.html";
 import dataSettingsTemplate from "../../resources/settings/datasettings.html";
-import { booleanType, numberType, SimpleValue, stringType, parseType, typeRegistry, ValueType, type Value, TypeParseError } from "../model/types";
+import { numberType, SimpleValue, parseType, ValueType, type Value, TypeParseError } from "../model/types";
 import { Translator } from "./dictionary";
 import type { ViewModel } from "./viewmodel";
 
@@ -35,6 +34,7 @@ class MovingBlock {
 abstract class BuilderAction {
     /**
      * Reverts the action and returns the action it performed to do said revertion.
+     * @returns The inverse action of this action.
      */
     public abstract revert(): BuilderAction;
 }
@@ -44,6 +44,11 @@ class OptionSetAction extends BuilderAction {
     private readonly rawValues: string[];
     private readonly previousRawValues: string[];
 
+    /**
+     * @param option The option that was modified.
+     * @param rawValues The new raw values of the option.
+     * @param previousRawValues The previous raw values of the option.
+     */
     constructor(option: BlockOption, rawValues: string[], previousRawValues: string[]) {
         super();
         this.option = option;
@@ -52,7 +57,7 @@ class OptionSetAction extends BuilderAction {
     }
 
     public override revert(): BuilderAction {
-        this.option.setRawValues(this.previousRawValues);
+        this.option.rawValues = this.previousRawValues;
         return new OptionSetAction(this.option, this.previousRawValues, this.rawValues);
     }
 }
@@ -62,6 +67,11 @@ class NextSetAction extends BuilderAction {
     private readonly previousParentBlock: StructogramBlock | undefined;
     private readonly block: StructogramBlock;
 
+    /**
+     * @param parentBlock The block whose next block was changed.
+     * @param previousParentBlock The block which used to be the parent block.
+     * @param block The block which was moved.
+     */
     constructor(parentBlock: StructogramBlock | undefined, previousParentBlock: StructogramBlock | undefined, block: StructogramBlock) {
         super();
         this.parentBlock = parentBlock;
@@ -87,6 +97,13 @@ class SubBlockSetAction extends BuilderAction {
     private readonly previousSubBlockKey: string | undefined;
     private readonly block: StructogramBlock;
 
+    /**
+     * @param superBlock The super block whose sub blocks were changed. If undefined it means that the moved block is no longer a sub block.
+     * @param subBlockKey The key of the sub block that was changed. If undefined it means that the moved block is no longer a sub block.
+     * @param previousSuperBlock The previous super block of the block. If undefined it means that the moved block was not a sub block originally.
+     * @param previousSubBlockKey The previous key of the sub block. If undefined it means that the moved block was not a sub block originally.
+     * @param block The block which was moved.
+     */
     constructor(superBlock: StructogramBlock | undefined, subBlockKey: string | undefined, previousSuperBlock: StructogramBlock | undefined, previousSubBlockKey: string | undefined, block: StructogramBlock) {
         super();
         this.superBlock = superBlock;
@@ -110,6 +127,9 @@ class SubBlockSetAction extends BuilderAction {
 class AddBlockAction extends BuilderAction {
     private readonly block: StructogramBlock;
 
+    /**
+     * @param block The block that was added.
+     */
     constructor(block: StructogramBlock) {
         super();
         this.block = block;
@@ -123,6 +143,10 @@ class AddBlockAction extends BuilderAction {
 
 class DeleteBlockAction extends BuilderAction {
     private readonly block: StructogramBlock;
+
+    /**
+     * @param block The block that was deleted.
+     */
     constructor(block: StructogramBlock) {
         super();
         this.block = block;
@@ -139,6 +163,11 @@ class ChangeStartingBlockAction extends BuilderAction {
     private readonly block: StructogramBlock | undefined;
     private readonly previousBlock: StructogramBlock | undefined;
 
+    /**
+     * @param structogram The structogram whose starting block was changed.
+     * @param block The new starting block.
+     * @param previousBlock The previous starting block.
+     */
     constructor(structogram: Structogram, block: StructogramBlock | undefined, previousBlock: StructogramBlock | undefined) {
         super();
         this.structogram = structogram;
@@ -152,10 +181,17 @@ class ChangeStartingBlockAction extends BuilderAction {
     }
 }
 
+/**
+ * This action is responsible for the creation of independent movable structogram segments in the build area.
+ */
 class CreateSegmentAction extends BuilderAction {
     private readonly renderTarget: Element;
     private readonly associatedSegment: Element;
 
+    /**
+     * @param renderTarget The render target in which the segment was created in.
+     * @param associatedSegment The created segment element.
+     */
     constructor(renderTarget: Element, associatedSegment: Element) {
         super();
         this.renderTarget = renderTarget;
@@ -168,10 +204,17 @@ class CreateSegmentAction extends BuilderAction {
     }
 }
 
+/**
+ * This action is responsible for the deletion of independent movable structogram segments in the build area.
+ */
 class RemoveSegmentAction extends BuilderAction {
     private readonly renderTarget: Element;
     private readonly associatedSegment: Element;
 
+    /**
+     * @param renderTarget The render target in which the segment was removed from.
+     * @param associatedSegment The removed segment element.
+     */
     constructor(renderTarget: Element, associatedSegment: Element) {
         super();
         this.renderTarget = renderTarget;
@@ -193,6 +236,15 @@ class SpecificationChangeAction extends BuilderAction {
     private readonly oldAux: [string, string][];
     private readonly oldOutput: [string, string][];
 
+    /**
+     * @param structogram The structogram whose specification changed.
+     * @param newInput The new input data of the structogram.
+     * @param newAux The new auxiliary data of the structogram.
+     * @param newOutput The new output data of the structogram.
+     * @param oldInput The previous input data of the structogram.
+     * @param oldAux The previous auxiliary data of the structogram.
+     * @param oldOutput The previous output data of the structogram.
+     */
     constructor(structogram: Structogram, newInput: [string, string][], newAux: [string, string][], newOutput: [string, string][], oldInput: [string, string][], oldAux: [string, string][], oldOutput: [string, string][]) {
         super();
         this.structogram = structogram;
@@ -228,6 +280,10 @@ class ActionTimeLine {
     private past: (BuilderAction | ActionStart)[] = [];
     private future: (BuilderAction | ActionStart)[] = [];
 
+    /**
+     * Adds an action to the timeline.
+     * @param action The action to be added to the timeline.
+     */
     public didAction(action: BuilderAction) {
         this.past.push(action);
         if(this.past.length > this.historyLimit) {
@@ -239,12 +295,19 @@ class ActionTimeLine {
         this.future = [];
     }
 
+    /**
+     * Begins an action block. Undo will revert everything until this point.
+     * Calling it again will start another action block which can be reverted.
+     */
     public start() {
         if(this.past.at(-1) != "start") this.past.push("start");
     }
 
+    /**
+     * Undoes everything in the past action block.
+     */
     public undo() {
-        if(this.past.length == 0) return; 
+        if(this.past.length == 0) return;
         let action = this.past.pop();
         // the last action could be empty we should skip it
         if(action == "start") {
@@ -258,6 +321,9 @@ class ActionTimeLine {
         }
     }
 
+    /**
+     * Redoes everything in the future action block.
+     */
     public redo() {
         if(this.future.length == 0) return;
         let action = this.future.pop();
@@ -300,25 +366,28 @@ export class StructogramBuilder extends StructogramRenderer {
     public readonly structogramSettings = new StructogramSettings(this);
     public readonly structogramGeneralSettings;
 
+    /**
+     * The block currently selected. Used by structogram settings and copy pasting.
+     */
     public set selectedBlock(block: StructogramBlock | undefined) {
         if(this._selectedBlock) {
             const node = document.querySelector(`#${this.idPrefix}-${this._selectedBlock.id}`);
-            node?.classList.remove(...selectedClass);
-            node?.classList.add(...unselectedClass);
+            node?.classList.remove(...selectedStyle);
+            node?.classList.add(...neutralStyle);
         } else {
             const speci = document.querySelector("#specification");
-            speci?.classList.remove("bg-cyan-100");
-            speci?.classList.add("bg-white", "hover:bg-cyan-50");
+            speci?.classList.remove(...selectedStyle);
+            speci?.classList.add(...neutralStyle);
         }
         this._selectedBlock = block;
         if(this._selectedBlock) {
             const node = document.querySelector(`#${this.idPrefix}-${this._selectedBlock.id}`);
-            node?.classList.remove(...unselectedClass);
-            node?.classList.add(...selectedClass);
+            node?.classList.remove(...neutralStyle);
+            node?.classList.add(...selectedStyle);
         } else {
             const speci = document.querySelector("#specification");
-            speci?.classList.remove("bg-white", "hover:bg-cyan-50");
-            speci?.classList.add("bg-cyan-100");
+            speci?.classList.remove(...neutralStyle);
+            speci?.classList.add(...selectedStyle);
         }
         this.emitter.emit(StructogramBuilder.selectedBlockChanged);
     }
@@ -329,16 +398,16 @@ export class StructogramBuilder extends StructogramRenderer {
 
     /**
      * Creates an HTML element that can accomodate a block tree.
-     * @param block the first block of the tree 
-     * @param x x coordinate of the starting position
-     * @param y y coordinate of the starting positon
+     * @param block The first block of the tree.
+     * @param x The x coordinate of the starting position.
+     * @param y The y coordinate of the starting position.
      */
     private addSegmentFor(block: StructogramBlock, x: number, y: number): Element {
         const elem = this.structogramSVG.cloneNode() as SVGSVGElement;
         elem.id = `${block.id}-segment`;
         setX(elem, x);
         setY(elem, y);
-        elem.classList.add("opacity-50");
+        elem.classList.add(...inactiveStyle);
         elem.classList.remove("structogram-svg");
         this.renderTarget.appendChild(elem);
         this.timeLine.didAction(new CreateSegmentAction(this.renderTarget, elem));
@@ -346,6 +415,10 @@ export class StructogramBuilder extends StructogramRenderer {
         return elem;
     }
 
+    /**
+     * Removes a block from its block tree.
+     * @param block The block to remove.
+     */
     private disconnectBlock(block: StructogramBlock) {
         const structogram = this.structogram;
         function isStartingBlock(block: StructogramBlock) {
@@ -355,7 +428,7 @@ export class StructogramBuilder extends StructogramRenderer {
             return !!block.superBlock && !!block.subBlockKey;
         }
         function hasParent(block: StructogramBlock) {
-            return !!block.parent;
+            return !!block.prev;
         }
         if(isStartingBlock(block)) {
             structogram.startingBlock = undefined;
@@ -366,7 +439,7 @@ export class StructogramBuilder extends StructogramRenderer {
             superBlock.setSubBlock(subBlockKey, undefined);
             this.timeLine.didAction(new SubBlockSetAction(undefined, undefined, superBlock, subBlockKey, block));
         } else if(hasParent(block)){
-            const parent = block.parent!;
+            const parent = block.prev!;
             parent.next = undefined;
             this.timeLine.didAction(new NextSetAction(undefined, parent, block));
         }
@@ -374,17 +447,17 @@ export class StructogramBuilder extends StructogramRenderer {
 
     /**
      * Converts an x coordinate relative to the main div of the structogramview to be the coordinate system of the svg of the structogramview.
-     * @param x the coordinate relative to the main div
-     * @returns the coordinate in the coordinate system of the svg og the structogramview
+     * @param x The coordinate relative to the main div.
+     * @returns The coordinate in the coordinate system of the svg of the structogramview.
      */
     private xDivToSvg(x: number) {
         return this.originOffsetX - this.originX + x / this.scale;
     }
 
     /**
-     * Converts an y coordinate relative to the main div of the structogramview to be the coordinate system of the svg of the structogramview.
-     * @param y the coordinate relative to the main div
-     * @returns the coordinate in the coordinate system of the svg og the structogramview
+     * Converts a y coordinate relative to the main div of the structogramview to be the coordinate system of the svg of the structogramview.
+     * @param x The coordinate relative to the main div.
+     * @returns The coordinate in the coordinate system of the svg of the structogramview.
      */
     private yDivToSvg(y: number) {
         return this.originOffsetY - this.originY + y / this.scale;
@@ -411,7 +484,7 @@ export class StructogramBuilder extends StructogramRenderer {
         });
     }
 
-    private setupNewStructogramButtons() {
+    private setupNewStructogramConfirmationButtons() {
         this.newButton.addEventListener("click", () => {
             this.newWindow.classList.remove("hidden");
         });
@@ -426,7 +499,7 @@ export class StructogramBuilder extends StructogramRenderer {
         })
     }
 
-    private setupBlockDropping() {
+    private setupBlockDroppingInBuildArea() {
         this.viewElement.addEventListener("mouseup", event => {
             if(event.button == 0) {
                 if(this.movingBlock) {
@@ -470,7 +543,7 @@ export class StructogramBuilder extends StructogramRenderer {
         });
     }
 
-    private setupBlockMoving() {
+    private setupBlockMovingLogic() {
         this.viewElement.addEventListener("mousemove", event => {
             if(this.movingBlock) {
                 if(this.movingBlock.associatedElement) {
@@ -537,11 +610,10 @@ export class StructogramBuilder extends StructogramRenderer {
     constructor(structogram: Structogram, viewModel: ViewModel) {
         super(viewModel, structogram, document.querySelector("#structogram-builder")!, "builder")
         this.structogramGeneralSettings = new StructogramGeneralSettings(this.structogram, this.viewModel);
-        this.toolbar.generateHTML();
-        this.setupBlockDropping();
-        this.setupBlockMoving();
+        this.setupBlockDroppingInBuildArea();
+        this.setupBlockMovingLogic();
         this.setupTimeLineControlButtons();
-        this.setupNewStructogramButtons();
+        this.setupNewStructogramConfirmationButtons();
         this.setupCopyPaste();
         this.settingsButton.addEventListener("click", () => {
             this.structogramGeneralSettings.show();
@@ -585,8 +657,8 @@ export class StructogramBuilder extends StructogramRenderer {
             }
         })
         if(this.selectedBlock == block) {
-            elem.classList.remove(...unselectedClass);
-            elem.classList.add(...selectedClass);
+            elem.classList.remove(...neutralStyle);
+            elem.classList.add(...selectedStyle);
         }
     }
 
@@ -595,12 +667,12 @@ export class StructogramBuilder extends StructogramRenderer {
         setPosition(elem, xOffset, yOffset);
         setSize(elem, width, baseBlockHeight);
         function highlight() {
-            elem.classList.remove("fill-white");
-            elem.classList.add("fill-green-50");
+            elem.classList.remove(...cannotPlaceOnStyle);
+            elem.classList.add(...canPlaceOnStyle);
         }
         function unhighlight() {
-            elem.classList.add("fill-white");
-            elem.classList.remove("fill-green-50");
+            elem.classList.add(...cannotPlaceOnStyle);
+            elem.classList.remove(...canPlaceOnStyle);
         }
         elem.addEventListener("mouseup", event => {
             if(event.button == 0) {
@@ -621,7 +693,7 @@ export class StructogramBuilder extends StructogramRenderer {
                 }
                 if(block) {
                     if(context.parent) {
-                        const parent = block.parent;
+                        const parent = block.prev;
                         context.parent.next = block;
                         this.timeLine.didAction(new NextSetAction(context.parent, parent, block));
                         unhighlight();
@@ -667,14 +739,10 @@ export class StructogramBuilder extends StructogramRenderer {
 
 class ToolbarEntry {
     private readonly icon: HTMLElement;
-    private readonly _name: string;
-    private readonly _description: string;
     private readonly factory: () => StructogramBlock;
 
-    constructor(toolbar: BlockToolbar, icon: HTMLElement, name: string, description: string, factory: () => StructogramBlock) {
+    constructor(toolbar: BlockToolbar, icon: HTMLElement, factory: () => StructogramBlock) {
         this.icon = icon;
-        this._name = name;
-        this._description = description;
         this.factory = factory;
         this.icon.addEventListener("mousedown", event => {
             if(event.button == 0) {
@@ -682,14 +750,6 @@ class ToolbarEntry {
                 event.stopPropagation();
             }
         })
-    }
-
-    public get name() {
-        return this._name;
-    }
-
-    public get description() {
-        return this._description;
     }
 
     public createBlock(): StructogramBlock {
@@ -710,51 +770,35 @@ class BlockToolbar {
         this.toolbarEntries = [
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-assignment-block")!, 
-                "Assignment block", 
-                "desc",
+                document.querySelector("#toolbar-assignment-block")!,
                 () => new AssignmentBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-control-block")!, 
-                "Control block", 
-                "desc",
+                document.querySelector("#toolbar-control-block")!,
                 () => new ControlBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-print-block")!, 
-                "Print block", 
-                "desc",
+                document.querySelector("#toolbar-print-block")!,
                 () => new PrintBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-true-false-branching-block")!, 
-                "True False branching block", 
-                "desc",
+                document.querySelector("#toolbar-true-false-branching-block")!,
                 () => new TrueFalseBranchingBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-multi-branching-block")!, 
-                "Multi branching block", 
-                "desc",
+                document.querySelector("#toolbar-multi-branching-block")!,
                 () => new MultiBranchingBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-counting-loop-block")!, 
-                "Counting loop block", 
-                "desc",
+                document.querySelector("#toolbar-counting-loop-block")!,
                 () => new CountingLoopBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-front-testing-loop-block")!, 
-                "Front testing loop block", 
-                "desc",
+                document.querySelector("#toolbar-front-testing-loop-block")!,
                 () => new FrontTestingLoopBlock(structogram)),
             new ToolbarEntry(
                 this,
-                document.querySelector("#toolbar-back-testing-loop-block")!, 
-                "Back testing loop block", 
-                "desc",
+                document.querySelector("#toolbar-back-testing-loop-block")!,
                 () => new BackTestingLoopBlock(structogram))
             ];
         document.addEventListener("mouseup", event => {
@@ -764,6 +808,9 @@ class BlockToolbar {
         })
     }
 
+    /**
+     * A function for constructing the currently dragged toolbar entries structogram block.
+     */
     public get blockBrush() {
         return this._blockBrush;
     }
@@ -782,21 +829,9 @@ class BlockToolbar {
         this.blockBrush = undefined;
         return result;
     }
-
-    public generateHTML() {
-        this.toolbarNode.innerHTML = "";
-        for(const entry of this.toolbarEntries) {
-            const toolbarIcon = entry.getIcon();
-            const div = document.createElement("div");
-            div.classList.add("flex-auto");
-            div.classList.add("p-2");
-            div.appendChild(toolbarIcon);
-            this.toolbarNode.appendChild(div);
-        }
-    }
 }
 
-abstract class OptionHandler {  
+abstract class OptionHandler {
     /**
      * It fires when a block option changes.
      * Its arguments are: option: BlockOption, oldValue: string[], newValue: string[]
@@ -809,7 +844,13 @@ abstract class OptionHandler {
         this.optionResourceManager = optionResourceManager;
     }
 
-    public getHTMLNodeFor(option: BlockOption, block: StructogramBlock) {
+    /**
+     * Retrieves the HTML element for an option setup with event listeners.
+     * @param option The option to create the element for.
+     * @param block The block it is a part of.
+     * @returns An HTML element for changing that option.
+     */
+    public getHTMLElementFor(option: BlockOption, block: StructogramBlock) {
         const node = this.optionResourceManager.getHTMLForObject(option);
         if(!node) return undefined;
         this.applyLogic(option, block, node);
@@ -826,27 +867,27 @@ class StatementOptionHandler<J extends Value> extends OptionHandler {
     protected override applyLogic(option: StatementOption<J>, block: StructogramBlock, node: Element): void {
         (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;
         const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
-        textField.value = option.getStatement();
+        textField.value = option.statement;
         textField.addEventListener("change", () => {
-            const oldValues = option.getRawValues();
-            option.setStatement(textField.value);
-            this.changed(option, option.getRawValues(), oldValues);
+            const oldValues = option.rawValues;
+            option.statement = textField.value;
+            this.changed(option, option.rawValues, oldValues);
         });
-    }   
+    }
 }
 
 class BooleanStatementListOptionHandler extends OptionHandler {
 
     private updateStatements(form: HTMLElement, option: BooleanStatementListOption) {
         const fields = [...form.querySelectorAll("input[type=\"text\"]")!.values()] as HTMLFormElement[];
-        option.setStatements(fields.map(f => f.value));
+        option.statements = fields.map(f => f.value);
     }
 
     private addUpdateEventTo(form: HTMLElement, textField: HTMLFormElement, option: BooleanStatementListOption) {
         textField.addEventListener("change", () => {
-            const oldValues = option.getRawValues();
+            const oldValues = option.rawValues;
             this.updateStatements(form, option);
-            this.changed(option, option.getRawValues(), oldValues);
+            this.changed(option, option.rawValues, oldValues);
         })
     }
 
@@ -857,13 +898,13 @@ class BooleanStatementListOptionHandler extends OptionHandler {
         const removeButton = copy.querySelector("input[type=\"button\"]") as HTMLFormElement;
         removeButton.addEventListener("click", event => {
             if(event.button == 0) {
-                const oldValues = option.getRawValues();
+                const oldValues = option.rawValues;
                 form.removeChild(copy);
                 this.updateStatements(form, option);
-                this.changed(option, option.getRawValues(), oldValues);
+                this.changed(option, option.rawValues, oldValues);
             }
         })
-        textField.value = option.getStatements()[index];
+        textField.value = option.statements[index];
         this.addUpdateEventTo(form, textField, option);
         return copy;
     }
@@ -873,7 +914,7 @@ class BooleanStatementListOptionHandler extends OptionHandler {
         const form = node.querySelector("form") as HTMLElement;
         const conditionEntry = node.querySelector(".t-condition-entry") as HTMLElement;
         form.removeChild(conditionEntry);
-        const statementCount = option.getStatements().length;
+        const statementCount = option.statements.length;
         let i = 0;
         for(; i < statementCount; i++) {
             this.cloneAndAddTextField(form, conditionEntry, i, option);
@@ -881,31 +922,31 @@ class BooleanStatementListOptionHandler extends OptionHandler {
         const addButton = node.querySelector(`.t-add-button`) as HTMLElement;
         addButton.addEventListener("click", event => {
             if(event.button == 0) {
-                const oldValues = option.getRawValues();
+                const oldValues = option.rawValues;
                 i++;
                 this.cloneAndAddTextField(form, conditionEntry, i, option);
                 this.updateStatements(form, option);
-                this.changed(option, option.getRawValues(), oldValues);
+                this.changed(option, option.rawValues, oldValues);
             }
         })
-    }   
+    }
 }
 
 class KeyOptionHandler extends OptionHandler {
     protected override applyLogic(option: KeyOption, block: StructogramBlock, node: Element): void {
-        (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;  
+        (node.querySelector(".t-name") as HTMLElement).dataset["trkey"] = `option_name_${option.name}`;
         const textField = node.querySelector("input[type=\"text\"]")! as HTMLFormElement;
-        textField.value = option.getKey();
+        textField.value = option.key;
         textField.addEventListener("change", () => {
-            const oldValues = option.getRawValues();
-            option.setKey(textField.value);
-            this.changed(option, option.getRawValues(), oldValues);
+            const oldValues = option.rawValues;
+            option.key = textField.value;
+            this.changed(option, option.rawValues, oldValues);
         });
-    }   
+    }
 }
 
 class SpecificationSettingHandler {
-    
+
     /**
      * It fires when the specification is changed by the user.
      * Its arguments are: oldInput: [string, string][], oldAux: [string, string][], oldOutput: [string, string][], newInput: [string, string][], newAux: [string, string][], newOutput: [string, string][]
@@ -934,7 +975,7 @@ class SpecificationSettingHandler {
         const inputDataEntries = this.inDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
         const auxDataEntries = this.auxDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
         const outputDataEntries = this.outDataElem.querySelectorAll(".t-data-entry") as NodeListOf<HTMLElement>;
-        
+
         const oldInput = this.structogramBuilder.structogram.inputData.map(entry => [entry[0]!, entry[1]!.id]);
         const oldAux = this.structogramBuilder.structogram.auxData.map(entry => [entry[0]!, entry[1]!.id]);
         const oldOutput = this.structogramBuilder.structogram.outputData.map(entry => [entry[0]!, entry[1]!.id]);
@@ -983,9 +1024,9 @@ class SpecificationSettingHandler {
     }
 
     private setupElements() {
-        this.setupDataSettings(this.structogramBuilder.structogram.inputData, this.inDataElem, "specification_in_full");
-        this.setupDataSettings(this.structogramBuilder.structogram.auxData, this.auxDataElem, "specification_aux_full");
-        this.setupDataSettings(this.structogramBuilder.structogram.outputData, this.outDataElem, "specification_out_full");
+        this.setupDataSettingsHandlingFor(this.structogramBuilder.structogram.inputData, this.inDataElem, "specification_in_full");
+        this.setupDataSettingsHandlingFor(this.structogramBuilder.structogram.auxData, this.auxDataElem, "specification_aux_full");
+        this.setupDataSettingsHandlingFor(this.structogramBuilder.structogram.outputData, this.outDataElem, "specification_out_full");
     }
 
     private loadEntriesFor(entries: [string, ValueType][], target: HTMLElement) {
@@ -1003,7 +1044,7 @@ class SpecificationSettingHandler {
         this.loadEntriesFor(this.structogramBuilder.structogram.outputData, this.outDataElem);
     }
 
-    private setupDataSettings(entries: [string, ValueType][], target: HTMLElement, name: string) {
+    private setupDataSettingsHandlingFor(entries: [string, ValueType][], target: HTMLElement, name: string) {
         this.loadEntriesFor(entries, target);
         (target.querySelector(".t-name") as HTMLElement).dataset["trkey"] = name;
         const entriesElem = target.querySelector(".t-entries") as HTMLElement;
@@ -1042,7 +1083,7 @@ class SpecificationSettingHandler {
         this.loadEntries();
         return [this.inDataElem, this.auxDataElem, this.outDataElem];
     }
-    
+
 }
 
 class StructogramSettings {
@@ -1067,20 +1108,28 @@ class StructogramSettings {
     constructor(structogramBuilder: StructogramBuilder) {
         this.builder = structogramBuilder;
         this.specificationSettingsHandler = new SpecificationSettingHandler(structogramBuilder);
-        this.optionResourceManager.register("anystatementoption", statementOptionTemplate);
-        this.optionHandlers["anystatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
-        this.optionResourceManager.register("numericstatementoption", statementOptionTemplate);
-        this.optionHandlers["numericstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
-        this.optionResourceManager.register("stringstatementoption", statementOptionTemplate);
-        this.optionHandlers["stringstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
-        this.optionResourceManager.register("booleanstatementoption", statementOptionTemplate);
-        this.optionHandlers["booleanstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
-        this.optionResourceManager.register("booleanstatementlistoption", booleanStatementListOptionTemplate);
-        this.optionHandlers["booleanstatementlistoption"] = new BooleanStatementListOptionHandler(this.optionResourceManager);
-        this.optionResourceManager.register("keyoption", keyOptionTemplate);
-        this.optionHandlers["keyoption"] = new KeyOptionHandler(this.optionResourceManager);
+        this.registerOptionsIntoResourceManager();
+        this.registerOptionHandlers();
         this.addListenersForHandlers();
         this.addCurrentBlockHandler();
+    }
+
+    private registerOptionsIntoResourceManager() {
+        this.optionResourceManager.register("anystatementoption", statementOptionTemplate);
+        this.optionResourceManager.register("numericstatementoption", statementOptionTemplate);
+        this.optionResourceManager.register("stringstatementoption", statementOptionTemplate);
+        this.optionResourceManager.register("booleanstatementoption", statementOptionTemplate);
+        this.optionResourceManager.register("booleanstatementlistoption", booleanStatementListOptionTemplate);
+        this.optionResourceManager.register("keyoption", keyOptionTemplate);
+    }
+
+    private registerOptionHandlers() {
+        this.optionHandlers["anystatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
+        this.optionHandlers["numericstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
+        this.optionHandlers["stringstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
+        this.optionHandlers["booleanstatementoption"] = new StatementOptionHandler<SimpleValue>(this.optionResourceManager);
+        this.optionHandlers["booleanstatementlistoption"] = new BooleanStatementListOptionHandler(this.optionResourceManager);
+        this.optionHandlers["keyoption"] = new KeyOptionHandler(this.optionResourceManager);
     }
 
     private addListenersForHandlers() {
@@ -1105,7 +1154,7 @@ class StructogramSettings {
         if(this.builder.selectedBlock) {
             for(const option of this.builder.selectedBlock.options) {
                 if(option.classIdentifier in this.optionHandlers) {
-                    const node = this.optionHandlers[option.classIdentifier]!.getHTMLNodeFor(option, this.builder.selectedBlock);
+                    const node = this.optionHandlers[option.classIdentifier]!.getHTMLElementFor(option, this.builder.selectedBlock);
                     if(node) this.structogramSettingsElem.appendChild(node);
                 }
             }
@@ -1116,8 +1165,6 @@ class StructogramSettings {
             }
         }
     }
-
-    
 }
 
 class StructogramSpecificator {
@@ -1127,9 +1174,9 @@ class StructogramSpecificator {
     private addEntryTo(clazz: string, entry: string) {
         const currentText = getTemplateText(this.specificationElem, clazz);
         if(currentText.length > 0) {
-            setTemplateText(this.specificationElem, clazz, currentText + `, ${entry}`);  
+            setTemplateText(this.specificationElem, clazz, currentText + `, ${entry}`);
         } else {
-            setTemplateText(this.specificationElem, clazz, `${entry}`);  
+            setTemplateText(this.specificationElem, clazz, `${entry}`);
         }
     }
 
@@ -1194,7 +1241,7 @@ class StructogramGeneralSettings {
     private loadSettings() {
         this.indexSetting.value = this.structogram.startingIndex.toString();
     }
-    
+
     private saveSettings() {
         this.structogram.startingIndex = Number(this.indexSetting.value);
     }

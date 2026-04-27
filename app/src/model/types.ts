@@ -35,10 +35,19 @@ export class ValueType {
         this.orderable = orderable;
     }
 
+    /**
+     * Decides if a given type matches this type, meaning it is an acceptable type
+     * in place of this type.
+     * @param type the type to check
+     * @returns Whether or not the given type matches this type.
+     */
     public matches(type: ValueType) {
         return this.id == type.id || type.baseIdentifier == "undefined";
     }
 
+    /**
+     * @returns Whether or not this type has fields like object do.
+     */
     public hasFields() {
         return false;
     }
@@ -70,11 +79,18 @@ export class ObjectType extends ValueType {
         }
     }
 
+    /**
+     * @param field A name of a field.
+     * @returns The type of the field.
+     */
     public getFieldType(field: string): ValueType {
         if(!(field in this.fields)) throw new Error(`Field [${field}] not present in object!`);
         return this.fields[field]!(this.typeParameter);
     }
 
+    /**
+     * @returns All the field types.
+     */
     public getFieldTypes(): FieldTypes {
         return {...this.fields};
     }
@@ -160,7 +176,7 @@ export abstract class Field {
     constructor(name: string) {
         this.name = name;
     }
-    
+
     /**
      * Adds the field type information to a given record.
      * @param parameterTypes the potential type parameters
@@ -187,19 +203,6 @@ export class PredefinedField extends Field {
     public addTypeInformationTo(template: UtilityObjectTemplate, typeParameters: ValueType[], fields: FieldTypes): void {
         fields[this.name] = () => this.type(typeParameters);
     }
-}
-
-/**
- * The builder pattern in Typescript cannot be implemented in the usual way because inner classes are not fully supported.
- * Inner classes are static fields which are asssigned to an anonymous class. Anonymous classes defined like this
- * cannot have private fields. Consequently, we use an external interface to define its methods and then return an 
- * anonymous object implementing this interface using a static method of the class the builder is constructing. 
- * This way we can preserve encapsulation.
- */
-export interface UtilityObjectTemplateBuilder {
-    addField(name: string, type: ValueTypeFunction): UtilityObjectTemplateBuilder;
-    addSelfReferentialField(name: string): UtilityObjectTemplateBuilder;
-    build(): UtilityObjectTemplate;
 }
 
 export class SimpleValue implements Value, Ordered<SimpleValue> {
@@ -256,6 +259,33 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
     }
 }
 
+/**
+ * The builder pattern in Typescript cannot be implemented in the usual way because inner classes are not fully supported.
+ * Inner classes are static fields which are assigned to an anonymous class. Anonymous classes defined like this
+ * cannot have private fields. Consequently, we use an external interface to define its methods and then return an
+ * anonymous object implementing this interface using a static method of the class the builder is constructing.
+ * This way we can preserve encapsulation.
+ */
+export interface UtilityObjectTemplateBuilder {
+    /**
+     * Adds a field with a type to the object.
+     * @param name The name of the field to add.
+     * @param type The type of the field to add.
+     */
+    addField(name: string, type: ValueTypeFunction): UtilityObjectTemplateBuilder;
+
+    /**
+     * Adds a field with a type that is the same as the template's type.
+     * @param name The name of the field to add.
+     */
+    addSelfReferentialField(name: string): UtilityObjectTemplateBuilder;
+
+    /**
+     * Creates the template.
+     */
+    build(): UtilityObjectTemplate;
+}
+
 export class UtilityObjectTemplate {
     private readonly id: string;
     private fields: Field[];
@@ -266,7 +296,7 @@ export class UtilityObjectTemplate {
     }
 
     public getType(typeParameters: ValueType[]): ObjectType {
-        const fieldTypes: FieldTypes = {}; 
+        const fieldTypes: FieldTypes = {};
         for(const field of this.fields) {
             field.addTypeInformationTo(this, typeParameters, fieldTypes);
         }
@@ -281,7 +311,7 @@ export class UtilityObjectTemplate {
         return new class implements UtilityObjectTemplateBuilder {
             private readonly id: string;
             private readonly fields: Field[] = [];
-            
+
             constructor(id: string) {
                 this.id = id;
             }
@@ -328,17 +358,20 @@ export class UtilityArray implements Value {
      */
     public static readonly elementAccessed = "utilityarray.element.accessed";
 
+    /**
+     * @param values The array of values it will contain.
+     * @param elementType The type of the elements it will contain.
+     * @throws {Error} The parameter must only contain values of the element type.
+     */
     constructor(values: Value[], elementType: ValueType) {
-        UtilityArray.ensureValuesAreHomogenous(values)
+        UtilityArray.ensureValuesMatchElementType(values, elementType);
         this.elements = [...values.map(value => value.clone())];
         this.elementType = elementType;
     }
 
-    private static ensureValuesAreHomogenous(values: Value[]) {
+    private static ensureValuesMatchElementType(values: Value[], elementType: ValueType) {
         for(let i = 0; i < values.length; i++) {
-            for(let j = i + 1; j < values.length; j++) {
-                if(!values[i]!.type.matches(values[j]!.type)) throw new Error("Array cannot be heterogenous!");
-            }
+            if(!elementType.matches(values[i]!.type)) throw new Error("Array content must match its element type!");
         }
     }
 
@@ -382,6 +415,10 @@ export class UtilityArray implements Value {
         return false;
     }
 
+    /**
+     * @param other The array to concatenate onto this array.
+     * @returns A new array which contains the elements of this array and the given array.
+     */
     public concat(other: UtilityArray): UtilityArray {
         if(!this.elementType.matches(other.elementType)) throw new Error("Cannot concatenate two arrays of different element types!");
         return new UtilityArray(this.elements.concat(other.elements), this.elementType);
@@ -397,6 +434,11 @@ export class UtilityArray implements Value {
 }
 
 export class UtilityString extends UtilityArray implements Ordered<UtilityString> {
+
+    /**
+     * @param values An array of characters.
+     * @throws {Error} The parameter must only contain char values.
+     */
     constructor(values: Value[]) {
         super(values, charType);
         UtilityString.ensureValuesAreChar(values);
@@ -407,7 +449,7 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
             if(!charType.matches(value.type)) return new Error("Values of string must be chars!");
         }
     }
-    
+
     public greaterThan(other: UtilityString): boolean {
         return this.getString() > other.getString();
     }
@@ -472,6 +514,12 @@ export class UtilityObject implements Value {
         this.type = type;
     }
 
+    /**
+     * @param name The name of the field whose value to retrieve.
+     * @param supressEvent If true it will stop the object from firing events.
+     * @returns The value of the field whose name was provided as a parameter.
+     * @throws {Error} The field with the given name must exist.
+     */
     public get(name: string, supressEvent: boolean = false): Value {
         if(!(name in this.fieldData)) throw new Error("Field does not exist!");
         if(!supressEvent) {
@@ -480,6 +528,13 @@ export class UtilityObject implements Value {
         return this.fieldData[name]!;
     }
 
+    /**
+     * Sets the value of a field with a given name.
+     * @param name The name of the field whose value to set.
+     * @param value The value to set the field to.
+     * @throws {Error} The field with the given name must exist.
+     * @throws {Error} The value provided must match the type of the field.
+     */
     public set(name: string, value: Value) {
         if(!(name in this.fieldData)) throw new Error("Field does not exist!");
         if(!this.type.getFieldType(name).matches(value.type)) throw new Error("Type mismatch!");
@@ -511,20 +566,20 @@ export class UtilityObject implements Value {
     }
 }
 
-export const SinglyLinkedListNodeTemplate = 
+export const SinglyLinkedListNodeTemplate =
     UtilityObjectTemplate.Builder("s1l")
         .addField("key", typeParams => typeParams[0]!)
         .addSelfReferentialField("next")
         .build();
-        
-export const DoublyLinkedListNodeTemplate = 
+
+export const DoublyLinkedListNodeTemplate =
     UtilityObjectTemplate.Builder("s2l")
         .addField("key", typeParams => typeParams[0]!)
         .addSelfReferentialField("next")
         .addSelfReferentialField("prev")
         .build();
 
-export const BinaryTreeNodeTemplate = 
+export const BinaryTreeNodeTemplate =
     UtilityObjectTemplate.Builder("btn")
         .addField("key", typeParams => typeParams[0]!)
         .addSelfReferentialField("parent")
@@ -534,21 +589,23 @@ export const BinaryTreeNodeTemplate =
 
 export const typeRegistry: Record<string, (v: ValueType) => ValueType> = {};
 
-function registerType(type: ValueType, factory: (v: ValueType) => ValueType, aliases: string[] = []) {
+/**
+ * Registers a type into the type registry. Must be called on types to be able to parse them.
+ * @param factory A function that can construct the type.
+ */
+function registerType(factory: (v: ValueType) => ValueType) {
+    const type = factory(anyType);
     typeRegistry[type.baseIdentifier] = factory;
-    for(const alias of aliases) {
-        typeRegistry[alias] = factory;
-    }
 }
 
-registerType(numberType, v => numberType);
-registerType(charType, v => charType);
-registerType(booleanType, v => booleanType);
-registerType(new ArrayType(numberType), v => new ArrayType(v));
-registerType(stringType, v => stringType);
-registerType(SinglyLinkedListNodeTemplate.getType([numberType]), v => SinglyLinkedListNodeTemplate.getType([v]));
-registerType(DoublyLinkedListNodeTemplate.getType([numberType]), v => DoublyLinkedListNodeTemplate.getType([v]));
-registerType(BinaryTreeNodeTemplate.getType([numberType]), v => BinaryTreeNodeTemplate.getType([v]));
+registerType(_v => numberType);
+registerType(_v => charType);
+registerType(_v => booleanType);
+registerType(v => new ArrayType(v));
+registerType(_v => stringType);
+registerType(v => SinglyLinkedListNodeTemplate.getType([v]));
+registerType(v => DoublyLinkedListNodeTemplate.getType([v]));
+registerType(v => BinaryTreeNodeTemplate.getType([v]));
 
 function splitTypeTokens(typeIdentifier: string) {
     return typeIdentifier.split("<").map(t => t.split(">")[0]!);
@@ -562,6 +619,11 @@ export class TypeParseError extends Error {
     }
 }
 
+/**
+ * Parses a string representation of a type identifier and parses it into its corresponding type.
+ * @param typeIdentifier The string representation of the type identifier.
+ * @returns The type this identifier corresponds to.
+ */
 export function parseType(typeIdentifier: string): ValueType {
     const typeTokens = splitTypeTokens(typeIdentifier);
     if(typeTokens.some(t => !(t in typeRegistry))) throw new TypeParseError("Invalid type identifier!");

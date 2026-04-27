@@ -8,11 +8,11 @@ export type Bracket = OpeningBracket | ClosingBracket;
 type Comma = ",";
 
 export class StatementParseError extends Error {
-    public readonly translationKey: string;
+    public readonly errorID: string;
 
-    constructor(m: string, translationKey: string) {
+    constructor(m: string, errorID: string) {
         super(m);
-        this.translationKey = translationKey;
+        this.errorID = errorID;
         Object.setPrototypeOf(this, StatementParseError.prototype);
     }
 }
@@ -31,20 +31,50 @@ export class IndexResolver {
         this.startIndex = startIndex;
     }
 
+    /**
+     * Translates the index given by a user to an index to be used in code.
+     * @param index The user given index.
+     * @returns The index to be used in code.
+     */
     public resolve(index: number) {
         return index - this.startIndex;
     }
 }
 
 export abstract class Operator {
+    /**
+     * The precedence of an Operator determines which operator takes priority over another.
+     * An Operator with higher precedence will always be evaluated first.
+     */
     public readonly precedence: number;
+
+    /**
+     * The type of the Operator. Decides how the it's applied.
+     */
     public readonly type: OperatorType;
+
+    /**
+     * The text representing the Operator in statements.
+     */
     public readonly token: string;
+
+    /**
+     * How many Operands does the Operator expect.
+     */
     public readonly operandCount: number;
     private condition: (ops: ValueType[]) => boolean;
     protected returnType: ValueType;
     protected rightToLeft: boolean;
 
+    /**
+     * @param precedence The priority.
+     * @param operandCount How many Operands it will be applicable to.
+     * @param type How it can be applied.
+     * @param token The text that represents it inside statements.
+     * @param condition The preconditions of the Operands it can be applied to.
+     * @param returnType The type of the value it will be evaluated into.
+     * @param rightToLeft Is it evaluated from left to right or from right to left?
+     */
     protected constructor(precedence: number, operandCount: number, type: OperatorType, token: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, rightToLeft: boolean) {
         this.precedence = precedence;
         this.type = type;
@@ -55,18 +85,22 @@ export abstract class Operator {
         this.rightToLeft = rightToLeft;
     }
 
-    public getPrecedence(): number {
-        return this.precedence;
-    }
-
+    /**
+     * @param other The other Operator.
+     * @returns Whether or not this Operator has precedence over the other Operator.
+     */
     public hasPrecedenceOver(other: Operator): boolean {
         if(this.rightToLeft) {
-            return other.getPrecedence() < this.getPrecedence();
+            return other.precedence < this.precedence;
         }
-        return other.getPrecedence() <= this.getPrecedence();
+        return other.precedence <= this.precedence;
     }
 
-    public getReturnType(parameterTypes: ValueType[] = []): ValueType {
+    /**
+     * @param operandTypes The types of the Operands this Operator would be applied on.
+     * @returns The type of the value the Operator will be evaluated into.
+     */
+    public getReturnType(operandTypes: ValueType[] = []): ValueType {
         return this.returnType;
     }
 
@@ -74,22 +108,45 @@ export abstract class Operator {
         return operands.some(op => op.type.id == "undefined");
     }
 
+    /**
+     * Evaluates the Operator on given Operands.
+     * @param operands The operands.
+     * @param indexResolver The index resolver to be used on indicies.
+     * @returns The value it's evaluated into
+     */
     abstract apply(operands: Value[], indexResolver: IndexResolver): Value;
-    public isApplicableTo(types: ValueType[]): boolean {
-        if(types.some(t => t.id == "undefined")) return true;
-        return this.condition(types);
+
+    /**
+     * @param operandTypes The types of the Operands this Operator would be applied on.
+     * @returns Whether or not this Operator accepts these Operands.
+     */
+    public isApplicableTo(operandTypes: ValueType[]): boolean {
+        if(operandTypes.some(t => t.id == "undefined")) return true;
+        return this.condition(operandTypes);
     }
 }
 
 class BinaryOperator extends Operator {
     protected operation: (a: Value, b: Value) => Value;
 
+    /**
+     * @param precedence The priority.
+     * @param token The text that represents it inside statements.
+     * @param condition The preconditions of the Operands it can be applied to.
+     * @param returnType The type of the value it will be evaluated into.
+     * @param operation What it does to the given Operands.
+     * @param rightToLeft Is it evaluated from left to right or from right to left?
+     */
     public constructor(precedence: number, token: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value, b: Value) => Value, rightToLeft: boolean = false) {
         super(precedence, 2, "infix", token, condition, returnType, rightToLeft);
         this.operation = operation;
     }
 
-    public static matchesSomePairsFn(operandTypePairs: ValueType[][]) {
+    /**
+     * @param operandTypePairs The pair of types the function will accept.
+     * @returns A function which returns true if the pair of types given to it is contained in the given parameter.
+     */
+    public static matchesSomePairsFn(operandTypePairs: [ValueType, ValueType][]) {
         return (types: ValueType[]) => {
             for(const pair of operandTypePairs) {
                 let pairCopy = [...pair];
@@ -104,7 +161,7 @@ class BinaryOperator extends Operator {
             return false;
         }
     }
-    
+
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != 2) {
             throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
@@ -113,20 +170,25 @@ class BinaryOperator extends Operator {
 
         const a = operands[0]!;
         const b = operands[1]!;
-        
+
         return this.operation(a, b);
     }
 }
 
+/**
+ * Exists as a special case to the undefined operands evaluate to undefined value rule.
+ * This Operator should not return an undefined value when given undefined Operands because
+ * it is needed for checking whether or not a value is defined.
+ */
 class EqualityOperator extends BinaryOperator {
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
         if(operands.length != 2) {
-            throw new StatementEvaluationError(`BinaryOperator expected 2 operands but received ${operands.length}!`);
+            throw new StatementEvaluationError(`EqualityOperator expected 2 operands but received ${operands.length}!`);
         }
-        
+
         const a = operands[0]!;
         const b = operands[1]!;
-        
+
         return this.operation(a, b);
     }
 }
@@ -134,11 +196,22 @@ class EqualityOperator extends BinaryOperator {
 class UnaryOperator extends Operator {
     private operation: (a: Value) => Value;
 
+    /**
+     * @param precedence The priority.
+     * @param token The text that represents it inside statements.
+     * @param condition The preconditions of the Operands it can be applied to.
+     * @param returnType The type of the value it will be evaluated into.
+     * @param operation What it does to the given Operands.
+     */
     public constructor(precedence: number, token: string, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value) => Value) {
         super(precedence, 1, "prefix", token, condition, returnType, true);
         this.operation = operation;
     }
-    
+
+    /**
+     * @param operandTypes The list of types the function will accept.
+     * @returns A function that returns true if the all the types given to it are contained in the parameter.
+     */
     public static matchesSomeFn(operandTypes: ValueType[]) {
         return (types: ValueType[]) => operandTypes.some(type => type.matches(types[0]!));
     }
@@ -157,13 +230,15 @@ class UnaryOperator extends Operator {
 class FunctionOperator extends Operator {
     private operation: (a: Value[], idxr: IndexResolver) => void;
 
-    public constructor(token: string, operandCount: number, operandCondition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value[], idxr: IndexResolver) => void) {
-        super(98, operandCount, "prefix", token, operandCondition, returnType, true);
+    /**
+     * @param token The text that represents it inside statements.
+     * @param operandCount How many Operands it will be applicable to.
+     * @param condition The preconditions of the Operands it can be applied to.
+     * @param operation What it does to the given Operands.
+     */
+    public constructor(token: string, operandCount: number, condition: (ops: ValueType[]) => boolean, returnType: ValueType, operation: (a: Value[], idxr: IndexResolver) => void) {
+        super(98, operandCount, "prefix", token, condition, returnType, true);
         this.operation = operation;
-    }
-    
-    public static matchesSomeFn(operandTypes: ValueType[]) {
-        return (types: ValueType[]) => operandTypes.some(type => type.matches(types[0]!));
     }
 
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
@@ -178,6 +253,11 @@ class FunctionOperator extends Operator {
 class ObjectConstructor extends Operator {
     private template: UtilityObjectTemplate;
 
+    /**
+     * @param token The text that represents it inside statements.
+     * @param operandTypes The list of type of Operands in order it can be applied to.
+     * @param template The object template to use.
+     */
     public constructor(token: string, operandTypes: ValueType[], template: UtilityObjectTemplate) {
         super(100, operandTypes.length, "prefix", token, UnaryOperator.matchesSomeFn(operandTypes), anyType, true);
         this.template = template;
@@ -192,11 +272,14 @@ class ObjectConstructor extends Operator {
         return this.template.construct(operands);
     }
 
-    public override getReturnType(parameterTypes: ValueType[]): ValueType {
-        return this.template.getType(parameterTypes);
+    public override getReturnType(operandTypes: ValueType[]): ValueType {
+        return this.template.getType(operandTypes);
     }
 }
 
+/**
+ * A special binary operator used to access fields of Objects.
+ */
 class ObjectGetOperator extends Operator {
 
     public constructor() {
@@ -214,21 +297,24 @@ class ObjectGetOperator extends Operator {
 
         const a = operands[0]! as UtilityObject;
         const b = operands[1]! as SimpleValue;
-        
+
         return a.get(b.value as string);
     }
 
-    public override getReturnType(parameterTypes: ValueType[]): ValueType {
-        if(parameterTypes.length != 2) throw new Error("Invalid number of parameter types!");
-        if(!(parameterTypes[0] instanceof ObjectType)) throw new Error("First parameter is not an object!");
-        if(!(parameterTypes[1] instanceof TokenType)) throw new Error("Second parameter is not a token!");
-        const objectType = parameterTypes[0]!;
-        const field = parameterTypes[1].token;
+    public override getReturnType(operandTypes: ValueType[]): ValueType {
+        if(operandTypes.length != 2) throw new Error("Invalid number of parameter types!");
+        if(!(operandTypes[0] instanceof ObjectType)) throw new Error("First parameter is not an object!");
+        if(!(operandTypes[1] instanceof TokenType)) throw new Error("Second parameter is not a token!");
+        const objectType = operandTypes[0]!;
+        const field = operandTypes[1].token;
         if(!objectType.hasField(field)) throw new StatementParseError(`Accessing non-existing field [${field}] on object [${objectType.id}]!`, "error_no_field");
         return objectType.getFieldType(field);
     }
 }
 
+/**
+ * A special binary operator used to access elements of arrays. Every indexed array expression will be converted to this in the background.
+ */
 class ObjectIndexOperator extends Operator {
 
     public constructor() {
@@ -246,25 +332,33 @@ class ObjectIndexOperator extends Operator {
 
         const a = operands[0]! as UtilityArray;
         const b = operands[1]! as SimpleValue;
-        
+
         return a.indexGet(indexResolver.resolve(b.value as number));
     }
 
-    public getReturnType(parameterTypes: ValueType[]): ValueType {
-        if(parameterTypes.length != 2) throw new Error("Invalid number of parameter types!");
-        if(!(parameterTypes[0] instanceof ArrayType)) throw new Error("Invalid usage of return type!");
-        return parameterTypes[0]!.elementType;
+    public getReturnType(operandTypes: ValueType[]): ValueType {
+        if(operandTypes.length != 2) throw new Error("Invalid number of parameter types!");
+        if(!(operandTypes[0] instanceof ArrayType)) throw new Error("Invalid usage of return type!");
+        return operandTypes[0]!.elementType;
     }
 }
 
 type OperatorType = "prefix" | "infix";
 
-const operatorTokens: Set<string> = new Set();
+/**
+ * All the text representations of operators that exists.
+ */
+export const operatorTokens: Set<string> = new Set();
+
 const operatorsByType: Record<OperatorType, Record<string, Operator>> = {
     "prefix": {},
     "infix": {}
 };
 
+/**
+ * Registers an Operator to be used in the Statement logic.
+ * @param op The Operator to register.
+ */
 function registerOperator(op: Operator) {
     operatorTokens.add(op.token);
     operatorsByType[op.type]![op.token] = op;
@@ -274,13 +368,36 @@ function registerOperator(op: Operator) {
 registerOperator(new BinaryOperator(4, "+", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) + ((b as SimpleValue).value as number))));
 registerOperator(new BinaryOperator(4, "-", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) - ((b as SimpleValue).value as number))));
 registerOperator(new BinaryOperator(5, "*", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) * ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(5, "/", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number))));
-registerOperator(new BinaryOperator(5, "div", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(Math.floor(((a as SimpleValue).value as number) / ((b as SimpleValue).value as number)))));
-registerOperator(new BinaryOperator(5, "mod", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) % ((b as SimpleValue).value as number))));
+registerOperator(new BinaryOperator(5, "/", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => {
+    const aNum = (a as SimpleValue).value as number
+    const bNum = (b as SimpleValue).value as number;
+    if(bNum == 0) return SimpleValue.undefined();
+    return SimpleValue.number(aNum / bNum)
+}));
+registerOperator(new BinaryOperator(5, "div", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => {
+    const aNum = (a as SimpleValue).value as number
+    const bNum = (b as SimpleValue).value as number;
+    if(bNum == 0) return SimpleValue.undefined();
+    return SimpleValue.number(Math.floor(aNum / bNum));
+}));
+registerOperator(new BinaryOperator(5, "mod", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => {
+    const aNum = (a as SimpleValue).value as number
+    const bNum = (b as SimpleValue).value as number;
+    if(bNum == 0) return SimpleValue.undefined();
+    return SimpleValue.number(aNum % bNum)
+}));
 registerOperator(new BinaryOperator(6, "^", BinaryOperator.matchesSomePairsFn([[numberType, numberType]]), numberType, (a, b) => SimpleValue.number(((a as SimpleValue).value as number) ** ((b as SimpleValue).value as number)), true));
 registerOperator(new UnaryOperator(7, "-", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(-((a as SimpleValue).value as number))));
-registerOperator(new UnaryOperator(7, "sqrt", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.sqrt(((a as SimpleValue).value as number)))));
-registerOperator(new UnaryOperator(7, "log", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))));
+registerOperator(new UnaryOperator(7, "sqrt", UnaryOperator.matchesSomeFn([numberType]), numberType, a => {
+    const aNum = (a as SimpleValue).value as number;
+    if(aNum < 0) return SimpleValue.undefined();
+    return SimpleValue.number(Math.sqrt(aNum));
+}));
+registerOperator(new UnaryOperator(7, "log", UnaryOperator.matchesSomeFn([numberType]), numberType, a => {
+    const aNum = (a as SimpleValue).value as number;
+    if(aNum <= 0) return SimpleValue.undefined();
+    return SimpleValue.number(Math.log2(((a as SimpleValue).value as number)))
+}));
 registerOperator(new UnaryOperator(7, "abs", UnaryOperator.matchesSomeFn([numberType]), numberType, a => SimpleValue.number(Math.abs(((a as SimpleValue).value as number)))));
 registerOperator(new UnaryOperator(7, "len", types => types[0]!.isUndefined() || types[0]!.baseIdentifier == "array" || types[0]!.baseIdentifier == "string", numberType, a => SimpleValue.number((a as UtilityArray).length)));
 
@@ -297,8 +414,8 @@ registerOperator(new BinaryOperator(3, ">=", BinaryOperator.matchesSomePairsFn([
 
 // Array Operators
 registerOperator(new class extends BinaryOperator {
-    public getReturnType(parameterTypes: ValueType[]): ValueType {
-        return parameterTypes[0]!;
+    public getReturnType(operandTypes: ValueType[]): ValueType {
+        return operandTypes[0]!;
     }
 }(4, "&", types => (types[0]!.baseIdentifier == "array" || types[0]!.id == "string" || types[0]!.isUndefined()) && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityArray).concat(b as UtilityArray)));
 registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([anyType]), stringType, a => new UtilityString([...a.asString()].map(SimpleValue.char))));
@@ -310,11 +427,10 @@ registerOperator(new ObjectConstructor("btn", [anyType], BinaryTreeNodeTemplate)
 
 // Object Operators
 registerOperator(new ObjectGetOperator());
-const indexOperator = new ObjectIndexOperator();
-registerOperator(indexOperator);
+registerOperator(new ObjectIndexOperator());
 
 // Function Operators
-registerOperator(new FunctionOperator("swap", 3, 
+registerOperator(new FunctionOperator("swap", 3,
     ops => {
         return (ops[0]!.baseIdentifier == "array" || ops[0]!.baseIdentifier == "string") && ops[1]!.matches(numberType) && ops[2]!.matches(numberType)
     },
@@ -326,7 +442,7 @@ registerOperator(new FunctionOperator("swap", 3,
         array.indexSwap(idx1, idx2);
     }
 ));
-registerOperator(new FunctionOperator("is1l", 2, 
+registerOperator(new FunctionOperator("is1l", 2,
     ops => {
         return ops[0]!.baseIdentifier == "s1l" && ops[0]!.matches(ops[1]!);
     },
@@ -342,7 +458,7 @@ registerOperator(new FunctionOperator("is1l", 2,
         }
     }
 ));
-registerOperator(new FunctionOperator("is2l", 2, 
+registerOperator(new FunctionOperator("is2l", 2,
     ops => {
         return ops[0]!.baseIdentifier == "s2l" && ops[0]!.matches(ops[1]!);
     },
@@ -362,7 +478,7 @@ registerOperator(new FunctionOperator("is2l", 2,
         }
     }
 ));
-registerOperator(new FunctionOperator("ileft", 2, 
+registerOperator(new FunctionOperator("ileft", 2,
     ops => {
         return ops[0]!.baseIdentifier == "btn" && ops[0]!.matches(ops[1]!);
     },
@@ -379,7 +495,7 @@ registerOperator(new FunctionOperator("ileft", 2,
         }
     }
 ));
-registerOperator(new FunctionOperator("iright", 2, 
+registerOperator(new FunctionOperator("iright", 2,
     ops => {
         return ops[0]!.baseIdentifier == "btn" && ops[0]!.matches(ops[1]!);
     },
@@ -399,14 +515,26 @@ registerOperator(new FunctionOperator("iright", 2,
 
 export abstract class Operand {
     public abstract get type(): ValueType;
+    /**
+     * @returns Flattens the Operand into a List of ResolvableOperand and Operators.
+     */
     public abstract flatten(): (ResolvableOperand | Operator)[];
 }
 
 export abstract class ResolvableOperand extends Operand {
+    /**
+     * The text representation of the Operand. Can be an empty string.
+     */
     public readonly representation: string;
 
+    /**
+     * @returns The value this Operand can be resolved to.
+     */
     public abstract resolve(): Value;
 
+    /**
+     * @param representation The text representation of the Operand. Can be an empty string.
+     */
     constructor(representation: string) {
         super();
         this.representation = representation;
@@ -417,6 +545,10 @@ export class GroupedOperand extends Operand {
     public readonly tokens: (Operand | Operator)[];
     public readonly type: ValueType;
 
+    /**
+     * @param tokens The group of Operands and Operators it represents.
+     * @param type The type the group would be evaluated to eventually.
+     */
     constructor(tokens: (Operand | Operator)[], type: ValueType) {
         super();
         this.tokens = tokens;
@@ -599,7 +731,7 @@ export abstract class Statement<T> {
     /**
      * Emitted when an operator is applied on operands.
      * Its arguments are: operator: Operator, operands: Value[]
-     * */ 
+     * */
     public static readonly computeEvent = "statement.compute";
 
     /**
@@ -608,14 +740,16 @@ export abstract class Statement<T> {
      * */
     public static readonly operandResolutionEvent = "statement.operandresolution";
 
-    /** 
+    /**
      * Emitted when the evaluation is started.
+     * It has no arguments.
      * */
 
     public static readonly evaluationStart = "statement.evaluation.start";
-    
-    /** 
+
+    /**
      * Emitted when the evaluation is ended.
+     * It has no arguments.
      * */
     public static readonly evaluationEnd = "statement.evaluation.end";
 
@@ -685,6 +819,10 @@ export abstract class Statement<T> {
             return !isNumeric(c) && !isAlphanumeric(c);
         }
 
+        function isCurrentTokenAFinishedOperatorToken(c: string) {
+            return operatorTokens.has(currentToken) && !operatorTokens.has(currentToken+c);
+        }
+
         for(let c of text) {
             if(c == "{" || tokenParseState == "array" as TokenParseState) {
                 if(c == "{") arrayDepth += 1;
@@ -729,7 +867,7 @@ export abstract class Statement<T> {
                 currentToken += c;
                 flushCurrentToken();
             } else if(isSpecialCharacter(c)) {
-                if(operatorTokens.has(currentToken) && !operatorTokens.has(currentToken+c)) {
+                if(isCurrentTokenAFinishedOperatorToken(c)) {
                     flushCurrentToken();
                 }
                 handleState(c, "specialcharacter");
@@ -737,7 +875,7 @@ export abstract class Statement<T> {
                 handleState(c, "alphanumeric");
             }
         }
-        
+
         flushCurrentToken();
 
         return tokens;
@@ -755,10 +893,11 @@ export abstract class Statement<T> {
             } else if (token == "(" || token == ")" || token == ",") {
                 return [token];
             } else if (token == "[") {
+                // we replace the indexers with the indexing operator
                 return ["@", "("];
             } else if (token == "]") {
                 return [")"];
-            } else { 
+            } else {
                 return [parseOperand(token, memory, indexResolver)];
             }
         }).flat();
@@ -774,7 +913,6 @@ export abstract class Statement<T> {
                 }
                 if(token == ",") continue;
                 if(i == partialParsedTokens.length - 1) {
-                    // TODO investigate if this can even be triggered, wouldn't token literals already cover this edge case?
                     throw new StatementParseError(`Statement ends with an operator! There are no postfix operators!`, "error_postfix");
                 }
 
@@ -826,7 +964,7 @@ export abstract class Statement<T> {
                     applyOperator(lastOp);
                 }
             }
-            
+
             let bracketDepth = 0;
             for(let token of parsedTokens) {
                 if(token instanceof Operator) {
@@ -839,6 +977,10 @@ export abstract class Statement<T> {
                         operators.push("(");
                     } else if (token == ")") {
                         bracketDepth -= 1;
+                        // this should be ensured here to avoid runtime errors
+                        if(bracketDepth < 0) {
+                            throw new StatementParseError("At least one closing bracket is missing its opening bracket!", "error_missing_opening_bracket");
+                        }
                         flushOperatorsWhile(() => operators.at(-1) != "(");
                         operators.pop();
                     } else {
@@ -851,13 +993,9 @@ export abstract class Statement<T> {
                 }
             }
 
-            // TODO add tests for this
+            // missing opening bracket must be handled earlier to avoid runtime errors
             if(bracketDepth != 0) {
-                if(bracketDepth < 0) {
-                    throw new StatementParseError("At least one closing bracket is missing its opening bracket!", "error_missing_opening_bracket");
-                } else {
-                    throw new StatementParseError("At least one opening bracket is missing its closing bracket!", "error_missing_closing_bracket");
-                }
+                throw new StatementParseError("At least one opening bracket is missing its closing bracket!", "error_missing_closing_bracket");
             }
 
             flushOperatorsWhile(() => operators.length > 0);
@@ -901,6 +1039,12 @@ export class NumericStatement extends Statement<number> {
         super();
     }
 
+    /**
+     * @param text the statement text to parse
+     * @param memory the memory to be used by the statement
+     * @param indexResolver the index resolver to be used by the statement
+     * @returns a numeric statement
+     */
     public static parse(text: string, memory: Memory, indexResolver: IndexResolver): NumericStatement {
         const statement = new NumericStatement();
         Statement.parseInto<number>(statement, text, memory, indexResolver);
@@ -927,6 +1071,12 @@ export class CharStatement extends Statement<string> {
         super();
     }
 
+    /**
+     * @param text the statement text to parse
+     * @param memory the memory to be used by the statement
+     * @param indexResolver the index resolver to be used by the statement
+     * @returns a char statement
+     */
     public static parse(text: string, memory: Memory, indexResolver: IndexResolver): CharStatement {
         const statement = new CharStatement();
         Statement.parseInto<string>(statement, text, memory, indexResolver);
@@ -953,6 +1103,12 @@ export class StringStatement extends Statement<string> {
         super();
     }
 
+    /**
+     * @param text the statement text to parse
+     * @param memory the memory to be used by the statement
+     * @param indexResolver the index resolver to be used by the statement
+     * @returns a string statement
+     */
     public static parse(text: string, memory: Memory, indexResolver: IndexResolver): StringStatement {
         const statement = new StringStatement();
         Statement.parseInto<string>(statement, text, memory, indexResolver);
@@ -979,6 +1135,12 @@ export class BooleanStatement extends Statement<boolean> {
         super();
     }
 
+    /**
+     * @param text the statement text to parse
+     * @param memory the memory to be used by the statement
+     * @param indexResolver the index resolver to be used by the statement
+     * @returns a boolean statement
+     */
     public static parse(text: string, memory: Memory, indexResolver: IndexResolver): BooleanStatement {
         const statement = new BooleanStatement();
         Statement.parseInto<boolean>(statement, text, memory, indexResolver);
@@ -996,6 +1158,12 @@ export class AnyStatement extends Statement<any> {
         super();
     }
 
+    /**
+     * @param text the statement text to parse
+     * @param memory the memory to be used by the statement
+     * @param indexResolver the index resolver to be used by the statement
+     * @returns a any statement
+     */
     public static parse(text: string, memory: Memory, indexResolver: IndexResolver): AnyStatement {
         const statement = new AnyStatement();
         Statement.parseInto<any>(statement, text, memory, indexResolver);

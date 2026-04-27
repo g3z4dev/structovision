@@ -1,6 +1,6 @@
 import EventEmitter2 from "eventemitter2";
 import {Memory, VariableCreationError} from "./memory";
-import {AnyStatement, BooleanStatement, NumericStatement, Statement, StatementParseError, StringStatement, IndexResolver} from "./statement";
+import {AnyStatement, BooleanStatement, NumericStatement, Statement, StatementParseError, StringStatement, IndexResolver, operatorTokens} from "./statement";
 import { numberType, SimpleValue, parseType, undefinedType, UtilityArray, type ClassIdentifiable, type Value, type ValueType, ObjectType, UtilityObject, ArrayType } from "./types";
 
 
@@ -23,7 +23,7 @@ export class StructogramIssue {
 
 export class Structogram {
     /**
-     * Emitted when something prints on the structogram. 
+     * Emitted when something prints on the structogram.
      * Has a string argument which is the message printed.
      */
     public static readonly printEvent = "structogram.print";
@@ -50,12 +50,12 @@ export class Structogram {
      * Its arguments are: key: string, type: ValueType
      */
     public static readonly outputSpecificationEvent = "structogram.specification.output";
-    
+
     /**
      * Emitted when the specification is cleared.
      */
     public static readonly specificationClearEvent = "structogram.specification.clear";
-    
+
     /**
      * Emitted when the issues change.
      * Its argument are: lastIssues: StructogramIssues[], currentIssues: StructogramIssues[]
@@ -74,24 +74,40 @@ export class Structogram {
     private _auxData: Record<string, ValueType> = {};
     private _outData: Record<string, ValueType> = {};
     private currentIssues: StructogramIssue[] = [];
-    private _indexResolver = new IndexResolver(0);
+    private _indexResolver = new IndexResolver(1);
+    private _results: [string, Value][] = [];
 
+    /**
+     * The declared input data of the specification.
+     */
     public get inputData() {
         return Object.entries(this._inData);
     }
 
+    /**
+     * The declared auxiliary data of the specification.
+     */
     public get auxData() {
         return Object.entries(this._auxData);
     }
 
+    /**
+     * The declared output data of the specification.
+     */
     public get outputData() {
         return Object.entries(this._outData);
     }
 
+    /**
+     * The issues that were raised during last preRun.
+     */
     public get issues() {
         return [...this.currentIssues];
     }
 
+    /**
+     * The starting index to be used for arrays.
+     */
     public set startingIndex(index: number) {
         this._indexResolver = new IndexResolver(index);
     }
@@ -119,11 +135,25 @@ export class Structogram {
         this.emitter.emit(Structogram.issuesChangedEvent, lastIssues, currentIssues);
     }
 
+    /**
+     * The results of the last run. If the structogram hasn't been run it will be empty.
+     */
+    public get results() {
+        return this._results;
+    }
+
+    private set results(results: [string, Value][]) {
+        this._results = results;
+    }
+
     constructor(emitter: EventEmitter2) {
         this.memory = new Memory();
         this.emitter = emitter;
     }
 
+    /**
+     * Removes all the declared data in the specification.
+     */
     public clearData() {
         this._inData = {};
         this._auxData = {};
@@ -165,6 +195,9 @@ export class Structogram {
             if(usedKeys.has(key)) {
                 return [new StructogramIssue("specification", "Duplicate key in data specification is not allowed!", "error_specification_duplicate")]
             }
+            if(operatorTokens.has(key)) {
+                return [new StructogramIssue("specification", "Keys mimicing operators is not allowed!", "error_forbidden_key")]
+            }
             usedKeys.add(key);
             try {
                 const statement = AnyStatement.parse(input[key]!, this.memory, this.indexResolver);
@@ -176,9 +209,9 @@ export class Structogram {
                 }
             } catch (error) {
                 if(error instanceof StatementParseError) {
-                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
+                    issues.push(new StructogramIssue("specification", error.message, error.errorID));
                 } else if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
+                    issues.push(new StructogramIssue("specification", error.message, error.errorID));
                 }
             }
         }
@@ -191,7 +224,7 @@ export class Structogram {
                 this.memory.createVariable(key, type);
             } catch (error) {
                 if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
+                    issues.push(new StructogramIssue("specification", error.message, error.errorID));
                 }
             }
         }
@@ -204,13 +237,18 @@ export class Structogram {
                 this.memory.createVariable(key, type);
             } catch (error) {
                 if(error instanceof VariableCreationError) {
-                    issues.push(new StructogramIssue("specification", error.message, error.translationKey));
+                    issues.push(new StructogramIssue("specification", error.message, error.errorID));
                 }
             }
         }
         return issues;
     }
 
+    /**
+     * Assembles the structogram into a runnable form and validates it.
+     * @param input A record whose keys are keys of input data and whose values are statement texts to be parsed as their starting value.
+     * @returns A list of structogram issues. It can be empty if no issues were found.
+     */
     public preRun(input: Record<string, string> = {}): StructogramIssue[] {
         this.memory.clear();
         const issues = this.createVariables(input);
@@ -222,6 +260,10 @@ export class Structogram {
         return issues;
     }
 
+    /**
+     * Runs a step of the algorithm described by this structogram.
+     * @throws {Error} preRun must be executed before running this and it should not return issues.
+     */
     public runStep(): void {
         if(!this.ready) {
             throw new Error("Cannot run before doing the preRun and addressing its issues!");
@@ -243,11 +285,12 @@ export class Structogram {
                 this.runStep();
             }
         } else {
+            this.results = this.generateResults();
             this.restart();
         }
     }
 
-    public getResults() {
+    private generateResults() {
         const results = [] as [string, Value][];
         for(const [key, _] of this.outputData) {
             results.push([key, this.memory.getVariable(key)]);
@@ -290,21 +333,27 @@ export class Structogram {
      * @returns every block without a parent
      */
     public getIndependentRootBlocks(): StructogramBlock[] {
-        return Object.values(this.idMap).filter(b => !b.parent && this.startingBlock != b && !b.superBlock);
+        return Object.values(this.idMap).filter(b => !b.prev && this.startingBlock != b && !b.superBlock);
     }
 
+    /**
+     * Removes all the blocks from the structogram.
+     */
     public clearBlocks() {
         for(const block of this.getIndependentRootBlocks()) {
             this.removeBlock(block);
         }
     }
 
+    /**
+     * The first block the structogram will execute.
+     */
     public set startingBlock(block: StructogramBlock | undefined) {
         if(this.running) throw new Error("Cannot change starting block while structogram is running!");
         if(block?.superBlock) {
             throw new Error("Cannot set subblock as starting block!");
         }
-        if(block?.parent) {
+        if(block?.prev) {
             throw new Error("Cannot set child block as starting block!");
         }
         this._startingBlock = block;
@@ -316,6 +365,9 @@ export class Structogram {
         return this._startingBlock;
     }
 
+    /**
+     * @returns A snapshot of the inner state of the structogram to be used to saving and loading.
+     */
     public getData() {
         return {
             "input": this.inputData.map(data => {
@@ -329,16 +381,18 @@ export class Structogram {
             }),
             "startingBlock": this.startingBlock?.getData(),
             "startingIndex": this.startingIndex
-        }   
+        }
     }
 
+    /**
+     * Loads data that was generated by getData into the structogram.
+     * @param data The data to be loaded into the structogram.
+     */
     public loadData(data: any) {
         this.reset();
-        const input = data["input"];
-        const aux = data["auxiliary"];
-        const output = data["output"];
-        
-        
+        const input = data["input"] ?? [];
+        const aux = data["auxiliary"] ?? [];
+        const output = data["output"] ?? [];
 
         function loadWith(entries: any, loader:(a: string, type: ValueType) => void) {
             for(const entry of entries) loader(entry["key"], parseType(entry["type"]));
@@ -351,6 +405,9 @@ export class Structogram {
         if("startingIndex" in data) this.startingIndex = data["startingIndex"];
     }
 
+    /**
+     * Restarts the structogram. Running will start from the beginning.
+     */
     public restart() {
         this.running = false;
         this.ready = false;
@@ -358,6 +415,9 @@ export class Structogram {
         this.currentBlock = this.startingBlock;
     }
 
+    /**
+     * Resets the structogram into its initial state after its construction except for its settings.
+     */
     public reset() {
         this.restart();
         this.clearData();
@@ -389,7 +449,7 @@ export class Structogram {
 export abstract class BlockOption implements ClassIdentifiable {
     protected readonly structogram: Structogram;
     public readonly name: string;
-    public readonly description: string;
+    public readonly descriptionKey: string;
     public readonly emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
 
     /**
@@ -398,19 +458,23 @@ export abstract class BlockOption implements ClassIdentifiable {
      */
     public static readonly optionChangedEvent = "blockoption.optionchanged";
 
-    constructor(structogram: Structogram, name: string, description: string) {
+    constructor(structogram: Structogram, name: string, descriptionKey: string) {
         this.structogram = structogram;
         this.name = name;
-        this.description = description;
+        this.descriptionKey = descriptionKey;
     }
 
     public abstract get classIdentifier(): string;
-    public abstract getRawValues(): string[];
-    public abstract setRawValues(data: string[]): void;
+
+    /**
+     * A list of strings representing the data in the option.
+     */
+    public abstract get rawValues(): string[];
+    public abstract set rawValues(data: string[]);
 }
 
 export class BooleanStatementListOption extends BlockOption {
-    private statements: string[] = [];
+    private _statements: string[] = [];
 
     public constructor(structogram: Structogram, name: string, description: string) {
         super(structogram, name, description);
@@ -420,52 +484,52 @@ export class BooleanStatementListOption extends BlockOption {
         return "booleanstatementlistoption";
     }
 
-    public setStatements(statements: string[]) {
-        this.statements = [...statements];
-        this.emitter.emit(BlockOption.optionChangedEvent);
+    public get statements() {
+        return [...this._statements];
     }
 
-    public getStatements() {
-        return [...this.statements];
+    public set statements(statements: string[]) {
+        this._statements = [...statements];
+        this.emitter.emit(BlockOption.optionChangedEvent);
     }
 
     public tryResolveStatements(): (BooleanStatement)[] {
         return this.statements.map(s => this.structogram.createBooleanStatement(s));
     }
 
-    public getConditionCount() {
+    public get conditionCount() {
         return this.statements.length;
     }
 
-    public override getRawValues() {
+    public override get rawValues() {
         return [...this.statements];
     }
 
-    public override setRawValues(data: string[]): void {
+    public override set rawValues(data: string[]) {
         this.statements = data;
         this.emitter.emit(BlockOption.optionChangedEvent);
     }
 }
 
 export abstract class StatementOption<T> extends BlockOption {
-    protected statement: string = "";
-    
-    public setStatement(statement: string) {
-        this.statement = statement;
+    protected _statement: string = "";
+
+    public set statement(statement: string) {
+        this._statement = statement;
         this.emitter.emit(BlockOption.optionChangedEvent);
     }
 
-    public getStatement() {
-        return this.statement;
+    public get statement() {
+        return this._statement;
     }
 
     public abstract tryResolveStatement(): Statement<T>;
 
-    public override getRawValues(): string[] {
+    public override get rawValues(): string[] {
         return [this.statement];
     }
 
-    public setRawValues(data: string[]): void {
+    public set rawValues(data: string[]) {
         this.statement = data[0]!;
         this.emitter.emit(BlockOption.optionChangedEvent);
     }
@@ -514,39 +578,40 @@ export class AnyStatementOption extends StatementOption<Value> {
 export class KeyOption extends BlockOption {
     private value: string = "";
 
-    public getKey() {
+    public get key() {
         return this.value;
     }
 
-    public override getRawValues(): string[] {
+    public override get rawValues(): string[] {
         return [this.value];
     }
 
-    public setKey(value: string) {
+    public set key(value: string) {
         this.value = value;
         this.emitter.emit(BlockOption.optionChangedEvent);
     }
 
-    public override setRawValues(data: string[]): void {
+    public override set rawValues(data: string[]) {
         this.value = data[0]!;
     }
 
     public override get classIdentifier(): string {
         return "keyoption";
     }
-    
+
 }
 
 export abstract class StructogramBlock implements ClassIdentifiable, Identifiable {
     protected static idSeq = 0;
     public readonly id: string = `block${StructogramBlock.idSeq++}`;
     protected _associatedStructogram: Structogram;
-    private _parent: StructogramBlock | undefined;
+    private _prev: StructogramBlock | undefined;
     protected _superBlock: StructogramBlock | undefined;
     protected _subBlockKey: string | undefined;
     protected abstract subBlocks: Record<string, StructogramBlock | undefined>;
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
+
     /**
      * It fires when the children or subblocks of a structogramblock changes.
      * Its arguments are: block: StructogramBlock
@@ -560,10 +625,16 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     public static readonly activeStepChanged = "structogramblock.activeStepChanged";
     protected _activeStep: string = "ready";
 
+    /**
+     * The structogram it is part of.
+     */
     public get associatedStructogram() {
         return this._associatedStructogram;
     }
-    
+
+    /**
+     * The current step of this block. Used to determine what it did last step.
+     */
     public get activeStep() {
         return this._activeStep;
     }
@@ -578,29 +649,38 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
         owner.addBlock(this);
     }
 
+    /**
+     * The block that comes after this block.
+     */
     public get next() {
         return this._next;
     }
 
     public set next(next: StructogramBlock | undefined) {
         if(this._next) {
-            this._next.parent = undefined;
+            this._next.prev = undefined;
         }
         this._next = next;
         if(this._next) {
-            this._next.parent = this;
+            this._next.prev = this;
         }
         this.emitter.emit(StructogramBlock.childrenChanged, this);
     }
 
-    public get parent() {
-        return this._parent;
+    /**
+     * The block that comes before this block.
+     */
+    public get prev() {
+        return this._prev;
     }
 
-    protected set parent(parent: StructogramBlock | undefined) {
-        this._parent = parent;
+    protected set prev(parent: StructogramBlock | undefined) {
+        this._prev = parent;
     }
 
+    /**
+     * The super block if this block is a sub block.
+     */
     public get superBlock() {
         return this._superBlock;
     }
@@ -609,6 +689,9 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
         this._superBlock = block;
     }
 
+    /**
+     * The sub block key of the block if it's a sub block.
+     */
     public get subBlockKey() {
         return this._subBlockKey;
     }
@@ -617,17 +700,28 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
         this._subBlockKey = key;
     }
 
+    /**
+     * @returns The sub blocks in order of how they would be in an actual structogram.
+     */
     public getOrderedSubBlocks(): [string,StructogramBlock | undefined][] {
         return Object.entries(this.subBlocks);
     }
 
+    /**
+     * @returns All the sub block belonging to this block.
+     */
     public getSubBlocks(): Record<string, StructogramBlock |undefined> {
         return {...this.subBlocks};
     }
 
+    /**
+     * Adds a sub block to this block with a given key.
+     * @param key The key of the sub block.
+     * @param block The block to be added as a sub block.
+     */
     public setSubBlock(key: string, block: StructogramBlock | undefined) {
         if(block) {
-            if(block.parent) {
+            if(block.prev) {
                 throw new Error("Child block cannot become a subblock!");
             }
             if(this._associatedStructogram.startingBlock == block || block._associatedStructogram.startingBlock == block) {
@@ -646,6 +740,10 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
         this.emitter.emit(StructogramBlock.childrenChanged, this);
     }
 
+    /**
+     * @param key A sub block key.
+     * @returns The sub block with this key.
+     */
     public getSubBlock(key: string) {
         return this.subBlocks[key];
     }
@@ -655,6 +753,9 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     public abstract get classIdentifier(): string;
     public abstract parseAndCheckForIssues(): StructogramIssue[];
 
+    /**
+     * @returns A snapshot of the inner state of the structogram block to be used to saving and loading.
+     */
     public getData(): any {
         return {
             "type": this.classIdentifier,
@@ -663,7 +764,7 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
                 return {"key": entry[0], "block": entry[1]?.getData()};
             }),
             "options": this.options.map(option => {
-                return {"name": option.name, "value": option.getRawValues()};
+                return {"name": option.name, "value": option.rawValues};
             })
         };
     }
@@ -680,13 +781,17 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
             "backtestingloopblock": (s) => new BackTestingLoopBlock(s),
         }
 
+        /**
+         * Creates a sturctogram block from a given data generated by the getData of a structogram block.
+         * @param data The data to be used to create a structogram block.
+         */
         public static constructFromData(data: any, structogram: Structogram): StructogramBlock {
             const block = this.typeToFactory[data["type"]]!(structogram);
             const optionsData = data["options"];
             for(const option of block.options) {
                 for(const optionData of optionsData) {
                     if(option.name == optionData["name"]) {
-                        option.setRawValues(optionData["value"]);
+                        option.rawValues = optionData["value"];
                         break;
                     }
                 }
@@ -724,8 +829,8 @@ function isNumeric(text: string) {
 export class AssignmentBlock extends SequenceBlock {
     private key: string | undefined;
     private statement: AnyStatement | undefined;
-    public readonly keyOption = new KeyOption(this._associatedStructogram, "key", "the key we assign the value to");
-    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to assign to the variable");
+    public readonly keyOption = new KeyOption(this._associatedStructogram, "key", "option_assignmentblock_key");
+    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "option_description_value");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -764,7 +869,7 @@ export class AssignmentBlock extends SequenceBlock {
     }
 
     public override parseAndCheckForIssues(): StructogramIssue[] {
-        this.key = this.keyOption.getKey();
+        this.key = this.keyOption.key;
         const keyTokens = this.key.split(new RegExp("\\.|\\[|\\]")).filter(s => s.length > 0);
         let memoryKey = keyTokens[0]!;
         const issues = [];
@@ -805,7 +910,7 @@ export class AssignmentBlock extends SequenceBlock {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
+                issues.push(new StructogramIssue(this.id, error.message, error.errorID));
             } else {
                 alert("Fatal parse error!");
             }
@@ -850,7 +955,7 @@ export class ControlBlock extends SequenceBlock {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message, error.translationKey)];
+                return [new StructogramIssue(this.id, error.message, error.errorID)];
             } else {
                 alert("Fatal parse error!");
             }
@@ -887,7 +992,7 @@ export class PrintBlock extends SequenceBlock {
             this.statement = this.statementOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message, error.translationKey)];
+                return [new StructogramIssue(this.id, error.message, error.errorID)];
             } else {
                 alert("Fatal parse error!");
             }
@@ -898,11 +1003,22 @@ export class PrintBlock extends SequenceBlock {
 }
 
 export abstract class BracketBlock extends StructogramBlock {
+    /**
+     * @returns False if the block should be run again after there are no more blocks.
+     */
     abstract isFinished(): boolean;
+
+    /**
+     * This option is needed for branching blocks, so that after they end, the logic
+     * will not circle back to calling them again unnecessarly. They would normally
+     * do that because they are implemented the same way looping blocks are where
+     * this is actually needed for them to function.
+     * @returns True if after being called there should immediately be another step.
+     */
     abstract skipToNext(): boolean;
 }
 
-type TrueFalseBranchingBlockStates = "ready" | "hasRun" | "finished" 
+type TrueFalseBranchingBlockStates = "ready" | "hasRun" | "finished"
 
 export class TrueFalseBranchingBlock extends BracketBlock {
     private condition: BooleanStatement | undefined ;
@@ -963,7 +1079,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message, error.translationKey)];
+                return [new StructogramIssue(this.id, error.message, error.errorID)];
             }
         }
 
@@ -989,7 +1105,7 @@ export class MultiBranchingBlock extends BracketBlock {
     public readonly conditionListOption = new BooleanStatementListOption(this._associatedStructogram, "conditions", "the list of conditions the branches have");
 
     private fillOutBranches() {
-        const statements = this.conditionListOption.getStatements();
+        const statements = this.conditionListOption.statements;
         const statementCount = statements.length;
         for(let i = 0; i < statementCount; i++) {
             if(!("branch"+i in this.subBlocks)) {
@@ -1000,7 +1116,7 @@ export class MultiBranchingBlock extends BracketBlock {
     }
 
     private trimBranches() {
-        const statementCount = this.conditionListOption.getStatements().length;
+        const statementCount = this.conditionListOption.statements.length;
         const branchCount = Object.values(this.subBlocks).length;
         if(branchCount > statementCount) {
             for(let i = statementCount; i < branchCount; i++) {
@@ -1059,7 +1175,7 @@ export class MultiBranchingBlock extends BracketBlock {
             this.branches = this.conditionListOption.tryResolveStatements();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message, error.translationKey)];
+                return [new StructogramIssue(this.id, error.message, error.errorID)];
             }
         }
 
@@ -1176,25 +1292,25 @@ export class CountingLoopBlock extends LoopBlock {
             this.from = this.fromOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
+                issues.push(new StructogramIssue(this.id, error.message, error.errorID));
             }
         }
         try {
             this.to = this.toOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
+                issues.push(new StructogramIssue(this.id, error.message, error.errorID));
             }
         }
         try {
             this.step = this.stepOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                issues.push(new StructogramIssue(this.id, error.message, error.translationKey));
+                issues.push(new StructogramIssue(this.id, error.message, error.errorID));
             }
         }
-        
-        this.variableKey = this.variableKeyOption.getKey();
+
+        this.variableKey = this.variableKeyOption.key;
         if(!this._associatedStructogram.memory.hasVariable(this.variableKey)) {
             issues.push(new StructogramIssue(this.id,`Variable with key [${this.variableKey}] is not defined!`, "error_undefined_variable"))
         } else if(!this._associatedStructogram.memory.getType(this.variableKey).matches(numberType)) {
@@ -1226,7 +1342,7 @@ export abstract class ConditionalLoopBlock extends LoopBlock {
             this.condition = this.conditionOption.tryResolveStatement();
         } catch (error) {
             if(error instanceof StatementParseError) {
-                return [new StructogramIssue(this.id, error.message, error.translationKey)];
+                return [new StructogramIssue(this.id, error.message, error.errorID)];
             }
         }
 

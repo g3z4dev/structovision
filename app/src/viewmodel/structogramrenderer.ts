@@ -1,5 +1,5 @@
 import { BlockOption, CountingLoopBlock, MultiBranchingBlock, Structogram, StructogramIssue, type StructogramBlock } from "../model/structogram";
-import { applyTransformation, CameraHandler, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
+import { applyTranslationAndScale, CameraHandler, centerX, getX, getY, ResourceManager, setID, setPosition, setSize, setTemplateText, setX, setY } from "./util";
 
 import assignmentBlockTemplate from "../../resources/blocks/assignmentblock.html";
 import controlBlockTemplate from "../../resources/blocks/controlblock.html";
@@ -10,7 +10,7 @@ import countingLoopBlockTemplate from "../../resources/blocks/countingloopblock.
 import frontTestingLoopBlockTemplate from "../../resources/blocks/fronttestingloopblock.html";
 import backTestingLoopBlockTemplate from "../../resources/blocks/backtestingloopblock.html";
 import undefinedBlockTemplate from "../../resources/blocks/undefinedblock.html";
-import { baseBlockHeight, textPadding } from "./constants";
+import { baseBlockHeight, errorStyle, neutralStyle, textPadding } from "./constants";
 import type { ViewModel } from "./viewmodel";
 
 
@@ -54,6 +54,10 @@ export class StructogramRenderer {
      */
     private optionListenerRemovers: (() => void)[] = [];
 
+    /**
+     * @param mainElement The parent HTML element where the rendering can be done in.
+     * @param idPrefix The id prefix a structogram block's corresponding HTML element's id should have. This is required to ensure unique ids in case of having multiple renderers.
+     */
     constructor(viewModel: ViewModel, structogram: Structogram, mainElement: HTMLElement, idPrefix: string) {
         this.viewModel = viewModel;
         this.mainElement = mainElement;
@@ -78,17 +82,17 @@ export class StructogramRenderer {
             for(const issue of oldIssues) {
                 const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`) as SVGElement;
                 if(block) {
-                    block.classList.remove("fill-red-100");
+                    block.classList.remove(...errorStyle);
                     block.dataset["helpTrkey"] = "";
-                    block.classList.add("fill-white");
+                    block.classList.add(...neutralStyle);
                 }
             }
             for(const issue of newIssues) {
                 const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`) as SVGElement;
                 if(block) {
-                    block.classList.add("fill-red-100");
+                    block.classList.add(...errorStyle);
                     block.dataset["helpTrkey"] = issue.issueID;
-                    block.classList.remove("fill-white");
+                    block.classList.remove(...neutralStyle);
                 }
             }
         });
@@ -101,7 +105,7 @@ export class StructogramRenderer {
         this.originX = this.cameraHandler.x;
         this.originY = this.cameraHandler.y;
         this.scale = this.cameraHandler.scale;
-        applyTransformation(this.renderTarget, this.originX - this.originOffsetX, this.originY - this.originOffsetY, this.scale);
+        applyTranslationAndScale(this.renderTarget, this.originX - this.originOffsetX, this.originY - this.originOffsetY, this.scale);
     }
 
     /**
@@ -123,7 +127,7 @@ export class StructogramRenderer {
     /**
      * Used to update the text content of an element. It will take the values given by a block option and display them
      * in element with the same class as the option's name.
-     * 
+     *
      * The index is used for options that have multiple values, like BooleanStatementListOptions.
      * @param elem the elem to replace the values on
      * @param options the block options
@@ -131,7 +135,7 @@ export class StructogramRenderer {
      */
     private replaceOptionValues(elem: HTMLElement, options: BlockOption[], index: number) {
         for(const option of options) {
-            const values = option.getRawValues();
+            const values = option.rawValues;
             if(values.length > 1) {
                 setTemplateText(elem, option.name, values[index]!);
             } else {
@@ -142,7 +146,7 @@ export class StructogramRenderer {
 
     private updateStepText(elem: HTMLElement, block: StructogramBlock) {
         if(block instanceof CountingLoopBlock) {
-            if(block.stepOption.getStatement().trim() == "1") {
+            if(block.stepOption.statement.trim() == "1") {
                 for(const elem2 of elem.querySelectorAll(".t-step-text") as NodeListOf<HTMLElement>) {
                     elem2.classList.add("hidden");
                 }
@@ -157,7 +161,7 @@ export class StructogramRenderer {
     /**
      * Sets up the text label for a given strutogramblock in accordance of how it was defined.
      * See developer documentation on how structogramblocks are defined.
-     * 
+     *
      * The index is used for blocks with subblock headers to differentiate between them.
      * @param elem the element represeting the block
      * @param options the options of the block
@@ -201,12 +205,12 @@ export class StructogramRenderer {
     /**
      * The main function of the StructogramRenderer. Takes a parent element and generates and svg image into it containing
      * the HTML representation of a full StructogramBlock tree. This function is recursive for subblocks.
-     * @param parent the element to generate the image into
-     * @param block the starting block of the tree
-     * @param width the width to use for the tree
-     * @param xOffset the x offset of the tree
-     * @param _yOffset the y offset of the tree
-     * @returns the height of the tree generated
+     * @param parent The element to generate the image into.
+     * @param block The starting block of the tree.
+     * @param width The width to use for the tree.
+     * @param xOffset The x offset of the tree.
+     * @param _yOffset The y offset of the tree.
+     * @returns The height of the tree generated.
      */
     protected resolveHTMLFor(parent: Element, block: StructogramBlock | undefined, width: number = this.viewModel.structogramWidth, xOffset: number = 0, _yOffset: number = 0): number {
         let prevBlock: StructogramBlock | undefined = undefined;
@@ -221,12 +225,12 @@ export class StructogramRenderer {
             const subBlockKeys = orderedSubBlocks.map(e => e[0]!);
             const subBlockCount = orderedSubBlocks.length;
             let maxSubBlockHeight = 0;
-            
+
             function resolveSubBlocks(renderer: StructogramRenderer, currentBlock: StructogramBlock, i: number) {
                 let subBlockXOffset = Number.parseInt(elem.dataset.subblockXOffset ?? "0");
                 let subBlockYOffset = Number.parseInt(elem.dataset.subblockYOffset ?? "0");
                 const newWidth = (width-subBlockXOffset)/subBlockCount;
-                
+
                 if(currentBlock instanceof MultiBranchingBlock) {
                     let header = undefined;
                     if(i == subBlockCount-1) {
@@ -255,7 +259,7 @@ export class StructogramRenderer {
                     const subBlockHeight = renderer.onUndefinedBlock(elem, new UndefinedBlockContext(undefined, currentBlock, subBlockKeys[i]!, false), newWidth, subBlockXOffset+newWidth*i, subBlockYOffset);
                     if(subBlockHeight > maxSubBlockHeight) maxSubBlockHeight = subBlockHeight;
                 }
-            } 
+            }
             this.updateStepText(elem, currentBlock);
             for(let i = 0; i < subBlockCount; i++) {
                 resolveSubBlocks(this, currentBlock, i);
@@ -290,9 +294,9 @@ export class StructogramRenderer {
     protected onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement) {
         elem.id = this.idPrefix + "-" + block.id;
         if(this.structogram.issues.map(i => i.id).includes(block.id)) {
-            elem.classList.add("fill-red-100");
+            elem.classList.add(...errorStyle);
             elem.dataset["helpTrkey"] = this.structogram.issues.filter(i => i.id == block.id)[0]!.issueID;
-            elem.classList.remove("fill-white");
+            elem.classList.remove(...neutralStyle);
         }
     }
 

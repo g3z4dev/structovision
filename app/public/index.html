@@ -14,70 +14,93 @@
             <div class="col-span-7 flex flex-col ">
                 <div class="flex bg-gray-200 border-b border-b-gray-400 h-12">
                     <div class="basis-11/16 flex flex-row" id="toolbar">
-                        <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="assignment_block_description" 
-                        id="toolbar-assignment-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <line x1="20%" y1="33%" x2="80%" y2="33%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="20%" y1="66%" x2="80%" y2="66%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                        </svg>
-                        <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="control_block_description" 
-                        id="toolbar-control-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <line x1="10%" y1="20%" x2="20%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="20%" y1="50%" x2="10%" y2="80%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="30%" y1="50%" x2="80%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                        </svg>
-                        <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="print_block_description" 
-                        id="toolbar-print-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <line x1="30%" y1="10%" x2="60%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="60%" y1="50%" x2="30%" y2="90%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                        </svg>
-                        <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="true_false_branching_block_description" 
-                        id="toolbar-true-false-branching-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <line x1="0%" y1="50%" x2="10%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                        </svg>
-                        <svg
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="multi_branching_block_description" 
-                        id="toolbar-multi-branching-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <line x1="50%" y1="0%" x2="50%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="50%" y1="50%" x2="40%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                            <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                        </svg>
-                        <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="counting_loop_block_description" 
-                        id="toolbar-counting-loop-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <line x1="10%" y1="20%" x2="60%" y2="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
-                        </svg>
-                        <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="front_testing_loop_block_description" 
-                        id="toolbar-front-testing-loop-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                        </svg>
-                        <svg 
-                        class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
-                        data-help-trkey="back_testing_loop_block_description" 
-                        id="toolbar-back-testing-loop-block">
-                            <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                            <rect width="80%" height="60%" x="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
-                        </svg>
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="assignment_block_description"
+                            id="toolbar-assignment-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <line x1="20%" y1="33%" x2="80%" y2="33%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="20%" y1="66%" x2="80%" y2="66%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="control_block_description"
+                            id="toolbar-control-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <line x1="10%" y1="20%" x2="20%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="20%" y1="50%" x2="10%" y2="80%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="30%" y1="50%" x2="80%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="print_block_description"
+                            id="toolbar-print-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <line x1="30%" y1="10%" x2="60%" y2="50%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="60%" y1="50%" x2="30%" y2="90%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="true_false_branching_block_description"
+                            id="toolbar-true-false-branching-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <line x1="0%" y1="50%" x2="10%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="multi_branching_block_description"
+                            id="toolbar-multi-branching-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <line x1="50%" y1="0%" x2="50%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="50%" y1="50%" x2="40%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                                <line x1="100%" y1="50%" x2="90%" y2="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="counting_loop_block_description"
+                            id="toolbar-counting-loop-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <line x1="10%" y1="20%" x2="60%" y2="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></line>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="front_testing_loop_block_description"
+                            id="toolbar-front-testing-loop-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <rect width="80%" height="60%" x="20%" y="40%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            </svg>
+                        </div>
+
+                        <div class="p-2">
+                            <svg
+                            class="overflow-visible hover:fill-blue-100 fill-white w-full h-full t-hover-help"
+                            data-help-trkey="back_testing_loop_block_description"
+                            id="toolbar-back-testing-loop-block">
+                                <rect width="100%" height="100%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                                <rect width="80%" height="60%" x="20%" class="non-scaling-stroke stroke-1 stroke-gray-700"></rect>
+                            </svg>
+                        </div>
                     </div>
                     <div class="basis-5/16 flex flex-row justify-around border-l border-gray-800 p-1 gap-1" id="options">
                         <button class="bg-blue-500 hover:bg-blue-400 text-gray-50 aspect-square t-language-button t-hover-help" data-help-trkey="language_button"><img class="aspect-square h-full" src="icons/flags/en.png" alt="flag-icon"/></button>
@@ -145,7 +168,7 @@
                     </div>
                 </div>
                 <div class="bg-white border border-gray-800 hidden" id="input-data">
-                    
+
                 </div>
                 <div class="structogram-view basis-full w-full h-full overflow-hidden bg-blue-50" id="run-view">
                     <svg width="100%" height="100%">
