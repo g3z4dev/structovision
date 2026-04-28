@@ -11,7 +11,7 @@ function createBasicStructogram(): [ee2.EventEmitter2, Structogram] {
 }
 
 function runStructogram(structogram: Structogram, input: Record<string, string> = {}) {
-    console.log(structogram.preRun(input))
+    structogram.preRun(input);
     structogram.runStep();
     while(structogram.running) {
         structogram.runStep();

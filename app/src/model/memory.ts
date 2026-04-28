@@ -121,7 +121,6 @@ export class Memory {
             this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
             return this.variables[key]!.value;
         }
-        
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
@@ -150,7 +149,7 @@ export class Memory {
             this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
             return this.variables[key]!.type;
         }
-        
+
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
@@ -174,7 +173,7 @@ export class Memory {
             this.emitter.emit(Memory.variableAccessedEvent, key, this.variables[key]!.value);
             return this.variables[key]!.constant;
         }
-        
+
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 
@@ -192,7 +191,7 @@ export class Memory {
             this.emitter.emit(Memory.variableChangedEvent, key, prevValue, value);
             return;
         }
-        
+
         throw new Error(`Variable with key [${key}] does not exist!`);
     }
 

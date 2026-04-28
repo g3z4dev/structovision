@@ -413,7 +413,6 @@ export class Structogram {
         this.ready = false;
         this.bracketBlockStack = [];
         this.currentBlock = this.startingBlock;
-        this.memory.clear();
     }
 
     /**
@@ -421,6 +420,7 @@ export class Structogram {
      */
     public reset() {
         this.restart();
+        this.memory.clear();
         this.clearData();
         this.startingBlock = undefined;
         this.clearBlocks();
@@ -450,7 +450,6 @@ export class Structogram {
 export abstract class BlockOption implements ClassIdentifiable {
     protected readonly structogram: Structogram;
     public readonly name: string;
-    public readonly descriptionKey: string;
     public readonly emitter: EventEmitter2 = new EventEmitter2({"maxListeners": 100});
 
     /**
@@ -459,10 +458,9 @@ export abstract class BlockOption implements ClassIdentifiable {
      */
     public static readonly optionChangedEvent = "blockoption.optionchanged";
 
-    constructor(structogram: Structogram, name: string, descriptionKey: string) {
+    constructor(structogram: Structogram, name: string) {
         this.structogram = structogram;
         this.name = name;
-        this.descriptionKey = descriptionKey;
     }
 
     public abstract get classIdentifier(): string;
@@ -477,8 +475,8 @@ export abstract class BlockOption implements ClassIdentifiable {
 export class BooleanStatementListOption extends BlockOption {
     private _statements: string[] = [];
 
-    public constructor(structogram: Structogram, name: string, description: string) {
-        super(structogram, name, description);
+    public constructor(structogram: Structogram, name: string) {
+        super(structogram, name);
     }
 
     public override get classIdentifier(): string {
@@ -830,8 +828,8 @@ function isNumeric(text: string) {
 export class AssignmentBlock extends SequenceBlock {
     private key: string | undefined;
     private statement: AnyStatement | undefined;
-    public readonly keyOption = new KeyOption(this._associatedStructogram, "key", "option_assignmentblock_key");
-    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "option_description_value");
+    public readonly keyOption = new KeyOption(this._associatedStructogram, "key");
+    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -913,6 +911,7 @@ export class AssignmentBlock extends SequenceBlock {
             if(error instanceof StatementParseError) {
                 issues.push(new StructogramIssue(this.id, error.message, error.errorID));
             } else {
+                console.error(error);
                 alert("Fatal parse error!");
             }
         }
@@ -931,7 +930,7 @@ export class AssignmentBlock extends SequenceBlock {
 
 export class ControlBlock extends SequenceBlock {
     private statement: AnyStatement | undefined;
-    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value", "the value to print");
+    public readonly statementOption = new AnyStatementOption(this._associatedStructogram, "value");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -958,6 +957,7 @@ export class ControlBlock extends SequenceBlock {
             if(error instanceof StatementParseError) {
                 return [new StructogramIssue(this.id, error.message, error.errorID)];
             } else {
+                console.error(error);
                 alert("Fatal parse error!");
             }
         }
@@ -968,7 +968,7 @@ export class ControlBlock extends SequenceBlock {
 
 export class PrintBlock extends SequenceBlock {
     private statement: StringStatement | undefined;
-    public readonly statementOption = new StringStatementOption(this._associatedStructogram, "value", "the value to print");
+    public readonly statementOption = new StringStatementOption(this._associatedStructogram, "value");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -995,6 +995,7 @@ export class PrintBlock extends SequenceBlock {
             if(error instanceof StatementParseError) {
                 return [new StructogramIssue(this.id, error.message, error.errorID)];
             } else {
+                console.error(error);
                 alert("Fatal parse error!");
             }
         }
@@ -1028,7 +1029,7 @@ export class TrueFalseBranchingBlock extends BracketBlock {
         "false": undefined
     };
     private state: TrueFalseBranchingBlockStates = "ready";
-    public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition", "the condition");
+    public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -1103,7 +1104,7 @@ export class MultiBranchingBlock extends BracketBlock {
         "else": undefined
     };
     protected branchIndex = 0;
-    public readonly conditionListOption = new BooleanStatementListOption(this._associatedStructogram, "conditions", "the list of conditions the branches have");
+    public readonly conditionListOption = new BooleanStatementListOption(this._associatedStructogram, "conditions");
 
     private fillOutBranches() {
         const statements = this.conditionListOption.statements;
@@ -1236,10 +1237,10 @@ export class CountingLoopBlock extends LoopBlock {
     private variableKey: string | undefined;
     private started: boolean = false;
     private checkedCondition = false;
-    public readonly variableKeyOption: KeyOption = new KeyOption(this._associatedStructogram, "key", "the key of the variable the loop will use to iterate with");
-    public readonly fromOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "from", "the number the calculation is starting from");
-    public readonly toOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "to", "the number the calculation is ending at");
-    public readonly stepOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "step", "the number the calculation is stepping with");
+    public readonly variableKeyOption: KeyOption = new KeyOption(this._associatedStructogram, "key");
+    public readonly fromOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "from");
+    public readonly toOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "to");
+    public readonly stepOption: NumericStatementOption = new NumericStatementOption(this._associatedStructogram, "step");
 
     constructor(structogram: Structogram) {
         super(structogram);
@@ -1326,7 +1327,7 @@ export class CountingLoopBlock extends LoopBlock {
 
 export abstract class ConditionalLoopBlock extends LoopBlock {
     protected condition: BooleanStatement | undefined;
-    public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition", "the condition of the loop");
+    public readonly conditionOption = new BooleanStatementOption(this._associatedStructogram, "condition");
 
     constructor(structogram: Structogram) {
         super(structogram);

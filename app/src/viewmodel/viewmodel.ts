@@ -175,8 +175,8 @@ export class ViewModel {
             try {
                 this.loadData(JSON.parse(data));
             } catch (error) {
+                console.error(error);
                 alert("Cache failed to load!");
-                console.log(error);
                 this.structogram.reset();
             }
         }
