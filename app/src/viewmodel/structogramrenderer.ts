@@ -325,4 +325,8 @@ export class StructogramRenderer {
     public runFrame(delta: number) {
 
     }
+
+    public clearSettings() {
+
+    }
 }

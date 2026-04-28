@@ -491,6 +491,7 @@ export class StructogramBuilder extends StructogramRenderer {
         this.newYesButton.addEventListener("click", () => {
             this.structogram.reset();
             this.timeLine.reset();
+            this.viewModel.clearSettings();
             this.viewModel.saveCache();
             this.newWindow.classList.add("hidden");
         });

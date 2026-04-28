@@ -9,7 +9,8 @@ type ViewMode = "builder" | "runner";
 export class ViewModel {
     public readonly structogram: Structogram;
 
-    private _structogramWidth: number = 1024;
+    private readonly defaultStructogramWidth = 1024;
+    private _structogramWidth: number = this.defaultStructogramWidth;
 
     public get structogramWidth() {
         return this._structogramWidth;
@@ -94,7 +95,7 @@ export class ViewModel {
      */
     private loadData(data: any) {
         this.structogram.loadData(data["structogram"]);
-        this.structogramWidth = data["structogram_width"] ?? 1024;
+        this.structogramWidth = data["structogram_width"] ?? this.defaultStructogramWidth;
         this.structogramRunner.loadData(data["rundata"]);
     }
 
@@ -200,6 +201,11 @@ export class ViewModel {
         const _delta = timestamp - this.lastTimestamp;
         this.lastTimestamp = timestamp;
         requestAnimationFrame(timestamp => this.runFrame(timestamp, _delta));
+    }
+
+    public clearSettings() {
+        this.structogramRunner.clearSettings();
+        this.structogramWidth = this.defaultStructogramWidth;
     }
 }
 

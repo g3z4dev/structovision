@@ -413,6 +413,7 @@ export class Structogram {
         this.ready = false;
         this.bracketBlockStack = [];
         this.currentBlock = this.startingBlock;
+        this.memory.clear();
     }
 
     /**

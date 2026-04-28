@@ -258,6 +258,10 @@ export class StructogramRunner extends StructogramRenderer {
         }
     }
 
+    public override clearSettings(): void {
+        this.programViewManager.clearSettings();
+    }
+
 }
 
 class TimeControl {
@@ -400,6 +404,13 @@ class ProgramViewSettings {
     public hide() {
         this.settingWindow.classList.add("hidden");
     }
+
+    public clear() {
+        this.outputVisibleInput.checked = true;
+        this.memoryVisibleInput.checked = true;
+        this.logicVisibleInput.checked = true;
+        this.objectsVisibleInput.checked = true;
+    }
 }
 
 class ProgramViewManager {
@@ -454,6 +465,12 @@ class ProgramViewManager {
     public render(progress: number) {
         this.objectView.render(progress);
     }
+
+    public clearSettings() {
+        this.reset();
+        this.objectView.clearSettings();
+        this.settings.clear();
+    }
 }
 
 abstract class ProgramView {
@@ -485,6 +502,10 @@ abstract class ProgramView {
         } else {
             this.viewElem.classList.add("hidden");
         }
+    }
+
+    public clearSettings() {
+
     }
 }
 
@@ -1632,6 +1653,10 @@ class ObjectView extends ProgramView implements AnimatedView {
             renderer.reset();
             renderer.reloadObjects();
         }
+    }
+
+    public override clearSettings() {
+        this.selectorsField.value = "";
     }
 }
 

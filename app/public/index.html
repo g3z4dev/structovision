@@ -241,17 +241,28 @@
             </div>
         </div>
         <div id="view-settings" class="bg-gray-500/40 absolute m-auto w-full h-full left-0 right-0 top-0 hidden">
-            <div class="m-auto mt-5 w-1/2 h-1/2 flex flex-col bg-gray-800 rounded-md text-gray-100 p-2">
+            <div class="m-auto mt-5 w-1/4 h-1/2 flex flex-col bg-gray-800 rounded-md text-gray-100 p-2">
                 <p class="text-lg m-2 text-center t-translatable" data-trkey="view_settings"></p>
-                <form class="overflow-y-auto">
-                    <label for="view-settings-logs-visible"><span class="t-translatable" data-trkey="title_logs"></span></label>
-                    <input id="view-settings-logs-visible" class="w-full bg-gray-600" type="checkbox">
-                    <label for="view-settings-memory-visible"><span class="t-translatable" data-trkey="title_memory"></span></label>
-                    <input id="view-settings-memory-visible" class="w-full bg-gray-600" type="checkbox">
-                    <label for="view-settings-logic-visible"><span class="t-translatable" data-trkey="title_logic"></span></label>
-                    <input id="view-settings-logic-visible" class="w-full bg-gray-600" type="checkbox">
-                    <label for="view-settings-objects-visible"><span class="t-translatable" data-trkey="title_objects"></span></label>
-                    <input id="view-settings-objects-visible" class="w-full bg-gray-600" type="checkbox">
+                <form class="overflow-y-auto w-3/4 m-auto">
+                    <div class="flex flex-row bg-gray-900 mb-1">
+                        <label for="view-settings-logs-visible" class="w-full"><span class="t-translatable" data-trkey="title_logs"></span></label>
+                        <input id="view-settings-logs-visible" class="bg-gray-600" type="checkbox" checked>
+                    </div>
+
+                    <div class="flex flex-row bg-gray-900 mb-1">
+                        <label for="view-settings-memory-visible" class="w-full"><span class="t-translatable" data-trkey="title_memory"></span></label>
+                        <input id="view-settings-memory-visible" class="bg-gray-600" type="checkbox" checked>
+                    </div>
+
+                    <div class="flex flex-row bg-gray-900 mb-1">
+                        <label for="view-settings-logic-visible" class="w-full"><span class="t-translatable" data-trkey="title_logic"></span></label>
+                        <input id="view-settings-logic-visible" class="bg-gray-600" type="checkbox" checked>
+                    </div>
+
+                    <div class="flex flex-row bg-gray-900 mb-1">
+                        <label for="view-settings-objects-visible" class="w-full"><span class="t-translatable" data-trkey="title_objects"></span></label>
+                        <input id="view-settings-objects-visible" class="bg-gray-600" type="checkbox" checked>
+                    </div>
                 </form>
                 <button id="view-settings-done" class="m-auto text-gray-50 bg-blue-600 hover:bg-blue-400 w-1/5 t-translatable" data-trkey="button_done"></button>
             </div>
