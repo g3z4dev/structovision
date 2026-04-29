@@ -60,6 +60,7 @@ export class ViewModel {
         this.structogramRunner = new StructogramRunner(this.structogram, this);
         this.structogram.emitter.addListener(Structogram.changedEvent, () => {
             this.structogramBuilder.updateHTML();
+            this.saveCache();
         });
         this.switchToBuilderButton.addEventListener("click", event => {
             if(event.button == 0) {
@@ -97,6 +98,7 @@ export class ViewModel {
         this.structogram.loadData(data["structogram"]);
         this.structogramWidth = data["structogram_width"] ?? this.defaultStructogramWidth;
         this.structogramRunner.loadData(data["rundata"]);
+        this.structogramBuilder.updateSelection();
     }
 
     /**
@@ -149,11 +151,12 @@ export class ViewModel {
                     if(readerEvent.target && readerEvent.target.result) {
                         try {
                             const data = JSON.parse(readerEvent.target.result as string);
+                            this.clearSettings();
                             this.loadData(data);
                             this.saveCache();
                         } catch (error) {
                             alert("Structogram failed to load! Invalid format!");
-                            this.structogram.reset();
+                            this.clearSettings();
                         }
                     }
                 }
@@ -173,11 +176,12 @@ export class ViewModel {
         const data = localStorage.getItem("lastData");
         if(data) {
             try {
+                this.clearSettings();
                 this.loadData(JSON.parse(data));
             } catch (error) {
                 console.error(error);
                 alert("Cache failed to load!");
-                this.structogram.reset();
+                this.clearSettings();
             }
         }
     }
@@ -204,6 +208,7 @@ export class ViewModel {
     }
 
     public clearSettings() {
+        this.structogramBuilder.clearSettings();
         this.structogramRunner.clearSettings();
         this.structogramWidth = this.defaultStructogramWidth;
     }

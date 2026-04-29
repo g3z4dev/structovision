@@ -1,4 +1,4 @@
-import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, UtilityArray, UtilityString, type Value } from "@structovision/app/model/types";
+import { BinaryTreeNodeTemplate, booleanType, charType, DoublyLinkedListNodeTemplate, numberType, SimpleValue, SinglyLinkedListNodeTemplate, undefinedType, UtilityArray, UtilityString, type Value } from "@structovision/app/model/types";
 import type { IAssert } from "zora";
 
 export function cartesian<T, J>(ar1: T[], ar2: J[]): [T, J][] {
@@ -26,7 +26,7 @@ export function charArray(chars: string[]) {
 }
 
 export function array(values: Value[]) {
-    return new UtilityArray(values, values[0]!.type);
+    return new UtilityArray(values, values[0]?.type ?? undefinedType);
 }
 
 export function s1l(value: Value) {

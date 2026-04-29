@@ -1,5 +1,5 @@
 import { Structogram, StructogramBlock } from "../model/structogram";
-import { baseRunSpeed, neutralStyle, runningStyle, stepActiveStyle } from "./constants";
+import { baseRunSpeed, blockNeutralStyle, blockRunningStyle, stepActiveStyle } from "./constants";
 import { StructogramRenderer } from "./structogramrenderer";
 import { CameraHandler, lerp, ListWindow, parseIntoHTML, setID, setTemplateText } from "./util";
 import EventEmitter2 from "eventemitter2";
@@ -38,16 +38,16 @@ export class StructogramRunner extends StructogramRenderer {
     public set currentBlock(currentBlock: StructogramBlock | undefined) {
         if(this._currentBlock) {
             const node = this.renderTarget.querySelector(`#${this.idPrefix}-${this._currentBlock.id}`);
-            node?.classList.remove(...runningStyle);
-            node?.classList.add(...neutralStyle);
+            node?.classList.remove(...blockRunningStyle);
+            node?.classList.add(...blockNeutralStyle);
             currentBlock?.emitter.removeAllListeners(StructogramBlock.activeStepChanged);
         }
         this.activeBlockStep = undefined;
         this._currentBlock = currentBlock;
         if(currentBlock) {
             const node = this.renderTarget.querySelector(`#${this.idPrefix}-${currentBlock.id}`);
-            node?.classList.remove(...neutralStyle);
-            node?.classList.add(...runningStyle);
+            node?.classList.remove(...blockNeutralStyle);
+            node?.classList.add(...blockRunningStyle);
             this.activeBlockStep = currentBlock.activeStep;
             currentBlock.emitter.addListener(StructogramBlock.activeStepChanged, step => {
                 this.activeBlockStep = step;
@@ -103,7 +103,7 @@ export class StructogramRunner extends StructogramRenderer {
         const textField = entry.querySelector("input[type=\"text\"]") as HTMLInputElement;
         textField.addEventListener("change", () => {
             this.viewModel.saveCache();
-        })
+        });
         textField.dataset["variableKey"] = key;
         this.inputDataElem.appendChild(entry);
         this.inputDataElem.classList.remove("hidden");

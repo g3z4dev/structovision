@@ -116,6 +116,10 @@ export class ArrayType extends ValueType {
         this.elementType = elementType;
     }
 
+    public override matches(type: ValueType): boolean {
+        return this.baseIdentifier == type.baseIdentifier && type instanceof ArrayType && this.elementType.matches(type.elementType) || type.baseIdentifier == "undefined";
+    }
+
     public override get id(): string {
         return `${this.baseIdentifier}<${this.elementType.id}>`;
     }
@@ -421,7 +425,9 @@ export class UtilityArray implements Value {
      */
     public concat(other: UtilityArray): UtilityArray {
         if(!this.elementType.matches(other.elementType)) throw new Error("Cannot concatenate two arrays of different element types!");
-        return new UtilityArray(this.elements.concat(other.elements), this.elementType);
+        let elementType = this.elementType;
+        if(elementType.isUndefined()) elementType = other.elementType;
+        return new UtilityArray(this.elements.concat(other.elements), elementType);
     }
 
     public asString(): string {

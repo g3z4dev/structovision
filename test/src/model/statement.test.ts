@@ -370,3 +370,17 @@ test("statements with arrays containing function operator calls should work as i
     testAnyStatement(assertion, "{swap(a,0,1),swap(a,2,3)}", ud(), mem);
     jsonEqual(assertion, mem.getVariable("a"), array([n(2), n(1), n(4), n(3)]), "a function operator should work as expected within arrays");
 });
+
+test("statements violating mathematical limitations should return undefined", (assertion) => {
+    testAnyStatement(assertion, "1/0", ud());
+    testAnyStatement(assertion, "1 div 0", ud());
+    testAnyStatement(assertion, "1 mod 0", ud());
+    testAnyStatement(assertion, "log(-1)", ud());
+    testAnyStatement(assertion, "log(0)", ud());
+});
+
+test("statements with empty array should work as inteded", (assertion) => {
+    testAnyStatement(assertion, "{}", array([]));
+    testAnyStatement(assertion, "{}&{1}&{2}", array([n(1),n(2)]));
+    assertion.throws(() => AnyStatement.parse('{}&{true}&{1}', placeholderMemory, placeholderIndexResolver), StatementParseError, "Concatenating empty arrays should not bypass array restrictions");
+});

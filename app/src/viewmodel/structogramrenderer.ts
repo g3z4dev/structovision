@@ -10,7 +10,7 @@ import countingLoopBlockTemplate from "../../resources/blocks/countingloopblock.
 import frontTestingLoopBlockTemplate from "../../resources/blocks/fronttestingloopblock.html";
 import backTestingLoopBlockTemplate from "../../resources/blocks/backtestingloopblock.html";
 import undefinedBlockTemplate from "../../resources/blocks/undefinedblock.html";
-import { baseBlockHeight, errorStyle, neutralStyle, textPadding } from "./constants";
+import { baseBlockHeight, blockErrorStyle, blockNeutralStyle, textPadding } from "./constants";
 import type { ViewModel } from "./viewmodel";
 
 
@@ -82,17 +82,17 @@ export class StructogramRenderer {
             for(const issue of oldIssues) {
                 const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`) as SVGElement;
                 if(block) {
-                    block.classList.remove(...errorStyle);
+                    block.classList.remove(...blockErrorStyle);
                     block.dataset["helpTrkey"] = "";
-                    block.classList.add(...neutralStyle);
+                    block.classList.add(...blockNeutralStyle);
                 }
             }
             for(const issue of newIssues) {
                 const block = this.renderTarget.querySelector(`#${idPrefix}-${issue.id}`) as SVGElement;
                 if(block) {
-                    block.classList.add(...errorStyle);
+                    block.classList.add(...blockErrorStyle);
                     block.dataset["helpTrkey"] = issue.issueID;
-                    block.classList.remove(...neutralStyle);
+                    block.classList.remove(...blockNeutralStyle);
                 }
             }
         });
@@ -294,9 +294,9 @@ export class StructogramRenderer {
     protected onBlockAdded(block: StructogramBlock, parent: StructogramBlock | undefined, elem: HTMLElement) {
         elem.id = this.idPrefix + "-" + block.id;
         if(this.structogram.issues.map(i => i.id).includes(block.id)) {
-            elem.classList.add(...errorStyle);
+            elem.classList.add(...blockErrorStyle);
             elem.dataset["helpTrkey"] = this.structogram.issues.filter(i => i.id == block.id)[0]!.issueID;
-            elem.classList.remove(...neutralStyle);
+            elem.classList.remove(...blockNeutralStyle);
         }
     }
 

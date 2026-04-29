@@ -415,7 +415,15 @@ registerOperator(new BinaryOperator(3, ">=", BinaryOperator.matchesSomePairsFn([
 // Array Operators
 registerOperator(new class extends BinaryOperator {
     public getReturnType(operandTypes: ValueType[]): ValueType {
-        return operandTypes[0]!;
+        const type1 = operandTypes[0]!;
+        const type2 = operandTypes[1]!;
+        if(type1 instanceof ArrayType) {
+            if(type1.elementType.isDefined()) return type1;
+        }
+        if(type2 instanceof ArrayType) {
+            if(type2.elementType.isDefined()) return type2;
+        }
+        return type1;
     }
 }(4, "&", types => (types[0]!.baseIdentifier == "array" || types[0]!.id == "string" || types[0]!.isUndefined()) && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityArray).concat(b as UtilityArray)));
 registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([anyType]), stringType, a => new UtilityString([...a.asString()].map(SimpleValue.char))));
@@ -651,13 +659,16 @@ class ArrayLiteralOperand extends ResolvableOperand {
             throw new Error("Not an array literal!");
         }
         text = text.substring(1,text.length-1);
+        if(text.length == 0) {
+            return new ArrayLiteralOperand([], undefinedType);
+        }
         const values = ArrayLiteralOperand.splitElements(text).map(token => AnyStatement.parse(token, memory, indexResolver));
         for(let i = 0; i < values.length; i++) {
             for(let j = i+1; j < values.length; j++) {
                 if(!values[i]!.returnType.matches(values[j]!.returnType)) throw new StatementParseError("Arrays cannot be heterogeneous!", "error_array_heterogeneous")
             }
         }
-        return new ArrayLiteralOperand(values, values.length > 0 ? values[0]!.returnType : anyType);
+        return new ArrayLiteralOperand(values, values.length > 0 ? values[0]!.returnType : undefinedType);
     }
 
     public resolve(): Value {

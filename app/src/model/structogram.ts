@@ -30,6 +30,7 @@ export class Structogram {
 
     /**
      * Emitted when the structogram structure is changed.
+     * It has no arguments.
      */
     public static readonly changedEvent = "structogram.changed";
 
@@ -53,6 +54,7 @@ export class Structogram {
 
     /**
      * Emitted when the specification is cleared.
+     * It has no arguments.
      */
     public static readonly specificationClearEvent = "structogram.specification.clear";
 
@@ -306,9 +308,9 @@ export class Structogram {
             this.addBlock(child, true);
             child = child.next;
         }
-        if(!supressEvent) this.emitter.emit(Structogram.changedEvent, block);
+        if(!supressEvent) this.emitter.emit(Structogram.changedEvent);
         block.emitter.addListener(StructogramBlock.childrenChanged, () => {
-            this.emitter.emit(Structogram.changedEvent, block);
+            this.emitter.emit(Structogram.changedEvent);
         });
     }
 
@@ -325,7 +327,7 @@ export class Structogram {
             this.removeBlock(child, true);
             child = child.next;
         }
-        if(!supressEvent) this.emitter.emit(Structogram.changedEvent, block);
+        if(!supressEvent) this.emitter.emit(Structogram.changedEvent);
         block.emitter.removeAllListeners(StructogramBlock.childrenChanged);
     }
 
@@ -358,7 +360,7 @@ export class Structogram {
         }
         this._startingBlock = block;
         this.currentBlock = block;
-        this.emitter.emit(Structogram.changedEvent, block);
+        this.emitter.emit(Structogram.changedEvent);
     }
 
     public get startingBlock() {
@@ -915,6 +917,7 @@ export class AssignmentBlock extends SequenceBlock {
                 alert("Fatal parse error!");
             }
         }
+
         if(!memory.hasVariable(memoryKey)) {
             issues.push(new StructogramIssue(this.id, `Variable with key [${memoryKey}] is not defined!`, "error_undefined_variable"));
         } else if(!verifyFieldsExist()) {
@@ -1254,21 +1257,16 @@ export class CountingLoopBlock extends LoopBlock {
             this._associatedStructogram.memory.setVariable(this.variableKey!, SimpleValue.number(this.from?.evaluate() ?? 0));
             return this;
         } else if(!this.checkedCondition) {
-            const lastStep = this.activeStep;
             this.activeStep = "condition";
-            this.checkedCondition = (this._associatedStructogram.memory.getVariable(this.variableKey!) as SimpleValue).value as number < (this.to?.evaluate() ?? 0);
+            this.checkedCondition = (this._associatedStructogram.memory.getVariable(this.variableKey!) as SimpleValue).value as number <= (this.to?.evaluate() ?? 0);
             if(this.checkedCondition) {
-                if(lastStep == "init") {
-                    this.checkedCondition = false;
-                    return this.loopStart;
-                }
-                return this;
+                return this.loopStart;
             }
         } else {
             this.activeStep = "increment";
             this.checkedCondition = false;
             this._associatedStructogram.memory.changeVariable(this.variableKey!, v => SimpleValue.number((v as SimpleValue).value as number + (this.step?.evaluate() ?? 0)));
-            return this.loopStart;
+            return this;
         }
         this.finished = true;
         this.started = false;
