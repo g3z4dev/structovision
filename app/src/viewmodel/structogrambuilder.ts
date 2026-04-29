@@ -751,7 +751,7 @@ export class StructogramBuilder extends StructogramRenderer {
         this.selectedBlock = undefined;
     }
 
-    public updateSelection() {
+    public updateBlockSelection() {
         this.selectedBlock = undefined;
     }
 }

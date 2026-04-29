@@ -98,7 +98,7 @@ export class ViewModel {
         this.structogram.loadData(data["structogram"]);
         this.structogramWidth = data["structogram_width"] ?? this.defaultStructogramWidth;
         this.structogramRunner.loadData(data["rundata"]);
-        this.structogramBuilder.updateSelection();
+        this.structogramBuilder.updateBlockSelection();
     }
 
     /**
