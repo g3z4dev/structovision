@@ -221,6 +221,7 @@ export class SimpleValue implements Value, Ordered<SimpleValue> {
     }
 
     public static number(value: number) {
+        if(!Number.isFinite(value)) return SimpleValue.undefined();
         return new SimpleValue(value, numberType);
     }
 
@@ -470,6 +471,10 @@ export class UtilityString extends UtilityArray implements Ordered<UtilityString
 
     public getString() {
         return (this.elements as SimpleValue[]).map(e => e.value).join("");
+    }
+
+    public asString(): string {
+        return `"${this.getString()}"`;
     }
 
     public concat(other: UtilityString): UtilityString {

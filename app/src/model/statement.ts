@@ -318,7 +318,7 @@ class ObjectGetOperator extends Operator {
 class ObjectIndexOperator extends Operator {
 
     public constructor() {
-        super(99, 2, "infix", "@", types => types[0]!.id.startsWith("array") && types[1]!.id == "number", anyType, false);
+        super(99, 2, "infix", "@", types => (types[0]!.id.startsWith("array") || stringType.matches(types[0]!)) && types[1]!.id == "number", anyType, false);
     }
 
     public override apply(operands: Value[], indexResolver: IndexResolver): Value {
@@ -338,8 +338,13 @@ class ObjectIndexOperator extends Operator {
 
     public getReturnType(operandTypes: ValueType[]): ValueType {
         if(operandTypes.length != 2) throw new Error("Invalid number of parameter types!");
-        if(!(operandTypes[0] instanceof ArrayType)) throw new Error("Invalid usage of return type!");
-        return operandTypes[0]!.elementType;
+        if(operandTypes[0] instanceof ArrayType) {
+            return operandTypes[0]!.elementType;
+        } else if(stringType.matches(operandTypes[0]!)) {
+            return charType;
+        } else {
+            throw new Error("Invalid usage of return type!");
+        }
     }
 }
 
@@ -426,7 +431,7 @@ registerOperator(new class extends BinaryOperator {
         return type1;
     }
 }(4, "&", types => (types[0]!.baseIdentifier == "array" || types[0]!.id == "string" || types[0]!.isUndefined()) && types[0]!.matches(types[1]!), anyType, (a, b) => (a as UtilityArray).concat(b as UtilityArray)));
-registerOperator(new UnaryOperator(100, "str", UnaryOperator.matchesSomeFn([anyType]), stringType, a => new UtilityString([...a.asString()].map(SimpleValue.char))));
+registerOperator(new UnaryOperator(50, "str", UnaryOperator.matchesSomeFn([anyType]), stringType, a => new UtilityString([...a.asString()].map(SimpleValue.char))));
 
 // Constructors
 registerOperator(new ObjectConstructor("s1l", [anyType], SinglyLinkedListNodeTemplate));
@@ -1099,7 +1104,7 @@ export class CharStatement extends Statement<string> {
 export class StringStatement extends Statement<string> {
     public override evaluate(): string {
         const result = this.evaluateInternally();
-        if(result.type.isUndefined()) return "";
+        if(result.type.isUndefined()) return "undefined";
         return (result as UtilityString).getString();
     }
 
