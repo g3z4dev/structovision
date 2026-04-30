@@ -303,12 +303,19 @@ export class Structogram {
     public addBlock(block: StructogramBlock, supressEvent: boolean = false) {
         if(this.running) throw new Error("Cannot add block while structogram is running!");
         this.idMap[block.id] = block;
+        for(const [_key, subBlock] of block.getOrderedSubBlocks()) {
+            if(subBlock) {
+                this.addBlock(subBlock, true);
+            }
+        }
         let child = block.next;
         while(child) {
             this.addBlock(child, true);
             child = child.next;
         }
         if(!supressEvent) this.emitter.emit(Structogram.changedEvent);
+        // under certain circumstances a block could be added twice, this line ensures this will not result in a memory leak
+        block.emitter.removeAllListeners(StructogramBlock.childrenChanged);
         block.emitter.addListener(StructogramBlock.childrenChanged, () => {
             this.emitter.emit(Structogram.changedEvent);
         });
@@ -609,7 +616,7 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     private _prev: StructogramBlock | undefined;
     protected _superBlock: StructogramBlock | undefined;
     protected _subBlockKey: string | undefined;
-    protected abstract subBlocks: Record<string, StructogramBlock | undefined>;
+    protected subBlocks: Record<string, StructogramBlock | undefined> = {};
     private _next: StructogramBlock | undefined;
     public readonly emitter = new EventEmitter2();
 
@@ -627,7 +634,7 @@ export abstract class StructogramBlock implements ClassIdentifiable, Identifiabl
     protected _activeStep: string = "ready";
 
     /**
-     * The structogram it is part of.
+     * The structogram it is part of or used to be part of.
      */
     public get associatedStructogram() {
         return this._associatedStructogram;

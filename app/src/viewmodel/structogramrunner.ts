@@ -1591,7 +1591,7 @@ class ObjectView extends ProgramView implements AnimatedView {
     private renderers: ObjectRenderer<NodeRenderData>[];
     public readonly selectorsField: HTMLInputElement;
     public get selectors(): string[] {
-        return this.selectorsField.value.split(",");
+        return this.selectorsField.value.split(",").map(t => t.trim());
     }
     private readonly cameraHandler: CameraHandler;
 

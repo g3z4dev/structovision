@@ -540,6 +540,11 @@ export class StructogramBuilder extends StructogramRenderer {
                 this.movingBlock = undefined;
             }
         });
+        document.addEventListener("selectstart", event => {
+            if(this.movingBlock) {
+                event.preventDefault();
+            }
+        });
     }
 
     private setupBlockMovingLogic() {
@@ -823,7 +828,13 @@ class BlockToolbar {
             if(event.button == 0) {
                 this.blockBrush = undefined;
             }
-        })
+        });
+
+        document.addEventListener("selectstart", event => {
+            if(this.blockBrush) {
+                event.preventDefault();
+            }
+        });
     }
 
     /**
@@ -1161,6 +1172,7 @@ class StructogramSettings {
 
     private addCurrentBlockHandler() {
         this.builder.emitter.addListener(StructogramBuilder.selectedBlockChanged, () => {
+            this
             this.generateHTML();
         });
     }
